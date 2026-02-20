@@ -1,0 +1,9 @@
+Os backups do projeto Aurix ficam no disco D: (mais espaço).
+
+Pasta dos backups:  D:\Aurix-backups
+
+Exemplo:  D:\Aurix-backups\Aurix-2025-02-19
+
+Para fazer um novo backup no futuro, copie a raiz do projeto para uma nova pasta
+dentro de D:\Aurix-backups\ (ex.: D:\Aurix-backups\Aurix-2026-XX-XX), excluindo
+as pastas node_modules e .git.

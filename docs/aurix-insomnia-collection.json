@@ -1,0 +1,129 @@
+{
+  "info": {
+    "name": "Aurix API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST Login",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@aurix.com\",\n  \"senha\": \"123456\"\n}"
+            },
+            "url": "http://localhost:3001/api/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "GET Dashboard",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3001/api/dashboard",
+            "description": "Usar Bearer Token (token do Login)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Produtos",
+      "item": [
+        {
+          "name": "GET Produtos",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3001/api/produtos",
+            "description": "Usar Bearer Token"
+          }
+        },
+        {
+          "name": "POST Produto",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Produto Exemplo\",\n  \"preco\": 99.90,\n  \"custo\": 45.00,\n  \"estoque_atual\": 50,\n  \"estoque_minimo\": 10\n}"
+            },
+            "url": "http://localhost:3001/api/produtos",
+            "description": "Usar Bearer Token"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clientes",
+      "item": [
+        {
+          "name": "GET Clientes",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3001/api/clientes",
+            "description": "Usar Bearer Token"
+          }
+        },
+        {
+          "name": "POST Cliente",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Maria Silva\",\n  \"telefone\": \"(11) 99999-1234\",\n  \"observacoes\": \"Cliente preferencial\"\n}"
+            },
+            "url": "http://localhost:3001/api/clientes",
+            "description": "Usar Bearer Token"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Vendas",
+      "item": [
+        {
+          "name": "GET Vendas",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3001/api/vendas",
+            "description": "Usar Bearer Token"
+          }
+        },
+        {
+          "name": "POST Venda",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cliente_id\": \"cole-o-id-do-cliente\",\n  \"itens\": [\n    {\n      \"produto_id\": \"cole-o-id-do-produto\",\n      \"quantidade\": 2,\n      \"preco_unitario\": 99.90\n    }\n  ],\n  \"desconto\": 0,\n  \"forma_pagamento\": \"Pix\",\n  \"status\": \"PAGO\"\n}"
+            },
+            "url": "http://localhost:3001/api/vendas",
+            "description": "Usar Bearer Token. Troque cliente_id e produto_id pelos IDs reais (GET Clientes e GET Produtos)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Relatórios",
+      "item": [
+        {
+          "name": "GET Relatório",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3001/api/relatorios?dataInicial=2025-01-01&dataFinal=2025-12-31",
+            "description": "Usar Bearer Token"
+          }
+        }
+      ]
+    }
+  ]
+}
