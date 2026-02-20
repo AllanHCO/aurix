@@ -28,7 +28,7 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
   });
 
   const faturamento = vendasPagas.reduce(
-    (acc, venda) => acc + Number(venda.total),
+    (acc: number, venda: { total: unknown }) => acc + Number(venda.total),
     0
   );
 

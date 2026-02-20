@@ -37,9 +37,9 @@ export const gerarRelatorio = async (req: AuthRequest, res: Response) => {
 
   // Calcular métricas
   const totalVendas = vendas.length;
-  const vendasPagas = vendas.filter(v => v.status === 'PAGO');
+  const vendasPagas = vendas.filter((v: { status: string }) => v.status === 'PAGO');
   const faturamento = vendasPagas.reduce(
-    (acc, venda) => acc + Number(venda.total),
+    (acc: number, venda: { total: unknown }) => acc + Number(venda.total),
     0
   );
 
@@ -90,7 +90,7 @@ export const exportarCSV = async (req: AuthRequest, res: Response) => {
 
   // Gerar CSV
   const headers = ['Data', 'Cliente', 'Total', 'Status', 'Forma de Pagamento'];
-  const rows = vendas.map(venda => [
+  const rows = vendas.map((venda: { createdAt: Date; cliente: { nome: string }; total: unknown; status: string; forma_pagamento: string }) => [
     new Date(venda.createdAt).toLocaleDateString('pt-BR'),
     venda.cliente.nome,
     Number(venda.total).toFixed(2),
@@ -100,7 +100,7 @@ export const exportarCSV = async (req: AuthRequest, res: Response) => {
 
   const csv = [
     headers.join(','),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ...rows.map((row: (string | number)[]) => row.map((cell: string | number) => `"${cell}"`).join(','))
   ].join('\n');
 
   res.setHeader('Content-Type', 'text/csv');

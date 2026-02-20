@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
@@ -124,7 +124,7 @@ export const criarVenda = async (req: AuthRequest, res: Response) => {
     const total = subtotal - desconto;
 
     // Criar venda e itens em transação
-    const venda = await prisma.$transaction(async (tx) => {
+    const venda = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Criar venda
       const novaVenda = await tx.venda.create({
         data: {

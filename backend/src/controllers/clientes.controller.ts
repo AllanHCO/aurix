@@ -120,7 +120,7 @@ export const obterCliente = async (req: AuthRequest, res: Response) => {
 
   // Calcular total gasto (apenas vendas pagas)
   const totalGasto = cliente.vendas.reduce(
-    (acc, venda) => acc + Number(venda.total),
+    (acc: number, venda: { total: unknown }) => acc + Number(venda.total),
     0
   );
 

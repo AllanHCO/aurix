@@ -49,10 +49,11 @@ export const register = async (req: Request, res: Response) => {
   });
 
   // Gerar token
+  const secret = process.env.JWT_SECRET || 'default-secret-change-in-production';
   const token = jwt.sign(
     { userId: usuario.id },
-    process.env.JWT_SECRET!,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    secret,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as jwt.SignOptions
   );
 
   res.status(201).json({
@@ -81,10 +82,11 @@ export const login = async (req: Request, res: Response) => {
   }
 
   // Gerar token
+  const secret = process.env.JWT_SECRET || 'default-secret-change-in-production';
   const token = jwt.sign(
     { userId: usuario.id },
-    process.env.JWT_SECRET!,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    secret,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as jwt.SignOptions
   );
 
   res.json({
