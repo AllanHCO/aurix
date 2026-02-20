@@ -58,7 +58,6 @@ export default function VendaModal({ onClose }: VendaModalProps) {
   });
 
   const desconto = watch('desconto') || 0;
-  const status = watch('status');
 
   useEffect(() => {
     loadData();
@@ -247,9 +246,7 @@ export default function VendaModal({ onClose }: VendaModalProps) {
               </div>
             ) : (
               <div className="space-y-3">
-                {itens.map((item, index) => {
-                  const produto = produtos.find(p => p.id === item.produto_id);
-                  return (
+                {itens.map((item, index) => (
                     <div
                       key={index}
                       className="flex gap-3 p-4 border border-border-light rounded-lg"
@@ -303,8 +300,7 @@ export default function VendaModal({ onClose }: VendaModalProps) {
                         <span className="material-symbols-outlined">delete</span>
                       </button>
                     </div>
-                  );
-                })}
+                ))}
               </div>
             )}
           </div>

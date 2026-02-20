@@ -99,13 +99,7 @@ export default function Clientes() {
   };
 
   const handleEdit = (cliente: Cliente) => {
-    // Passar apenas os campos que o modal precisa
-    setClienteEditando({
-      id: cliente.id,
-      nome: cliente.nome,
-      telefone: cliente.telefone,
-      observacoes: cliente.observacoes
-    });
+    setClienteEditando(cliente);
     setModalOpen(true);
   };
 
