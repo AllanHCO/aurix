@@ -26,6 +26,16 @@ interface ClienteComInatividade {
   statusInatividade: StatusInatividade;
 }
 
+interface ClienteComVendas {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  observacoes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  vendas: { createdAt: Date }[];
+}
+
 export const listarClientes = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
@@ -53,7 +63,7 @@ export const listarClientes = async (req: AuthRequest, res: Response) => {
 
     const hoje = new Date();
 
-    const clientesComInatividade: ClienteComInatividade[] = clientes.map((cliente) => {
+    const clientesComInatividade: ClienteComInatividade[] = clientes.map((cliente: ClienteComVendas) => {
       const ultimaVenda = cliente.vendas[0]?.createdAt ?? null;
 
       let diasInativo: number | null = null;
