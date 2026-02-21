@@ -3,6 +3,7 @@ import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import 'express-async-errors';
 import dotenv from 'dotenv';
+import { PrismaClient } from '@prisma/client';
 import { errorHandler } from './middleware/errorHandler';
 import { swaggerDocument } from './swagger';
 import authRoutes from './routes/auth.routes';
@@ -17,9 +18,15 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middlewares
+// CORS: aceita FRONTEND_URL ou lista separada por vírgula (ex.: https://aurix-l3dn.onrender.com,http://localhost:5173)
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map((o) => o.trim()).filter(Boolean)
+  : ['http://localhost:5173'];
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(null, false);
+  },
   credentials: true
 }));
 app.use(express.json());
@@ -44,6 +51,23 @@ app.get('/', (req, res) => {
 // Health check (Render e monitoramento)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Teste de conexão com o banco (para debug de 500 em login/register)
+app.get('/health/db', async (req, res) => {
+  const prisma = new PrismaClient();
+  try {
+    await prisma.$connect();
+    await prisma.$disconnect();
+    return res.json({ database: 'ok', timestamp: new Date().toISOString() });
+  } catch (e: any) {
+    await prisma.$disconnect().catch(() => {});
+    return res.status(503).json({
+      database: 'error',
+      message: e?.message || String(e),
+      hint: 'Adicione ?sslmode=require no final da DATABASE_URL no Render (Supabase).'
+    });
+  }
 });
 
 // Routes
