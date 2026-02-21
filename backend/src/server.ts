@@ -30,7 +30,18 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 // OpenAPI JSON (para importar no Insomnia/Postman)
 app.get('/api-docs.json', (req, res) => res.json(swaggerDocument));
 
-// Health check
+// Raiz (para confirmar que a API está no ar)
+app.get('/', (req, res) => {
+  res.json({
+    service: 'aurix-backend',
+    status: 'ok',
+    health: '/health',
+    docs: '/api-docs',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Health check (Render e monitoramento)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });

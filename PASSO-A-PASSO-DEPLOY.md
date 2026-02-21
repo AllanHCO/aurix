@@ -68,7 +68,8 @@ Preencha assim:
 | **Branch** | `main` |
 | **Root Directory** | `backend` |
 | **Runtime** | **Node** |
-| **Build Command** | `npm install && npm run build && npx prisma generate` |
+| **Build Command** | `npm install --include=dev && npm run build && npx prisma generate` |
+| | *(O `--include=dev` instala TypeScript e @types/* necessários para o `tsc` no build.)* |
 | **Start Command** | `npm start` |
 | **Plan** | **Free** |
 
