@@ -23,7 +23,7 @@ Você precisa de **um segundo serviço** no Render só para a API:
    - **Start Command:** `npm start`
    - **Plan:** Free
 4. **Variáveis de ambiente** (Environment):
-   - `DATABASE_URL` = mesma do seu `backend/.env` (Supabase)
+   - `DATABASE_URL` = mesma do seu `backend/.env` (Supabase). **Se der 500 em login/register**, adicione `?sslmode=require` no final da URL (ex.: `...postgres?sslmode=require`).
    - `JWT_SECRET` = string aleatória longa
    - `JWT_EXPIRES_IN` = `7d`
    - `PORT` = `3001`

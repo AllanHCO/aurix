@@ -2,16 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   font-family: 'Manrope', sans-serif;
   margin: 0;
   padding: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Safe area para celulares com notch */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Área de toque mínima e sem zoom em inputs no iOS */
+@media (max-width: 768px) {
+  input, select, textarea, button {
+    font-size: 16px !important; /* Evita zoom ao focar no iOS */
+  }
 }
 
 .material-symbols-outlined {

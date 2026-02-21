@@ -193,25 +193,27 @@ export default function VendaModal({ onClose }: VendaModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-surface-light rounded-xl shadow-lg max-w-4xl w-full my-8">
-        <div className="p-6 border-b border-border-light flex items-center justify-between">
-          <h2 className="text-xl font-bold text-text-main">Nova Venda</h2>
+      <div className="bg-surface-light rounded-xl shadow-lg max-w-4xl w-full my-4 sm:my-8 max-h-[90vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 border-b border-border-light flex items-center justify-between shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold text-text-main">Nova Venda</h2>
           <button
+            type="button"
             onClick={onClose}
-            className="text-text-muted hover:text-text-main"
+            className="p-2 -m-2 rounded-lg text-text-muted hover:text-text-main hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+            aria-label="Fechar"
           >
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-4 sm:p-6 space-y-6">
           <div>
             <label className="block text-sm font-medium text-text-main mb-1">
               Cliente *
             </label>
             <select
               {...register('cliente_id')}
-              className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+              className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
             >
               <option value="">Selecione um cliente</option>
               {clientes.map((cliente) => (

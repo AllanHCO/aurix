@@ -35,10 +35,14 @@ export default function Login() {
       toast.success('Login realizado com sucesso!');
       navigate('/dashboard');
     } catch (error: any) {
-      const message =
-        error.response?.status === 401
-          ? 'Email ou senha incorretos. Tente novamente.'
-          : error.response?.data?.error || 'Erro ao fazer login';
+      let message = 'Erro ao fazer login';
+      if (error.response?.status === 401) {
+        message = 'Email ou senha incorretos. Tente novamente.';
+      } else if (error.response?.data?.error) {
+        message = error.response.data.error;
+      } else if (!error.response && error.message) {
+        message = 'Não foi possível conectar à API. Verifique se o backend está no ar e a URL (VITE_API_URL) no deploy.';
+      }
       setLoginError(message);
       toast.error(message);
     } finally {
@@ -47,7 +51,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background-light p-4">
+    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-background-light p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white shadow-lg mx-auto mb-4">
@@ -68,7 +72,7 @@ export default function Login() {
               <input
                 type="email"
                 {...register('email')}
-                className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                className="w-full px-4 py-3 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
                 placeholder="seu@email.com"
               />
               {errors.email && (
@@ -83,7 +87,7 @@ export default function Login() {
               <input
                 type="password"
                 {...register('senha')}
-                className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                className="w-full px-4 py-3 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
                 placeholder="••••••"
               />
               {errors.senha && (
@@ -101,7 +105,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 rounded-lg transition-colors disabled:opacity-50"
+              className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 rounded-lg transition-colors disabled:opacity-50 min-h-[48px] touch-manipulation"
             >
               {loading ? 'Entrando...' : 'Entrar'}
             </button>

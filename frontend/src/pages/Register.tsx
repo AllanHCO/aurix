@@ -45,18 +45,18 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background-light p-4">
+    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-background-light p-4">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white shadow-lg mx-auto mb-4">
-            <span className="material-symbols-outlined text-3xl">diamond</span>
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white shadow-lg mx-auto mb-4">
+            <span className="material-symbols-outlined text-2xl sm:text-3xl">diamond</span>
           </div>
-          <h1 className="text-3xl font-bold text-text-main mb-2">Aurix</h1>
-          <p className="text-text-muted">Gestão Comercial</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-2">Aurix</h1>
+          <p className="text-sm sm:text-base text-text-muted">Gestão Comercial</p>
         </div>
 
-        <div className="bg-surface-light rounded-xl shadow-sm border border-border-light p-8">
-          <h2 className="text-2xl font-bold text-text-main mb-6">Criar Conta</h2>
+        <div className="bg-surface-light rounded-xl shadow-sm border border-border-light p-4 sm:p-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-text-main mb-6">Criar Conta</h2>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
@@ -66,7 +66,7 @@ export default function Register() {
               <input
                 type="text"
                 {...register('nome')}
-                className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                className="w-full px-4 py-3 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
                 placeholder="Seu nome"
               />
             </div>
@@ -78,7 +78,7 @@ export default function Register() {
               <input
                 type="email"
                 {...register('email')}
-                className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                className="w-full px-4 py-3 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
                 placeholder="seu@email.com"
               />
               {errors.email && (
@@ -93,7 +93,7 @@ export default function Register() {
               <input
                 type="password"
                 {...register('senha')}
-                className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                className="w-full px-4 py-3 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
                 placeholder="••••••"
               />
               {errors.senha && (
@@ -108,7 +108,7 @@ export default function Register() {
               <input
                 type="password"
                 {...register('confirmarSenha')}
-                className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                className="w-full px-4 py-3 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
                 placeholder="••••••"
               />
               {errors.confirmarSenha && (
@@ -119,7 +119,7 @@ export default function Register() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 rounded-lg transition-colors disabled:opacity-50"
+              className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 rounded-lg transition-colors disabled:opacity-50 min-h-[48px] touch-manipulation"
             >
               {loading ? 'Cadastrando...' : 'Cadastrar'}
             </button>

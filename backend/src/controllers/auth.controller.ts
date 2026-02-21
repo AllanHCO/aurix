@@ -48,11 +48,14 @@ export const register = async (req: Request, res: Response) => {
     }
   });
 
-  // Gerar token
-  const secret = process.env.JWT_SECRET || 'default-secret-change-in-production';
+  // Gerar token (exige JWT_SECRET em produção)
+  const secret = process.env.JWT_SECRET?.trim() || '';
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new AppError('Configuração do servidor incompleta (JWT_SECRET)', 500);
+  }
   const token = jwt.sign(
     { userId: usuario.id },
-    secret,
+    secret || 'default-secret-change-in-production',
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as jwt.SignOptions
   );
 
@@ -81,11 +84,14 @@ export const login = async (req: Request, res: Response) => {
     throw new AppError('Email ou senha inválidos', 401);
   }
 
-  // Gerar token
-  const secret = process.env.JWT_SECRET || 'default-secret-change-in-production';
+  // Gerar token (exige JWT_SECRET em produção)
+  const secret = process.env.JWT_SECRET?.trim() || '';
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new AppError('Configuração do servidor incompleta (JWT_SECRET)', 500);
+  }
   const token = jwt.sign(
     { userId: usuario.id },
-    secret,
+    secret || 'default-secret-change-in-production',
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as jwt.SignOptions
   );
 

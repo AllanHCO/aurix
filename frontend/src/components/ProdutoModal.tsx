@@ -73,21 +73,23 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface-light rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-border-light flex items-center justify-between">
-          <h2 className="text-xl font-bold text-text-main">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-surface-light rounded-xl shadow-lg max-w-2xl w-full my-auto max-h-[90vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 border-b border-border-light flex items-center justify-between shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold text-text-main">
             {produto ? 'Editar Produto' : 'Novo Produto'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="text-text-muted hover:text-text-main"
+            className="p-2 -m-2 rounded-lg text-text-muted hover:text-text-main hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+            aria-label="Fechar"
           >
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-4 sm:p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-text-main mb-1">
               Nome *
@@ -95,7 +97,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
             <input
               type="text"
               {...register('nome')}
-              className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+              className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
             />
             {errors.nome && (
               <p className="text-red-500 text-sm mt-1">{errors.nome.message}</p>
@@ -111,7 +113,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
                 type="number"
                 step="0.01"
                 {...register('preco', { valueAsNumber: true })}
-                className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               />
               {errors.preco && (
                 <p className="text-red-500 text-sm mt-1">{errors.preco.message}</p>
@@ -126,7 +128,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
                 type="number"
                 step="0.01"
                 {...register('custo', { valueAsNumber: true })}
-                className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               />
               {errors.custo && (
                 <p className="text-red-500 text-sm mt-1">{errors.custo.message}</p>
@@ -142,7 +144,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
               <input
                 type="number"
                 {...register('estoque_atual', { valueAsNumber: true })}
-                className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               />
               {errors.estoque_atual && (
                 <p className="text-red-500 text-sm mt-1">{errors.estoque_atual.message}</p>
@@ -156,7 +158,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
               <input
                 type="number"
                 {...register('estoque_minimo', { valueAsNumber: true })}
-                className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               />
               {errors.estoque_minimo && (
                 <p className="text-red-500 text-sm mt-1">{errors.estoque_minimo.message}</p>
@@ -168,13 +170,13 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-border-light rounded-lg text-text-main hover:bg-background-light"
+              className="flex-1 px-4 py-3 border border-border-light rounded-lg text-text-main hover:bg-background-light min-h-[44px] touch-manipulation"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-2 rounded-lg"
+              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 rounded-lg min-h-[44px] touch-manipulation"
             >
               {produto ? 'Atualizar' : 'Criar'}
             </button>

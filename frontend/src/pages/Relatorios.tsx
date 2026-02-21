@@ -55,13 +55,13 @@ export default function Relatorios() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-text-main mb-2">Relatórios</h1>
-        <p className="text-text-muted">Gere relatórios de vendas por período</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-1 sm:mb-2">Relatórios</h1>
+        <p className="text-sm sm:text-base text-text-muted">Gere relatórios de vendas por período</p>
       </div>
 
-      <div className="bg-surface-light rounded-xl border border-border-light shadow-sm p-6">
+      <div className="bg-surface-light rounded-xl border border-border-light shadow-sm p-4 sm:p-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div>
             <label className="block text-sm font-medium text-text-main mb-1">
@@ -85,18 +85,18 @@ export default function Relatorios() {
               className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
             />
           </div>
-          <div className="flex items-end gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <button
               onClick={gerarRelatorio}
               disabled={loading}
-              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-2 rounded-lg disabled:opacity-50"
+              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 rounded-lg disabled:opacity-50 min-h-[44px] touch-manipulation"
             >
               {loading ? 'Gerando...' : 'Gerar Relatório'}
             </button>
             {relatorio && (
               <button
                 onClick={exportarCSV}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-3 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation"
               >
                 <span className="material-symbols-outlined">download</span>
                 CSV
@@ -121,11 +121,11 @@ export default function Relatorios() {
             </div>
 
             {relatorio.vendas.length > 0 ? (
-              <div className="bg-background-light rounded-lg border border-border-light overflow-hidden">
-                <table className="w-full">
+              <div className="bg-background-light rounded-lg border border-border-light overflow-x-auto">
+                <table className="w-full min-w-[400px]">
                   <thead className="bg-surface-light border-b border-border-light">
                     <tr>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-text-muted">
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs sm:text-sm font-semibold text-text-muted">
                         Data
                       </th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-text-muted">

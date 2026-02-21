@@ -191,15 +191,15 @@ export default function Clientes() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-text-main mb-2">Clientes</h1>
-          <p className="text-text-muted">Gerencie sua base de clientes e monitore a inatividade</p>
+    <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-1 sm:mb-2">Clientes</h1>
+          <p className="text-sm sm:text-base text-text-muted">Gerencie sua base de clientes e monitore a inatividade</p>
         </div>
         <button
           onClick={() => setModalOpen(true)}
-          className="bg-primary hover:bg-primary-dark text-white font-bold px-5 py-2.5 rounded-lg flex items-center gap-2"
+          className="bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
         >
           <span className="material-symbols-outlined">add</span>
           Novo Cliente
@@ -251,26 +251,27 @@ export default function Clientes() {
       ) : (
         <>
           <div className="bg-surface-light rounded-xl border border-border-light shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <div className="inline-block min-w-full align-middle px-4 sm:px-0">
+              <table className="w-full min-w-[640px]">
                 <thead className="bg-background-light border-b border-border-light">
                   <tr>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-text-muted">
+                    <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
                       Nome
                     </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-text-muted">
+                    <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
                       Telefone
                     </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-text-muted">
+                    <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
                       Última Compra
                     </th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-text-muted">
+                    <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted">
                       Dias Inativo
                     </th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-text-muted">
+                    <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted">
                       Status
                     </th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-text-muted">
+                    <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted">
                       Ações
                     </th>
                   </tr>
@@ -283,15 +284,15 @@ export default function Clientes() {
                         const statusInfo = getStatusInfo(cliente.statusInatividade);
                         return (
                           <tr key={cliente.id} className="hover:bg-background-light">
-                        <td className="px-6 py-4 font-semibold text-text-main">{cliente.nome}</td>
-                        <td className="px-6 py-4 text-text-muted">{cliente.telefone || '-'}</td>
-                        <td className="px-6 py-4 text-text-muted">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-semibold text-text-main">{cliente.nome}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">{cliente.telefone || '-'}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">
                           {cliente.ultimaCompra ? formatDate(cliente.ultimaCompra) : '-'}
                         </td>
-                        <td className="px-6 py-4 text-center text-text-muted">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-center text-text-muted text-sm">
                           {cliente.diasInativo !== null ? `${cliente.diasInativo} ${cliente.diasInativo === 1 ? 'dia' : 'dias'}` : '-'}
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
                           <div className="flex items-center justify-center">
                             <div
                               className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${statusInfo.bg} ${statusInfo.cor} relative group`}
@@ -313,12 +314,12 @@ export default function Clientes() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-center gap-2">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4">
+                          <div className="flex items-center justify-center gap-1 sm:gap-2">
                             {cliente.telefone && (
                               <button
                                 onClick={() => abrirWhatsApp(cliente)}
-                                className="p-2 text-green-600 hover:bg-green-50 rounded"
+                                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-green-600 hover:bg-green-50 rounded touch-manipulation"
                                 title="Abrir WhatsApp"
                               >
                                 <span className="material-symbols-outlined">chat</span>
@@ -326,14 +327,14 @@ export default function Clientes() {
                             )}
                             <button
                               onClick={() => handleEdit(cliente)}
-                              className="p-2 text-primary hover:bg-primary/10 rounded"
+                              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-primary hover:bg-primary/10 rounded touch-manipulation"
                               title="Editar"
                             >
                               <span className="material-symbols-outlined">edit</span>
                             </button>
                             <button
                               onClick={() => handleDelete(cliente.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded"
+                              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-red-600 hover:bg-red-50 rounded touch-manipulation"
                               title="Excluir"
                             >
                               <span className="material-symbols-outlined">delete</span>
@@ -345,23 +346,24 @@ export default function Clientes() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={6} className="px-6 py-8 text-center text-text-muted">
+                      <td colSpan={6} className="px-4 sm:px-6 py-8 text-center text-text-muted text-sm">
                         Nenhum cliente encontrado com o filtro selecionado
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
 
           {/* Paginação */}
           {totalPaginas > 1 && (
-            <div className="flex items-center justify-between bg-surface-light rounded-xl border border-border-light p-4">
-              <div className="text-sm text-text-muted">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-surface-light rounded-xl border border-border-light p-4">
+              <div className="text-xs sm:text-sm text-text-muted text-center sm:text-left">
                 Mostrando {inicio + 1} a {Math.min(fim, clientesFiltrados.length)} de {clientesFiltrados.length} clientes
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-2">
                 <button
                   onClick={() => setPaginaAtual((p) => Math.max(1, p - 1))}
                   disabled={paginaAtual === 1}

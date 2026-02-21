@@ -65,15 +65,15 @@ export default function Produtos() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-text-main mb-2">Produtos</h1>
-          <p className="text-text-muted">Gerencie seu estoque</p>
+    <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-1 sm:mb-2">Produtos</h1>
+          <p className="text-sm sm:text-base text-text-muted">Gerencie seu estoque</p>
         </div>
         <button
           onClick={() => setModalOpen(true)}
-          className="bg-primary hover:bg-primary-dark text-white font-bold px-5 py-2.5 rounded-lg flex items-center gap-2"
+          className="bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
         >
           <span className="material-symbols-outlined">add</span>
           Novo Produto
@@ -98,25 +98,27 @@ export default function Produtos() {
         </div>
       ) : (
         <div className="bg-surface-light rounded-xl border border-border-light shadow-sm overflow-hidden">
-          <table className="w-full">
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="inline-block min-w-full align-middle px-4 sm:px-0">
+          <table className="w-full min-w-[520px]">
             <thead className="bg-background-light border-b border-border-light">
               <tr>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-text-muted">
+                <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
                   Nome
                 </th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-text-muted">
+                <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted">
                   Preço
                 </th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-text-muted">
+                <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted">
                   Custo
                 </th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-text-muted">
+                <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted">
                   Estoque
                 </th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-text-muted">
+                <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted">
                   Mínimo
                 </th>
-                <th className="px-6 py-4 text-center text-sm font-semibold text-text-muted">
+                <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted">
                   Ações
                 </th>
               </tr>
@@ -129,39 +131,39 @@ export default function Produtos() {
                     isEstoqueBaixo(produto) ? 'bg-red-50' : ''
                   }`}
                 >
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-text-main">{produto.nome}</span>
+                  <td className="px-3 sm:px-6 py-3 sm:py-4">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-semibold text-text-main truncate">{produto.nome}</span>
                       {isEstoqueBaixo(produto) && (
-                        <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
+                        <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded shrink-0">
                           Estoque Baixo
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-right font-semibold text-text-main">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-right font-semibold text-text-main text-sm sm:text-base">
                     {formatCurrency(produto.preco)}
                   </td>
-                  <td className="px-6 py-4 text-right text-text-muted">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-text-muted text-sm">
                     {formatCurrency(produto.custo)}
                   </td>
-                  <td className="px-6 py-4 text-right font-semibold text-text-main">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-right font-semibold text-text-main">
                     {produto.estoque_atual}
                   </td>
-                  <td className="px-6 py-4 text-right text-text-muted">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-text-muted">
                     {produto.estoque_minimo}
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-2">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4">
+                    <div className="flex items-center justify-center gap-1 sm:gap-2">
                       <button
                         onClick={() => handleEdit(produto)}
-                        className="p-2 text-primary hover:bg-primary/10 rounded"
+                        className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-primary hover:bg-primary/10 rounded touch-manipulation"
                       >
                         <span className="material-symbols-outlined">edit</span>
                       </button>
                       <button
                         onClick={() => handleDelete(produto.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded"
+                        className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-red-600 hover:bg-red-50 rounded touch-manipulation"
                       >
                         <span className="material-symbols-outlined">delete</span>
                       </button>
@@ -171,6 +173,8 @@ export default function Produtos() {
               ))}
             </tbody>
           </table>
+            </div>
+          </div>
         </div>
       )}
 
