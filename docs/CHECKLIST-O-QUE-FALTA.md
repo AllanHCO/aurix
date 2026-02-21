@@ -38,7 +38,35 @@ Quando isso estiver ok, você tem:
 
 ---
 
-### 2. Frontend chamando a API
+### 2. Site no Render em tela branca? (frontend)
+
+Se **aurix-43dn.onrender.com** (ou a URL do seu frontend) abre em branco mas no localhost funciona, confira:
+
+**A) Root Directory do serviço frontend no Render**
+
+- Se **Root Directory** estiver **vazio** (raiz do repositório):
+  - **Build Command:** `npm run build:frontend` ou `npm run build`
+  - **Start Command:** `serve frontend/dist -s -l ${PORT:-4173}`
+- Se **Root Directory** for **`frontend`**:
+  - **Build Command:** `npm run build`
+  - **Start Command:** `serve dist -s -l ${PORT:-4173}` ou `npm run start`  
+  (não use `serve frontend/dist` quando a raiz do serviço for a pasta `frontend`.)
+
+**B) Variável VITE_API_URL**
+
+- No serviço do **frontend** no Render, em **Environment**, adicione:
+  - **Key:** `VITE_API_URL`
+  - **Value:** `https://aurix-backend-rh6r.onrender.com/api` (ou a URL do seu backend + `/api`)
+- Salve e faça **novo deploy** do frontend (a variável é usada na hora do build).
+
+**C) Conferir no navegador**
+
+- Abra a URL do site, tecla **F12** → aba **Console**. Se aparecer erro 404 em algum arquivo `.js` ou `.css`, o Start Command ou a pasta servida estão errados.
+- Na aba **Network**, recarregue a página e veja se algum recurso falha (vermelho).
+
+---
+
+### 3. Frontend chamando a API
 
 O frontend precisa saber a URL da API **na hora do build**. Então:
 
@@ -55,7 +83,7 @@ Depois disso, ao abrir a URL do frontend e fazer login, o site vai chamar a API 
 
 ---
 
-### 3. CORS no backend
+### 4. CORS no backend
 
 O backend só aceita requisições do frontend se a origem estiver em `FRONTEND_URL`.  
 Você já deve ter colocado a URL do frontend em `FRONTEND_URL` no passo 1. Se a URL do frontend for outra, ajuste `FRONTEND_URL` no serviço do backend e salve (o Render faz redeploy).

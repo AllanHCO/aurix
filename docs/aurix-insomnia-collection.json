@@ -46,6 +46,14 @@
           }
         },
         {
+          "name": "GET Produto (por id)",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3001/api/produtos/:id",
+            "description": "Usar Bearer Token. Troque :id pelo ID do produto."
+          }
+        },
+        {
           "name": "POST Produto",
           "request": {
             "method": "POST",
@@ -56,6 +64,27 @@
             },
             "url": "http://localhost:3001/api/produtos",
             "description": "Usar Bearer Token"
+          }
+        },
+        {
+          "name": "PUT Produto",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Produto Atualizado\",\n  \"preco\": 109.90,\n  \"custo\": 50.00,\n  \"estoque_atual\": 45,\n  \"estoque_minimo\": 10\n}"
+            },
+            "url": "http://localhost:3001/api/produtos/:id",
+            "description": "Usar Bearer Token. Troque :id pelo ID do produto. Envie no body os campos que quiser atualizar."
+          }
+        },
+        {
+          "name": "DELETE Produto",
+          "request": {
+            "method": "DELETE",
+            "url": "http://localhost:3001/api/produtos/:id",
+            "description": "Usar Bearer Token. Troque :id pelo ID do produto."
           }
         }
       ]
@@ -72,6 +101,14 @@
           }
         },
         {
+          "name": "GET Cliente (por id)",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:3001/api/clientes/:id",
+            "description": "Usar Bearer Token. Troque :id pelo ID do cliente."
+          }
+        },
+        {
           "name": "POST Cliente",
           "request": {
             "method": "POST",
@@ -82,6 +119,27 @@
             },
             "url": "http://localhost:3001/api/clientes",
             "description": "Usar Bearer Token"
+          }
+        },
+        {
+          "name": "PUT Cliente",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Maria Silva Atualizada\",\n  \"telefone\": \"(11) 98888-0000\",\n  \"observacoes\": \"Cliente VIP\"\n}"
+            },
+            "url": "http://localhost:3001/api/clientes/:id",
+            "description": "Usar Bearer Token. Troque :id pelo ID do cliente. Envie no body os campos que quiser atualizar."
+          }
+        },
+        {
+          "name": "DELETE Cliente",
+          "request": {
+            "method": "DELETE",
+            "url": "http://localhost:3001/api/clientes/:id",
+            "description": "Usar Bearer Token. Troque :id pelo ID do cliente."
           }
         }
       ]
