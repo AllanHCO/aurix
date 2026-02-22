@@ -8,6 +8,7 @@ import VendaDetalheModal, { type VendaDetalhe } from '../components/VendaDetalhe
 interface Venda extends VendaDetalhe {
   itens: Array<{
     id: string;
+    produto_id: string;
     quantidade: number;
     preco_unitario: number;
     produto: { nome: string };

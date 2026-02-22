@@ -1,7 +1,7 @@
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function ThemeToggle() {
-  const { theme, toggleTheme, isDark } = useTheme();
+  const { toggleTheme, isDark } = useTheme();
 
   const label = isDark ? 'Alternar para modo claro' : 'Alternar para modo escuro';
   const icon = isDark ? 'light_mode' : 'dark_mode';
