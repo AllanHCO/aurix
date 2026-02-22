@@ -5,6 +5,12 @@ import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
 
 const prisma = new PrismaClient();
+/** Acesso a sql/empty/join (tipos podem não estar exportados em algumas versões do @prisma/client) */
+const PrismaRaw = Prisma as typeof Prisma & {
+  sql: (t: TemplateStringsArray, ...v: unknown[]) => unknown;
+  empty: unknown;
+  join: (arr: string[]) => unknown;
+};
 
 const produtoSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
@@ -53,46 +59,33 @@ export const listarProdutos = async (req: AuthRequest, res: Response) => {
   const { inicio, fim } = getPeriodoRange(periodoSafe);
 
   const whereCategoria = categoriaIds.length > 0
-    ? Prisma.sql`AND p.categoria_id IN (${Prisma.join(categoriaIds)})`
-    : Prisma.empty;
+    ? PrismaRaw.sql`AND p.categoria_id IN (${PrismaRaw.join(categoriaIds)})`
+    : PrismaRaw.empty;
   const whereNome = nome
-    ? Prisma.sql`AND p.nome ILIKE ${'%' + nome + '%'}`
-    : Prisma.empty;
+    ? PrismaRaw.sql`AND p.nome ILIKE ${'%' + nome + '%'}`
+    : PrismaRaw.empty;
 
-  const rows = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      nome: string;
-      preco: unknown;
-      custo: unknown;
-      estoque_atual: number;
-      estoque_minimo: number;
-      categoria_id: string;
-      categoria_nome: string | null;
-      createdAt: Date;
-      updatedAt: Date;
-      total_sold: bigint;
-    }>
-  >`
-    SELECT
-      p.id,
-      p.nome,
-      p.preco,
-      p.custo,
-      p.estoque_atual,
-      p.estoque_minimo,
-      p.categoria_id,
-      c.nome AS categoria_nome,
-      p."createdAt",
-      p."updatedAt",
-      COALESCE(SUM(iv.quantidade), 0)::bigint AS total_sold
+  type Row = {
+    id: string;
+    nome: string;
+    preco: unknown;
+    custo: unknown;
+    estoque_atual: number;
+    estoque_minimo: number;
+    categoria_id: string;
+    categoria_nome: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    total_sold: bigint;
+  };
+
+  const rows = await prisma.$queryRaw<Row[]>`
+    SELECT p.id, p.nome, p.preco, p.custo, p.estoque_atual, p.estoque_minimo, p.categoria_id, c.nome AS categoria_nome,
+      p."createdAt", p."updatedAt", COALESCE(SUM(iv.quantidade), 0)::bigint AS total_sold
     FROM produtos p
     LEFT JOIN categorias c ON c.id = p.categoria_id
     LEFT JOIN itens_venda iv ON iv.produto_id = p.id
-    LEFT JOIN vendas v ON v.id = iv.venda_id
-      AND v.status = 'PAGO'
-      AND v."createdAt" >= ${inicio}
-      AND v."createdAt" <= ${fim}
+    LEFT JOIN vendas v ON v.id = iv.venda_id AND v.status = 'PAGO' AND v."createdAt" >= ${inicio} AND v."createdAt" <= ${fim}
     WHERE 1=1
     ${whereCategoria}
     ${whereNome}
@@ -100,7 +93,7 @@ export const listarProdutos = async (req: AuthRequest, res: Response) => {
     ORDER BY p."createdAt" DESC
   `;
 
-  const produtos = rows.map((r) => ({
+  const produtos = rows.map((r: Row) => ({
     id: r.id,
     nome: r.nome,
     preco: Number(r.preco),
@@ -114,10 +107,11 @@ export const listarProdutos = async (req: AuthRequest, res: Response) => {
     qtdVendidaMesAtual: Number(r.total_sold)
   }));
 
+  type ProdutoListItem = { qtdVendidaMesAtual: number };
   if (filtroSafe === 'mais_vendidos') {
-    produtos.sort((a, b) => b.qtdVendidaMesAtual - a.qtdVendidaMesAtual);
+    produtos.sort((a: ProdutoListItem, b: ProdutoListItem) => b.qtdVendidaMesAtual - a.qtdVendidaMesAtual);
   } else if (filtroSafe === 'menos_vendidos') {
-    produtos.sort((a, b) => a.qtdVendidaMesAtual - b.qtdVendidaMesAtual);
+    produtos.sort((a: ProdutoListItem, b: ProdutoListItem) => a.qtdVendidaMesAtual - b.qtdVendidaMesAtual);
   }
 
   res.json(produtos);

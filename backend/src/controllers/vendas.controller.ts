@@ -218,7 +218,8 @@ export const atualizarVenda = async (req: AuthRequest, res: Response) => {
     throw new AppError('Venda não encontrada', 404);
   }
 
-  const itensNovos = body.itens ?? vendaExistente.itens.map(i => ({
+  type ItemVendaShape = { produto_id: string; quantidade: number; preco_unitario: number };
+  const itensNovos: ItemVendaShape[] = body.itens ?? vendaExistente.itens.map((i: { produto_id: string; quantidade: number; preco_unitario: unknown }) => ({
     produto_id: i.produto_id,
     quantidade: i.quantidade,
     preco_unitario: Number(i.preco_unitario)
@@ -241,7 +242,7 @@ export const atualizarVenda = async (req: AuthRequest, res: Response) => {
   }
 
   const subtotal = itensNovos.reduce(
-    (acc, item) => acc + Number(item.preco_unitario) * Number(item.quantidade),
+    (acc: number, item: ItemVendaShape) => acc + Number(item.preco_unitario) * Number(item.quantidade),
     0
   );
   const total = subtotal - desconto;
@@ -264,7 +265,7 @@ export const atualizarVenda = async (req: AuthRequest, res: Response) => {
 
     // 3) Criar novos itens
     await tx.itemVenda.createMany({
-      data: itensNovos.map(item => ({
+      data: itensNovos.map((item: ItemVendaShape) => ({
         venda_id: id,
         produto_id: item.produto_id,
         quantidade: item.quantidade,
