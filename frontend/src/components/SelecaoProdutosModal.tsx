@@ -26,10 +26,6 @@ export interface ItemVenda {
   quantidade: number;
 }
 
-function subtotalItem(item: ItemVenda): number {
-  return item.preco_unitario * item.quantidade;
-}
-
 interface SelecaoProdutosModalProps {
   open: boolean;
   onClose: () => void;
