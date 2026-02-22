@@ -38,6 +38,7 @@ export default {
         "success": "var(--color-success)",
         "error": "var(--color-error)",
         "warning": "var(--color-warning)",
+        "mint": "#10b981",
       },
       fontFamily: {
         display: ["Manrope", "sans-serif"],

@@ -4,17 +4,17 @@ import toast from 'react-hot-toast';
 import { formatDate } from '../utils/format';
 import ClienteModal from '../components/ClienteModal';
 
-type StatusInatividade = 'ATIVO' | 'ATENCAO' | 'INATIVO' | 'NOVO';
-type FiltroStatus = 'TODOS' | StatusInatividade;
+export type ClienteStatusManual = 'ativo' | 'atencao' | 'inativo';
+type FiltroStatus = 'TODOS' | ClienteStatusManual;
 
 interface Cliente {
   id: string;
   nome: string;
   telefone: string | null;
   observacoes: string | null;
+  status: ClienteStatusManual;
   ultimaCompra: string | null;
   diasInativo: number | null;
-  statusInatividade: StatusInatividade;
 }
 
 const ITENS_POR_PAGINA = 10;
@@ -51,9 +51,9 @@ export default function Clientes() {
           nome: cliente.nome || cliente.name || '',
           telefone: cliente.telefone || null,
           observacoes: cliente.observacoes || null,
+          status: cliente.status === 'atencao' || cliente.status === 'inativo' ? cliente.status : 'ativo',
           ultimaCompra: cliente.ultimaCompra || null,
-          diasInativo: cliente.diasInativo !== undefined ? cliente.diasInativo : null,
-          statusInatividade: cliente.statusInatividade || 'NOVO'
+          diasInativo: cliente.diasInativo !== undefined ? cliente.diasInativo : null
         }));
         
         console.log('Clientes normalizados:', clientesNormalizados);
@@ -82,8 +82,7 @@ export default function Clientes() {
     if (filtroStatus === 'TODOS') {
       return clientes;
     }
-    
-    return clientes.filter((c) => c && c.statusInatividade === filtroStatus);
+    return clientes.filter((c) => c && c.status === filtroStatus);
   }, [clientes, filtroStatus]);
 
   const handleDelete = async (id: string) => {
@@ -109,36 +108,14 @@ export default function Clientes() {
     loadClientes();
   };
 
-  const getStatusInfo = (status: StatusInatividade) => {
+  const getStatusInfo = (status: ClienteStatusManual) => {
     switch (status) {
-      case 'ATIVO':
-        return {
-          cor: 'text-green-600',
-          bg: 'bg-green-100',
-          icon: 'check_circle',
-          tooltip: 'Cliente ativo - menos de 30 dias sem comprar'
-        };
-      case 'ATENCAO':
-        return {
-          cor: 'text-yellow-600',
-          bg: 'bg-yellow-100',
-          icon: 'warning',
-          tooltip: 'Atenção - entre 30 e 45 dias sem comprar'
-        };
-      case 'INATIVO':
-        return {
-          cor: 'text-red-600',
-          bg: 'bg-red-100',
-          icon: 'cancel',
-          tooltip: 'Cliente inativo - mais de 45 dias sem comprar'
-        };
-      case 'NOVO':
-        return {
-          cor: 'text-gray-600',
-          bg: 'bg-gray-100',
-          icon: 'person_add',
-          tooltip: 'Cliente novo - ainda não realizou nenhuma compra'
-        };
+      case 'ativo':
+        return { cor: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30', label: 'Ativo' };
+      case 'atencao':
+        return { cor: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30', label: 'Atenção' };
+      case 'inativo':
+        return { cor: 'text-red-600 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30', label: 'Inativo' };
     }
   };
 
@@ -153,20 +130,14 @@ export default function Clientes() {
 
   const abrirWhatsApp = (cliente: Cliente) => {
     const telefoneFormatado = formatarTelefoneWhatsApp(cliente.telefone);
-    
     if (!telefoneFormatado) {
       toast.error('Telefone não disponível para este cliente');
       return;
     }
-
-    let mensagem = '';
-    if (cliente.statusInatividade === 'NOVO') {
-      mensagem = `Olá ${cliente.nome}! Tudo bem? Quer agendar um horário? 😊`;
-    } else {
-      const dias = cliente.diasInativo || 0;
-      mensagem = `Olá ${cliente.nome}! Tudo bem? Faz ${dias} ${dias === 1 ? 'dia' : 'dias'} que você não aparece por aqui. Quer agendar um horário? 😊`;
-    }
-
+    const dias = cliente.diasInativo ?? null;
+    const mensagem = dias !== null
+      ? `Olá ${cliente.nome}! Tudo bem? Faz ${dias} ${dias === 1 ? 'dia' : 'dias'} que você não aparece por aqui. Quer agendar um horário? 😊`
+      : `Olá ${cliente.nome}! Tudo bem? Quer agendar um horário? 😊`;
     const url = `https://wa.me/55${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`;
     window.open(url, '_blank');
   };
@@ -206,13 +177,12 @@ export default function Clientes() {
         </button>
       </div>
 
-      {/* Filtros rápidos */}
+      {/* Filtros rápidos por status */}
       <div className="flex gap-2 flex-wrap">
-        {(['TODOS', 'ATIVO', 'ATENCAO', 'INATIVO', 'NOVO'] as FiltroStatus[]).map((filtro) => {
-          const count = filtro === 'TODOS' 
+        {(['TODOS', 'ativo', 'atencao', 'inativo'] as FiltroStatus[]).map((filtro) => {
+          const count = filtro === 'TODOS'
             ? (clientes?.length || 0)
-            : (clientes?.filter((c) => c && c.statusInatividade === filtro).length || 0);
-          
+            : (clientes?.filter((c) => c && c.status === filtro).length || 0);
           return (
             <button
               key={filtro}
@@ -223,10 +193,7 @@ export default function Clientes() {
                   : 'bg-surface-light text-text-main hover:bg-background-light border border-border-light'
               }`}
             >
-              {filtro === 'TODOS' ? 'Todos' : 
-               filtro === 'ATIVO' ? 'Ativos' :
-               filtro === 'ATENCAO' ? 'Atenção' :
-               filtro === 'INATIVO' ? 'Inativos' : 'Novos'} ({count})
+              {filtro === 'TODOS' ? 'Todos' : filtro === 'ativo' ? 'Ativo' : filtro === 'atencao' ? 'Atenção' : 'Inativo'} ({count})
             </button>
           );
         })}
@@ -278,10 +245,8 @@ export default function Clientes() {
                 </thead>
                 <tbody className="divide-y divide-border-light">
                   {clientesPaginados && clientesPaginados.length > 0 ? (
-                    clientesPaginados
-                      .filter((cliente) => cliente && cliente.statusInatividade)
-                      .map((cliente) => {
-                        const statusInfo = getStatusInfo(cliente.statusInatividade);
+                    clientesPaginados.map((cliente) => {
+                        const statusInfo = getStatusInfo(cliente.status);
                         return (
                           <tr key={cliente.id} className="hover:bg-background-light">
                         <td className="px-3 sm:px-6 py-3 sm:py-4 font-semibold text-text-main">{cliente.nome}</td>
@@ -293,25 +258,8 @@ export default function Clientes() {
                           {cliente.diasInativo !== null ? `${cliente.diasInativo} ${cliente.diasInativo === 1 ? 'dia' : 'dias'}` : '-'}
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
-                          <div className="flex items-center justify-center">
-                            <div
-                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${statusInfo.bg} ${statusInfo.cor} relative group`}
-                              title={statusInfo.tooltip}
-                            >
-                              <span className="material-symbols-outlined text-sm">
-                                {statusInfo.icon}
-                              </span>
-                              <span className="text-xs font-medium">
-                                {cliente.statusInatividade === 'ATIVO' ? 'Ativo' :
-                                 cliente.statusInatividade === 'ATENCAO' ? 'Atenção' :
-                                 cliente.statusInatividade === 'INATIVO' ? 'Inativo' : 'Novo'}
-                              </span>
-                              {/* Tooltip */}
-                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-10">
-                                {statusInfo.tooltip}
-                                <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
-                              </div>
-                            </div>
+                          <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.cor}`}>
+                            {statusInfo.label}
                           </div>
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4">

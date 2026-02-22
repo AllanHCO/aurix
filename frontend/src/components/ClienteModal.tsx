@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
+type ClienteStatusManual = 'ativo' | 'atencao' | 'inativo';
 
 const clienteSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
@@ -13,17 +14,25 @@ const clienteSchema = z.object({
 
 type ClienteForm = z.infer<typeof clienteSchema>;
 
+const STATUS_OPCOES: { valor: ClienteStatusManual; label: string; cor: string; bg: string }[] = [
+  { valor: 'ativo', label: 'Ativo', cor: 'text-green-700 dark:text-green-300', bg: 'bg-green-500' },
+  { valor: 'atencao', label: 'Atenção', cor: 'text-amber-800 dark:text-amber-200', bg: 'bg-amber-400' },
+  { valor: 'inativo', label: 'Inativo', cor: 'text-red-700 dark:text-red-300', bg: 'bg-red-500' }
+];
+
 interface ClienteModalProps {
   cliente?: {
     id: string;
     nome: string;
     telefone: string | null;
     observacoes: string | null;
+    status?: ClienteStatusManual;
   } | null;
   onClose: () => void;
 }
 
 export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
+  const [statusLocal, setStatusLocal] = useState<ClienteStatusManual>(cliente?.status ?? 'ativo');
   const {
     register,
     handleSubmit,
@@ -40,22 +49,25 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
         telefone: cliente.telefone || '',
         observacoes: cliente.observacoes || ''
       });
+      setStatusLocal(cliente.status ?? 'ativo');
     } else {
       reset({
         nome: '',
         telefone: '',
         observacoes: ''
       });
+      setStatusLocal('ativo');
     }
   }, [cliente, reset]);
 
   const onSubmit = async (data: ClienteForm) => {
     try {
+      const payload = { ...data, status: statusLocal };
       if (cliente) {
-        await api.put(`/clientes/${cliente.id}`, data);
+        await api.put(`/clientes/${cliente.id}`, payload);
         toast.success('Cliente atualizado com sucesso!');
       } else {
-        await api.post('/clientes', data);
+        await api.post('/clientes', payload);
         toast.success('Cliente criado com sucesso!');
       }
       onClose();
@@ -118,6 +130,36 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
               className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               placeholder="Anotações sobre o cliente..."
             />
+          </div>
+
+          <div className="pt-2 pb-2 border-t border-border-light">
+            <p className="text-sm font-medium text-text-main mb-2">Status</p>
+            <div className="flex flex-wrap gap-2">
+              {STATUS_OPCOES.map((op) => {
+                const ativo = statusLocal === op.valor;
+                return (
+                  <button
+                    key={op.valor}
+                    type="button"
+                    onClick={() => setStatusLocal(op.valor)}
+                    className={`
+                      inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium
+                      transition-all duration-200 cursor-pointer
+                      ${ativo
+                        ? `${op.bg} text-white shadow-md`
+                        : 'bg-surface-elevated text-text-muted hover:bg-surface-light border border-border-light'
+                      }
+                    `}
+                  >
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${ativo ? 'bg-white/90' : op.bg}`}
+                      aria-hidden
+                    />
+                    {op.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex gap-3 pt-4">

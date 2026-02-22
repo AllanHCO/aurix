@@ -12,18 +12,26 @@ const clienteSchema = z.object({
   observacoes: z.string().optional()
 });
 
-type StatusInatividade = 'ATIVO' | 'ATENCAO' | 'INATIVO' | 'NOVO';
+const clienteCreateSchema = clienteSchema.extend({
+  status: z.enum(['ativo', 'atencao', 'inativo']).optional()
+});
 
-interface ClienteComInatividade {
+export type ClienteStatusManual = 'ativo' | 'atencao' | 'inativo';
+
+const clienteUpdateSchema = clienteSchema.extend({
+  status: z.enum(['ativo', 'atencao', 'inativo']).optional()
+}).partial();
+
+interface ClienteListagem {
   id: string;
   nome: string;
   telefone: string | null;
   observacoes: string | null;
+  status: ClienteStatusManual;
   createdAt: Date;
   updatedAt: Date;
   ultimaCompra: string | null;
   diasInativo: number | null;
-  statusInatividade: StatusInatividade;
 }
 
 interface ClienteComVendas {
@@ -31,6 +39,7 @@ interface ClienteComVendas {
   nome: string;
   telefone: string | null;
   observacoes: string | null;
+  status: string;
   createdAt: Date;
   updatedAt: Date;
   vendas: { createdAt: Date }[];
@@ -63,44 +72,31 @@ export const listarClientes = async (req: AuthRequest, res: Response) => {
 
     const hoje = new Date();
 
-    const clientesComInatividade: ClienteComInatividade[] = clientes.map((cliente: ClienteComVendas) => {
+    const lista: ClienteListagem[] = clientes.map((cliente: ClienteComVendas) => {
       const ultimaVenda = cliente.vendas[0]?.createdAt ?? null;
-
       let diasInativo: number | null = null;
-      let statusInatividade: StatusInatividade;
-
-      if (!ultimaVenda) {
-        statusInatividade = 'NOVO';
-      } else {
+      if (ultimaVenda) {
         const diffMs = hoje.getTime() - ultimaVenda.getTime();
         diasInativo = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-        if (diasInativo < 30) {
-          statusInatividade = 'ATIVO';
-        } else if (diasInativo <= 45) {
-          statusInatividade = 'ATENCAO';
-        } else {
-          statusInatividade = 'INATIVO';
-        }
       }
+      const status = (cliente.status === 'ativo' || cliente.status === 'atencao' || cliente.status === 'inativo')
+        ? cliente.status
+        : 'ativo';
 
-      const clienteFormatado = {
+      return {
         id: cliente.id,
         nome: cliente.nome,
         telefone: cliente.telefone,
         observacoes: cliente.observacoes,
+        status,
         createdAt: cliente.createdAt,
         updatedAt: cliente.updatedAt,
         ultimaCompra: ultimaVenda ? ultimaVenda.toISOString() : null,
-        diasInativo,
-        statusInatividade
+        diasInativo
       };
-
-      return clienteFormatado;
     });
 
-    console.log('Clientes processados:', JSON.stringify(clientesComInatividade, null, 2));
-    res.json(clientesComInatividade);
+    res.json(lista);
   } catch (error: any) {
     console.error('Erro ao listar clientes:', error);
     throw new AppError('Erro ao listar clientes', 500);
@@ -141,7 +137,13 @@ export const obterCliente = async (req: AuthRequest, res: Response) => {
 };
 
 export const criarCliente = async (req: AuthRequest, res: Response) => {
-  const data = clienteSchema.parse(req.body);
+  const parsed = clienteCreateSchema.parse(req.body);
+  const data = {
+    nome: parsed.nome,
+    telefone: parsed.telefone ?? undefined,
+    observacoes: parsed.observacoes ?? undefined,
+    ...(parsed.status && { status: parsed.status })
+  };
 
   const cliente = await prisma.cliente.create({
     data
@@ -152,7 +154,7 @@ export const criarCliente = async (req: AuthRequest, res: Response) => {
 
 export const atualizarCliente = async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const data = clienteSchema.partial().parse(req.body);
+  const data = clienteUpdateSchema.parse(req.body);
 
   const clienteExistente = await prisma.cliente.findUnique({
     where: { id }

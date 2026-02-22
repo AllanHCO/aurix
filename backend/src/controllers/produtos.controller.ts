@@ -5,6 +5,20 @@ import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
 
 const prisma = new PrismaClient();
+
+/** Janela em segundos para considerar duplicata (mesmo nome + categoria). */
+const DUPLICIDADE_JANELA_SEGUNDOS = 30;
+
+/** Cache de idempotência para POST /produtos: chave -> { statusCode, body, createdAt }. TTL 60s. */
+const IDEMPOTENCY_TTL_MS = 60_000;
+const produtoIdempotencyCache = new Map<string, { statusCode: number; body: unknown; createdAt: number }>();
+
+function purgeExpiredProdutoIdempotency() {
+  const now = Date.now();
+  for (const [key, entry] of produtoIdempotencyCache.entries()) {
+    if (now - entry.createdAt > IDEMPOTENCY_TTL_MS) produtoIdempotencyCache.delete(key);
+  }
+}
 /** Acesso a sql/empty/join (tipos podem não estar exportados em algumas versões do @prisma/client) */
 const PrismaRaw = Prisma as typeof Prisma & {
   sql: (t: TemplateStringsArray, ...v: unknown[]) => unknown;
@@ -133,16 +147,72 @@ export const obterProduto = async (req: AuthRequest, res: Response) => {
 };
 
 export const criarProduto = async (req: AuthRequest, res: Response) => {
-  const data = produtoSchema.parse(req.body);
-  const categoria = await prisma.categoria.findUnique({ where: { id: data.categoria_id } });
-  if (!categoria) throw new AppError('Categoria não encontrada', 400);
+  const idempotencyKey = (req.headers['idempotency-key'] ?? req.headers['x-idempotency-key']) as string | undefined;
 
-  const produto = await prisma.produto.create({
-    data,
-    include: { categoria: true }
-  });
+  purgeExpiredProdutoIdempotency();
+  if (idempotencyKey?.trim()) {
+    const cached = produtoIdempotencyCache.get(idempotencyKey.trim());
+    if (cached && Date.now() - cached.createdAt <= IDEMPOTENCY_TTL_MS) {
+      return res.status(cached.statusCode).json(cached.body);
+    }
+  }
 
-  res.status(201).json(produto);
+  try {
+    const data = produtoSchema.parse(req.body);
+
+    const produto = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const categoria = await tx.categoria.findUnique({ where: { id: data.categoria_id } });
+      if (!categoria) throw new AppError('Categoria não encontrada', 400);
+
+      const desde = new Date(Date.now() - DUPLICIDADE_JANELA_SEGUNDOS * 1000);
+      const duplicata = await tx.produto.findFirst({
+        where: {
+          categoria_id: data.categoria_id,
+          nome: { equals: data.nome.trim(), mode: 'insensitive' },
+          createdAt: { gte: desde }
+        }
+      });
+      if (duplicata) {
+        throw new AppError(
+          'Já existe um produto com o mesmo nome nesta categoria criado há pouco. Aguarde alguns segundos ou use outro nome.',
+          409
+        );
+      }
+
+      const payload = {
+        nome: data.nome.trim(),
+        preco: data.preco,
+        custo: data.custo,
+        estoque_atual: data.estoque_atual,
+        estoque_minimo: data.estoque_minimo,
+        categoria_id: data.categoria_id
+      };
+      const created = await tx.produto.create({
+        data: payload,
+        include: { categoria: true }
+      });
+      return created;
+    });
+
+    const body = JSON.parse(JSON.stringify(produto));
+    if (idempotencyKey?.trim()) {
+      produtoIdempotencyCache.set(idempotencyKey.trim(), {
+        statusCode: 201,
+        body,
+        createdAt: Date.now()
+      });
+    }
+    res.status(201).json(body);
+  } catch (error: any) {
+    if (error instanceof AppError) throw error;
+    if (error.code === 'P2002') {
+      throw new AppError(
+        'Já existe um produto com o mesmo nome nesta categoria. Não é possível duplicar.',
+        409
+      );
+    }
+    throw error;
+  }
 };
 
 export const atualizarProduto = async (req: AuthRequest, res: Response) => {

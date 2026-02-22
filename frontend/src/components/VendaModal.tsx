@@ -5,34 +5,23 @@ import { z } from 'zod';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
 import { formatCurrency } from '../utils/format';
-
-const itemSchema = z.object({
-  produto_id: z.string().min(1, 'Produto é obrigatório'),
-  quantidade: z.number().int().positive('Quantidade deve ser positiva'),
-  preco_unitario: z.number().positive('Preço unitário deve ser positivo')
-});
+import SelecaoProdutosModal, { type ItemVenda } from './SelecaoProdutosModal';
 
 const vendaSchema = z.object({
   cliente_id: z.string().min(1, 'Cliente é obrigatório'),
-  desconto: z.number().nonnegative('Desconto não pode ser negativo').default(0),
+  desconto_percentual: z
+    .number()
+    .min(0, 'Desconto não pode ser negativo')
+    .max(100, 'Desconto não pode ser maior que 100%')
+    .default(0),
   forma_pagamento: z.string().min(1, 'Forma de pagamento é obrigatória'),
   status: z.enum(['PAGO', 'PENDENTE']).default('PENDENTE')
 });
 
 type VendaForm = z.infer<typeof vendaSchema>;
-type ItemForm = z.infer<typeof itemSchema>;
 
-interface Produto {
-  id: string;
-  nome: string;
-  preco: number;
-  estoque_atual: number;
-  categoria_id?: string;
-}
-
-interface Categoria {
-  id: string;
-  nome: string;
+function subtotalItem(item: ItemVenda): number {
+  return Math.round(item.preco_unitario * item.quantidade * 100) / 100;
 }
 
 interface Cliente {
@@ -55,6 +44,12 @@ interface VendaParaEdicao {
   }>;
 }
 
+/** Calcula percentual de desconto a partir do valor em R$ e do subtotal. */
+function descontoPercentualFromValor(descontoValor: number, subtotal: number): number {
+  if (subtotal <= 0) return 0;
+  return Math.min(100, Math.max(0, (descontoValor / subtotal) * 100));
+}
+
 interface VendaModalProps {
   onClose: () => void;
   vendaId?: string;
@@ -63,13 +58,11 @@ interface VendaModalProps {
 
 export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps) {
   const isEdit = Boolean(vendaId && venda);
-  const [produtos, setProdutos] = useState<Produto[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [itens, setItens] = useState<ItemForm[]>([]);
+  const [itens, setItens] = useState<ItemVenda[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCategoriaIds, setSelectedCategoriaIds] = useState<string[]>([]);
-  const [searchNome, setSearchNome] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSelecaoProdutos, setShowSelecaoProdutos] = useState(false);
 
   const {
     register,
@@ -81,11 +74,11 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
     resolver: zodResolver(vendaSchema),
     defaultValues: {
       status: 'PENDENTE',
-      desconto: 0
+      desconto_percentual: 0
     }
   });
 
-  const desconto = watch('desconto') || 0;
+  const descontoPercentual = watch('desconto_percentual') ?? 0;
 
   useEffect(() => {
     loadData();
@@ -93,31 +86,29 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
 
   useEffect(() => {
     if (!loading && venda && venda.itens?.length) {
+      const itensIniciais: ItemVenda[] = venda.itens.map((i) => ({
+        produto_id: i.produto_id,
+        nome: i.produto?.nome ?? '',
+        preco_unitario: Number(i.preco_unitario),
+        quantidade: i.quantidade
+      }));
+      const subtotalBruto = itensIniciais.reduce((acc, i) => acc + subtotalItem(i), 0);
+      const percentual = descontoPercentualFromValor(Number(venda.desconto) || 0, subtotalBruto);
       reset({
         cliente_id: venda.cliente_id ?? '',
-        desconto: Number(venda.desconto) || 0,
-        forma_pagamento: venda.forma_pagamento || '',
-        status: venda.status || 'PENDENTE'
+        desconto_percentual: Math.round(percentual * 100) / 100,
+        forma_pagamento: venda.forma_pagamento ?? '',
+        status: venda.status ?? 'PENDENTE'
       });
-      setItens(
-        venda.itens.map((i) => ({
-          produto_id: i.produto_id,
-          quantidade: i.quantidade,
-          preco_unitario: Number(i.preco_unitario)
-        }))
-      );
+      setItens(itensIniciais);
     }
   }, [loading, venda, reset]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [clientesRes, categoriasRes] = await Promise.all([
-        api.get('/clientes'),
-        api.get('/categorias')
-      ]);
+      const clientesRes = await api.get('/clientes');
       setClientes(clientesRes.data);
-      setCategorias(categoriasRes.data);
     } catch (error) {
       toast.error('Erro ao carregar dados');
     } finally {
@@ -125,73 +116,20 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
     }
   };
 
-  const loadProdutos = async (categoriaIds: string[], nome: string) => {
-    try {
-      const params: Record<string, string | string[]> = {};
-      if (categoriaIds.length) params.categoria_ids = categoriaIds;
-      if (nome.trim()) params.nome = nome.trim();
-      const res = await api.get<Produto[]>('/produtos', { params });
-      setProdutos(res.data);
-    } catch {
-      setProdutos([]);
-    }
-  };
-
-  useEffect(() => {
-    if (!loading) loadProdutos(selectedCategoriaIds, searchNome);
-  }, [loading, selectedCategoriaIds, searchNome]);
-
-  const toggleCategoria = (id: string) => {
-    setSelectedCategoriaIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  const adicionarItem = () => {
-    setItens([
-      ...itens,
-      {
-        produto_id: '',
-        quantidade: 1,
-        preco_unitario: 0
-      }
-    ]);
-  };
-
   const removerItem = (index: number) => {
     setItens(itens.filter((_, i) => i !== index));
   };
 
-  const atualizarItem = (index: number, campo: keyof ItemForm, valor: any) => {
+  const atualizarItemVenda = (index: number, valor: number) => {
     const novosItens = [...itens];
-    
-    // Converter valores para o tipo correto
-    if (campo === 'quantidade') {
-      novosItens[index] = { ...novosItens[index], [campo]: Number(valor) || 0 };
-    } else if (campo === 'preco_unitario') {
-      novosItens[index] = { ...novosItens[index], [campo]: Number(valor) || 0 };
-    } else {
-      novosItens[index] = { ...novosItens[index], [campo]: valor };
-    }
-
-    // Se mudou o produto, atualizar preço
-    if (campo === 'produto_id') {
-      const produto = produtos.find(p => p.id === valor);
-      if (produto) {
-        novosItens[index].preco_unitario = Number(produto.preco);
-      }
-    }
-
+    novosItens[index] = { ...novosItens[index], quantidade: Math.max(1, Math.floor(valor)) };
     setItens(novosItens);
   };
 
-  const calcularTotal = () => {
-    const subtotal = itens.reduce(
-      (acc, item) => acc + item.preco_unitario * item.quantidade,
-      0
-    );
-    return subtotal - (desconto || 0);
-  };
+  const subtotalItens = Math.round(itens.reduce((acc, item) => acc + item.preco_unitario * item.quantidade, 0) * 100) / 100;
+  const descontoPct = Math.max(0, Math.min(100, Number(descontoPercentual) ?? 0));
+  const valorDesconto = Math.round(subtotalItens * (descontoPct / 100) * 100) / 100;
+  const totalFinal = Math.round((subtotalItens - valorDesconto) * 100) / 100;
 
   const onSubmit = async (data: VendaForm) => {
     if (!data.cliente_id || data.cliente_id === '') {
@@ -205,50 +143,64 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
     }
 
     if (itens.length === 0) {
-      toast.error('Adicione pelo menos um item à venda');
+      toast.error('Adicione pelo menos um produto à venda');
       return;
     }
 
-    // Validar itens antes de enviar
     const itensInvalidos = itens.filter(
-      item => !item.produto_id || item.quantidade <= 0 || item.preco_unitario <= 0
+      (item) => !item.produto_id || item.quantidade <= 0 || item.preco_unitario <= 0
     );
-
     if (itensInvalidos.length > 0) {
-      toast.error('Preencha todos os campos dos itens corretamente (produto, quantidade e preço)');
+      toast.error('Revise os itens (quantidade e preço devem ser positivos)');
       return;
     }
 
-    // Validar se todos os produtos foram selecionados
-    const produtosNaoSelecionados = itens.filter(item => !item.produto_id || item.produto_id === '');
-    if (produtosNaoSelecionados.length > 0) {
-      toast.error('Selecione um produto para todos os itens');
-      return;
-    }
+    const payloadItens = itens.map((item) => ({
+      produto_id: item.produto_id,
+      quantidade: Number(item.quantidade),
+      preco_unitario: Math.round(Number(item.preco_unitario) * 100) / 100
+    }));
 
-    try {
-      const vendaData = {
-        cliente_id: data.cliente_id,
-        desconto: Number(data.desconto) || 0,
-        forma_pagamento: data.forma_pagamento,
-        status: data.status || 'PENDENTE',
-        itens: itens.map(item => ({
-          produto_id: item.produto_id,
-          quantidade: Number(item.quantidade),
-          preco_unitario: Number(item.preco_unitario)
-        }))
-      };
-
-      if (isEdit && vendaId) {
+    if (isEdit && vendaId) {
+      try {
+        setIsSubmitting(true);
+        const vendaData = {
+          cliente_id: data.cliente_id,
+          desconto_percentual: Math.min(100, Math.max(0, Number(data.desconto_percentual) ?? 0)),
+          forma_pagamento: data.forma_pagamento,
+          status: data.status || 'PENDENTE',
+          itens: payloadItens
+        };
         await api.put(`/vendas/${vendaId}`, vendaData);
         toast.success('Venda atualizada com sucesso!');
-      } else {
-        await api.post('/vendas', vendaData);
-        toast.success('Venda registrada com sucesso!');
+        onClose();
+      } catch (error: any) {
+        setIsSubmitting(false);
+        const errorMessage = error.response?.data?.error || error.message || 'Erro ao atualizar venda';
+        toast.error(errorMessage);
       }
+      return;
+    }
+
+    setIsSubmitting(true);
+    const idempotencyKey = crypto.randomUUID?.() ?? `venda-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const vendaData = {
+      cliente_id: data.cliente_id,
+      desconto_percentual: Math.min(100, Math.max(0, Number(data.desconto_percentual) ?? 0)),
+      forma_pagamento: data.forma_pagamento,
+      status: data.status || 'PENDENTE',
+      itens: payloadItens
+    };
+
+    try {
+      await api.post('/vendas', vendaData, {
+        headers: { 'Idempotency-Key': idempotencyKey }
+      });
+      toast.success('Venda registrada com sucesso!');
       onClose();
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || (isEdit ? 'Erro ao atualizar venda' : 'Erro ao registrar venda');
+      setIsSubmitting(false);
+      const errorMessage = error.response?.data?.error || error.message || 'Erro ao registrar venda';
       toast.error(errorMessage);
     }
   };
@@ -306,108 +258,63 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
               </label>
               <button
                 type="button"
-                onClick={adicionarItem}
-                className="text-primary hover:text-primary-dark text-sm font-semibold flex items-center gap-1"
+                onClick={() => setShowSelecaoProdutos(true)}
+                className="bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-1.5"
               >
-                <span className="material-symbols-outlined text-lg">add</span>
-                Adicionar Item
+                <span className="material-symbols-outlined">add</span>
+                Adicionar Produtos
               </button>
             </div>
 
-            <div className="mb-3 p-3 bg-background-light rounded-lg border border-border-light">
-              <p className="text-xs font-medium text-text-muted mb-2">Filtrar produtos por categoria</p>
-              <div className="flex flex-wrap gap-2 mb-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedCategoriaIds.length === 0}
-                    onChange={() => setSelectedCategoriaIds([])}
-                    className="rounded border-border-light"
-                  />
-                  <span className="text-sm text-text-main">Todos</span>
-                </label>
-                {categorias.map((c) => (
-                  <label key={c.id} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedCategoriaIds.includes(c.id)}
-                      onChange={() => toggleCategoria(c.id)}
-                      className="rounded border-border-light"
-                    />
-                    <span className="text-sm text-text-main">{c.nome}</span>
-                  </label>
-                ))}
-              </div>
-              <input
-                type="text"
-                value={searchNome}
-                onChange={(e) => setSearchNome(e.target.value)}
-                placeholder="Buscar por nome do produto"
-                className="w-full px-3 py-2 text-sm border border-border-light rounded-lg outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-
             {itens.length === 0 ? (
-              <div className="text-center py-8 border border-border-light rounded-lg text-text-muted">
-                Nenhum item adicionado
+              <div className="text-center py-8 border border-border-light rounded-lg text-text-muted bg-background-light">
+                Nenhum item adicionado. Clique em &quot;Adicionar Produtos&quot; para abrir o catálogo.
               </div>
             ) : (
-              <div className="space-y-3">
-                {itens.map((item, index) => (
-                    <div
-                      key={index}
-                      className="flex gap-3 p-4 border border-border-light rounded-lg"
-                    >
-                      <div className="flex-1">
-                        <select
-                          value={item.produto_id}
-                          onChange={(e) => atualizarItem(index, 'produto_id', e.target.value)}
-                          className="w-full px-3 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary outline-none"
-                        >
-                          <option value="">Selecione o produto</option>
-                          {produtos.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.nome} - Estoque: {p.estoque_atual}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="w-24">
-                        <input
-                          type="number"
-                          value={item.quantidade}
-                          onChange={(e) =>
-                            atualizarItem(index, 'quantidade', parseInt(e.target.value) || 0)
-                          }
-                          min="1"
-                          className="w-full px-3 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary outline-none"
-                          placeholder="Qtd"
-                        />
-                      </div>
-                      <div className="w-32">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={item.preco_unitario}
-                          onChange={(e) =>
-                            atualizarItem(index, 'preco_unitario', parseFloat(e.target.value) || 0)
-                          }
-                          className="w-full px-3 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary outline-none"
-                          placeholder="Preço"
-                        />
-                      </div>
-                      <div className="w-24 text-right font-semibold text-text-main flex items-center">
-                        {formatCurrency(item.preco_unitario * item.quantidade)}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removerItem(index)}
-                        className="text-error hover:bg-badge-erro p-2 rounded"
-                      >
-                        <span className="material-symbols-outlined">delete</span>
-                      </button>
-                    </div>
-                ))}
+              <div className="border border-border-light rounded-lg overflow-hidden">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-background-light text-text-muted">
+                    <tr>
+                      <th className="p-3 font-medium">Produto</th>
+                      <th className="p-3 font-medium w-24">Quantidade</th>
+                      <th className="p-3 font-medium w-28">Preço unit.</th>
+                      <th className="p-3 font-medium w-28 text-right">Subtotal</th>
+                      <th className="p-3 w-12" aria-label="Remover" />
+                    </tr>
+                  </thead>
+                  <tbody className="text-text-main divide-y divide-border-light">
+                    {itens.map((item, index) => (
+                      <tr key={`${item.produto_id}-${index}`} className="hover:bg-surface-elevated/50">
+                        <td className="p-3 font-medium">{item.nome}</td>
+                        <td className="p-3">
+                          <input
+                            type="number"
+                            min={1}
+                            value={item.quantidade}
+                            onChange={(e) =>
+                              atualizarItemVenda(index, parseInt(e.target.value, 10) || 1)
+                            }
+                            className="w-16 px-2 py-1 border border-border-light rounded bg-input-bg text-text-main"
+                          />
+                        </td>
+                        <td className="p-3">{formatCurrency(item.preco_unitario)}</td>
+                        <td className="p-3 text-right font-medium">
+                          {formatCurrency(subtotalItem(item))}
+                        </td>
+                        <td className="p-3">
+                          <button
+                            type="button"
+                            onClick={() => removerItem(index)}
+                            className="text-error hover:bg-badge-erro p-2 rounded"
+                            title="Remover item"
+                          >
+                            <span className="material-symbols-outlined text-lg">delete</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -415,14 +322,26 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-text-main mb-1">
-                Desconto (R$)
+                Desconto (%)
               </label>
-              <input
-                type="number"
-                step="0.01"
-                {...register('desconto', { valueAsNumber: true })}
-                className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  {...register('desconto_percentual', {
+                    valueAsNumber: true,
+                    min: { value: 0, message: 'Mínimo 0%' },
+                    max: { value: 100, message: 'Máximo 100%' }
+                  })}
+                  className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                />
+                <span className="text-text-muted font-medium shrink-0">%</span>
+              </div>
+              {errors.desconto_percentual && (
+                <p className="text-red-500 text-sm mt-1">{errors.desconto_percentual.message}</p>
+              )}
             </div>
 
             <div>
@@ -460,26 +379,21 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
 
           <div className="bg-background-light p-4 rounded-lg border border-border-light">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-text-muted">Subtotal:</span>
+              <span className="text-text-muted">Subtotal</span>
               <span className="font-semibold text-text-main">
-                {formatCurrency(
-                  itens.reduce(
-                    (acc, item) => acc + item.preco_unitario * item.quantidade,
-                    0
-                  )
-                )}
+                {formatCurrency(subtotalItens)}
               </span>
             </div>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-text-muted">Desconto:</span>
+              <span className="text-text-muted">Desconto ({descontoPct}%)</span>
               <span className="font-semibold text-text-main">
-                {formatCurrency(desconto)}
+                {formatCurrency(valorDesconto)}
               </span>
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-border-light">
-              <span className="text-lg font-bold text-text-main">Total:</span>
+              <span className="text-lg font-bold text-text-main">Total final</span>
               <span className="text-2xl font-bold text-primary">
-                {formatCurrency(calcularTotal())}
+                {formatCurrency(totalFinal)}
               </span>
             </div>
           </div>
@@ -488,19 +402,37 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-border-light rounded-lg text-text-main hover:bg-background-light"
+              disabled={isSubmitting}
+              className="flex-1 px-4 py-2 border border-border-light rounded-lg text-text-main hover:bg-background-light disabled:opacity-50 disabled:pointer-events-none"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-2 rounded-lg"
+              disabled={isSubmitting || itens.length === 0}
+              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed min-h-[44px]"
             >
-              {isEdit ? 'Salvar alterações' : 'Registrar Venda'}
+              {isSubmitting ? (
+                <>
+                  <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                  Processando...
+                </>
+              ) : isEdit ? (
+                'Salvar alterações'
+              ) : (
+                'Finalizar Venda'
+              )}
             </button>
           </div>
         </form>
       </div>
+
+      <SelecaoProdutosModal
+        open={showSelecaoProdutos}
+        onClose={() => setShowSelecaoProdutos(false)}
+        itensDaVenda={itens}
+        setItensDaVenda={setItens}
+      />
     </div>
   );
 }

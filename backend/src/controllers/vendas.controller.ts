@@ -6,6 +6,17 @@ import { AuthRequest } from '../middleware/auth';
 
 const prisma = new PrismaClient();
 
+/** Cache de idempotência: chave -> { statusCode, body, createdAt }. TTL 60s. */
+const IDEMPOTENCY_TTL_MS = 60_000;
+const idempotencyCache = new Map<string, { statusCode: number; body: unknown; createdAt: number }>();
+
+function purgeExpiredIdempotency() {
+  const now = Date.now();
+  for (const [key, entry] of idempotencyCache.entries()) {
+    if (now - entry.createdAt > IDEMPOTENCY_TTL_MS) idempotencyCache.delete(key);
+  }
+}
+
 const itemVendaSchema = z.object({
   produto_id: z.string().uuid('ID do produto inválido'),
   quantidade: z.union([z.number(), z.string()]).transform(val => Number(val)).pipe(z.number().int().positive('Quantidade deve ser positiva')),
@@ -15,10 +26,39 @@ const itemVendaSchema = z.object({
 const vendaSchema = z.object({
   cliente_id: z.string().uuid('ID do cliente inválido'),
   itens: z.array(itemVendaSchema).min(1, 'Venda deve ter pelo menos um item'),
-  desconto: z.union([z.number(), z.string()]).transform(val => Number(val)).pipe(z.number().nonnegative('Desconto não pode ser negativo')).default(0),
+  desconto_percentual: z
+    .union([z.number(), z.string()])
+    .transform((val) => Number(val))
+    .pipe(
+      z
+        .number()
+        .min(0, 'Desconto não pode ser negativo')
+        .max(100, 'Desconto não pode ser maior que 100%')
+    )
+    .default(0),
   forma_pagamento: z.string().min(1, 'Forma de pagamento é obrigatória'),
   status: z.enum(['PAGO', 'PENDENTE']).default('PENDENTE')
 });
+
+type ItemVendaParsed = { produto_id: string; quantidade: number; preco_unitario: number };
+
+/** Consolida itens com mesmo produto_id: soma quantidades e usa o primeiro preco_unitario. */
+function consolidarItens(itens: ItemVendaParsed[]): ItemVendaParsed[] {
+  const map = new Map<string, { quantidade: number; preco_unitario: number }>();
+  for (const item of itens) {
+    const cur = map.get(item.produto_id);
+    if (!cur) {
+      map.set(item.produto_id, { quantidade: item.quantidade, preco_unitario: item.preco_unitario });
+    } else {
+      cur.quantidade += item.quantidade;
+    }
+  }
+  return Array.from(map.entries()).map(([produto_id, v]) => ({
+    produto_id,
+    quantidade: v.quantidade,
+    preco_unitario: v.preco_unitario
+  }));
+}
 
 export const listarVendas = async (req: AuthRequest, res: Response) => {
   const userId = req.userId!;
@@ -78,60 +118,57 @@ export const obterVenda = async (req: AuthRequest, res: Response) => {
 };
 
 export const criarVenda = async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.userId!;
-    const data = vendaSchema.parse(req.body);
+  const userId = req.userId!;
+  const idempotencyKey = (req.headers['idempotency-key'] ?? req.headers['x-idempotency-key']) as string | undefined;
 
-    // Verificar se cliente existe e pertence ao usuário
-    const cliente = await prisma.cliente.findFirst({
-      where: { 
-        id: data.cliente_id,
-        // Nota: Se houver relação de cliente com usuário, adicionar aqui
-      }
-    });
-
-    if (!cliente) {
-      throw new AppError('Cliente não encontrado', 404);
-    }
-
-    // Validar produtos e estoque
-    for (const item of data.itens) {
-    const produto = await prisma.produto.findUnique({
-      where: { id: item.produto_id }
-    });
-
-    if (!produto) {
-      throw new AppError(`Produto ${item.produto_id} não encontrado`, 404);
-    }
-
-    // Se venda for PAGA, verificar estoque
-    if (data.status === 'PAGO') {
-      if (produto.estoque_atual < item.quantidade) {
-        throw new AppError(
-          `Estoque insuficiente para o produto ${produto.nome}. Disponível: ${produto.estoque_atual}`,
-          400
-        );
-      }
+  purgeExpiredIdempotency();
+  if (idempotencyKey && idempotencyKey.trim() !== '') {
+    const cached = idempotencyCache.get(idempotencyKey.trim());
+    if (cached && Date.now() - cached.createdAt <= IDEMPOTENCY_TTL_MS) {
+      return res.status(cached.statusCode).json(cached.body);
     }
   }
 
-    // Calcular total (garantir que são números)
-    const subtotal = data.itens.reduce(
-      (acc, item) => acc + Number(item.preco_unitario) * Number(item.quantidade),
-      0
-    );
-    const desconto = Number(data.desconto) || 0;
-    const total = subtotal - desconto;
+  try {
+    const parsed = vendaSchema.parse(req.body);
+    const data = {
+      ...parsed,
+      itens: consolidarItens(parsed.itens)
+    };
 
-    // Criar venda e itens em transação
+    if (data.itens.length === 0) {
+      throw new AppError('Venda deve ter pelo menos um item após consolidar itens', 400);
+    }
+
     const venda = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Criar venda
+      const cliente = await tx.cliente.findFirst({ where: { id: data.cliente_id } });
+      if (!cliente) throw new AppError('Cliente não encontrado', 404);
+
+      for (const item of data.itens) {
+        const produto = await tx.produto.findUnique({ where: { id: item.produto_id } });
+        if (!produto) throw new AppError(`Produto não encontrado`, 404);
+        if (data.status === 'PAGO' && produto.estoque_atual < item.quantidade) {
+          throw new AppError(
+            `Estoque insuficiente para o produto ${produto.nome}. Disponível: ${produto.estoque_atual}`,
+            400
+          );
+        }
+      }
+
+      const subtotal = data.itens.reduce(
+        (acc, item) => acc + Number(item.preco_unitario) * Number(item.quantidade),
+        0
+      );
+      const percentual = Math.min(100, Math.max(0, Number(data.desconto_percentual) ?? 0));
+      const valorDesconto = subtotal * (percentual / 100);
+      const total = subtotal - valorDesconto;
+
       const novaVenda = await tx.venda.create({
         data: {
           cliente_id: data.cliente_id,
           usuario_id: userId,
-          total: total,
-          desconto: desconto,
+          total,
+          desconto: valorDesconto,
           forma_pagamento: data.forma_pagamento,
           status: data.status,
           itens: {
@@ -142,55 +179,40 @@ export const criarVenda = async (req: AuthRequest, res: Response) => {
             }))
           }
         },
-      include: {
-        cliente: true,
-        itens: {
-          include: {
-            produto: true
-          }
+        include: {
+          cliente: true,
+          itens: { include: { produto: true } }
+        }
+      });
+
+      if (data.status === 'PAGO') {
+        for (const item of data.itens) {
+          await tx.produto.update({
+            where: { id: item.produto_id },
+            data: { estoque_atual: { decrement: item.quantidade } }
+          });
         }
       }
-    });
-
-    // Se venda for PAGA, atualizar estoque
-    if (data.status === 'PAGO') {
-      for (const item of data.itens) {
-        await tx.produto.update({
-          where: { id: item.produto_id },
-          data: {
-            estoque_atual: {
-              decrement: item.quantidade
-            }
-          }
-        });
-      }
-    }
 
       return novaVenda;
     });
 
-    res.status(201).json(venda);
-  } catch (error: any) {
-    // Se já é um AppError, apenas relançar
-    if (error instanceof AppError) {
-      throw error;
+    const body = JSON.parse(JSON.stringify(venda));
+    if (idempotencyKey && idempotencyKey.trim() !== '') {
+      idempotencyCache.set(idempotencyKey.trim(), {
+        statusCode: 201,
+        body,
+        createdAt: Date.now()
+      });
     }
-    
-    // Se é erro de validação do Zod, converter para AppError
+    res.status(201).json(body);
+  } catch (error: any) {
+    if (error instanceof AppError) throw error;
     if (error.name === 'ZodError') {
       const firstError = error.errors[0];
       throw new AppError(firstError.message || 'Dados inválidos', 400);
     }
-    
-    // Log detalhado do erro para debug
-    console.error('=== ERRO AO CRIAR VENDA ===');
-    console.error('Tipo do erro:', error?.constructor?.name);
-    console.error('Mensagem:', error?.message);
-    console.error('Stack:', error?.stack);
-    console.error('Código:', error?.code);
-    console.error('Erro completo:', JSON.stringify(error, null, 2));
-    console.error('===========================');
-    
+    console.error('=== ERRO AO CRIAR VENDA ===', error?.message, error?.stack);
     throw error;
   }
 };
@@ -198,7 +220,11 @@ export const criarVenda = async (req: AuthRequest, res: Response) => {
 const vendaUpdateSchema = z.object({
   cliente_id: z.string().uuid('ID do cliente inválido').optional(),
   itens: z.array(itemVendaSchema).min(1, 'Venda deve ter pelo menos um item').optional(),
-  desconto: z.union([z.number(), z.string()]).transform(val => Number(val)).pipe(z.number().nonnegative()).default(0),
+  desconto_percentual: z
+    .union([z.number(), z.string()])
+    .transform((val) => Number(val))
+    .pipe(z.number().min(0).max(100))
+    .optional(),
   forma_pagamento: z.string().min(1).optional(),
   status: z.enum(['PAGO', 'PENDENTE']).optional()
 });
@@ -224,7 +250,18 @@ export const atualizarVenda = async (req: AuthRequest, res: Response) => {
     quantidade: i.quantidade,
     preco_unitario: Number(i.preco_unitario)
   }));
-  const desconto = body.desconto ?? Number(vendaExistente.desconto);
+  const subtotalCalc = itensNovos.reduce(
+    (acc: number, item: ItemVendaShape) => acc + Number(item.preco_unitario) * Number(item.quantidade),
+    0
+  );
+  const percentualDesconto =
+    body.desconto_percentual !== undefined
+      ? Math.min(100, Math.max(0, body.desconto_percentual))
+      : null;
+  const valorDesconto =
+    percentualDesconto !== null
+      ? subtotalCalc * (percentualDesconto / 100)
+      : Number(vendaExistente.desconto);
   const forma_pagamento = body.forma_pagamento ?? vendaExistente.forma_pagamento;
   const statusNovo = body.status ?? vendaExistente.status;
   const cliente_id = body.cliente_id ?? vendaExistente.cliente_id;
@@ -241,11 +278,7 @@ export const atualizarVenda = async (req: AuthRequest, res: Response) => {
     if (!produto) throw new AppError(`Produto ${item.produto_id} não encontrado`, 404);
   }
 
-  const subtotal = itensNovos.reduce(
-    (acc: number, item: ItemVendaShape) => acc + Number(item.preco_unitario) * Number(item.quantidade),
-    0
-  );
-  const total = subtotal - desconto;
+  const total = subtotalCalc - valorDesconto;
 
   const vendaAtualizada = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const statusAntigo = vendaExistente.status as 'PAGO' | 'PENDENTE';
@@ -296,7 +329,7 @@ export const atualizarVenda = async (req: AuthRequest, res: Response) => {
       data: {
         cliente_id,
         total,
-        desconto,
+        desconto: valorDesconto,
         forma_pagamento,
         status: statusNovo
       }

@@ -48,17 +48,25 @@ model Produto {
   categoria  Categoria   @relation(fields: [categoria_id], references: [id])
   itensVenda ItemVenda[]
 
+  @@unique([nome, categoria_id])
   @@index([categoria_id])
   @@map("produtos")
 }
 
+enum ClienteStatus {
+  ativo
+  atencao
+  inativo
+}
+
 model Cliente {
-  id          String   @id @default(uuid())
-  nome        String
-  telefone    String?
-  observacoes String?  @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String        @id @default(uuid())
+  nome      String
+  telefone  String?
+  observacoes String?     @db.Text
+  status    ClienteStatus @default(ativo)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
   vendas Venda[]
 

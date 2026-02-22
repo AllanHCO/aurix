@@ -38,6 +38,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [novaCategoriaOpen, setNovaCategoriaOpen] = useState(false);
   const [novaCategoriaNome, setNovaCategoriaNome] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
@@ -86,16 +87,23 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
   }, [produto, categorias, categoriaId, setValue]);
 
   const onSubmit = async (data: ProdutoForm) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
     try {
       if (produto) {
         await api.put(`/produtos/${produto.id}`, data);
         toast.success('Produto atualizado com sucesso!');
       } else {
-        await api.post('/produtos', data);
+        const idempotencyKey = crypto.randomUUID?.() ?? `produto-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        await api.post('/produtos', data, {
+          headers: { 'Idempotency-Key': idempotencyKey }
+        });
         toast.success('Produto criado com sucesso!');
       }
       onClose();
     } catch (error: any) {
+      setIsSubmitting(false);
       toast.error(error.response?.data?.error || 'Erro ao salvar produto');
     }
   };
@@ -266,15 +274,26 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-3 border border-border-light rounded-lg text-text-main hover:bg-background-light min-h-[44px] touch-manipulation"
+              disabled={isSubmitting}
+              className="flex-1 px-4 py-3 border border-border-light rounded-lg text-text-main hover:bg-background-light min-h-[44px] touch-manipulation disabled:opacity-50 disabled:pointer-events-none"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 rounded-lg min-h-[44px] touch-manipulation"
+              disabled={isSubmitting}
+              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 rounded-lg min-h-[44px] touch-manipulation flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {produto ? 'Atualizar' : 'Criar'}
+              {isSubmitting ? (
+                <>
+                  <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                  Processando...
+                </>
+              ) : produto ? (
+                'Atualizar'
+              ) : (
+                'Criar Produto'
+              )}
             </button>
           </div>
         </form>
