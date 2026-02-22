@@ -23,6 +23,17 @@ model Usuario {
   @@map("usuarios")
 }
 
+model Categoria {
+  id        String   @id @default(uuid())
+  nome      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  produtos Produto[]
+
+  @@map("categorias")
+}
+
 model Produto {
   id              String   @id @default(uuid())
   nome            String
@@ -30,11 +41,14 @@ model Produto {
   custo           Decimal  @db.Decimal(10, 2)
   estoque_atual   Int      @default(0)
   estoque_minimo  Int      @default(0)
+  categoria_id    String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  categoria  Categoria   @relation(fields: [categoria_id], references: [id])
   itensVenda ItemVenda[]
 
+  @@index([categoria_id])
   @@map("produtos")
 }
 
@@ -66,6 +80,7 @@ model Venda {
   usuario Usuario   @relation(fields: [usuario_id], references: [id])
   itens   ItemVenda[]
 
+  @@index([status, createdAt])
   @@map("vendas")
 }
 
@@ -80,6 +95,7 @@ model ItemVenda {
   venda   Venda   @relation(fields: [venda_id], references: [id], onDelete: Cascade)
   produto Produto @relation(fields: [produto_id], references: [id])
 
+  @@index([produto_id, venda_id])
   @@map("itens_venda")
 }
 

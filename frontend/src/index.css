@@ -2,14 +2,92 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ========== Tema claro (padrão) ========== */
+:root,
+html.light {
+  --color-bg: #f5f5f5;
+  --color-bg-secondary: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #f5f5f5;
+  --color-border: #e0e0e0;
+  --color-text-main: #1e1e1e;
+  --color-text-muted: #666666;
+  --color-text-tertiary: #999999;
+  --color-primary: #f5c542;
+  --color-primary-hover: #ffd966;
+  --color-primary-active: #d4a017;
+  --color-primary-dark: #e6b422;
+  --color-text-on-primary: #0a0a0a;
+  --color-success: #2e7d32;
+  --color-success-light: #4caf50;
+  --color-error: #b71c1c;
+  --color-error-light: #ef5350;
+  --color-warning: #ffb74d;
+  --color-badge-pago: #e8f5e9;
+  --color-badge-pago-text: #2e7d32;
+  --color-badge-pendente: #fff8e1;
+  --color-badge-pendente-text: #f5c542;
+  --color-badge-erro: #ffebee;
+  --color-badge-erro-text: #b71c1c;
+  --color-badge-estoque: #fff3e0;
+  --color-badge-estoque-text: #e65100;
+  --color-input-bg: #ffffff;
+  --color-input-border: #e0e0e0;
+  --color-sidebar-active-bg: rgba(245, 197, 66, 0.1);
+  --color-sidebar-hover: #f5f5f5;
+}
+
+/* ========== Tema escuro ========== */
+html.dark {
+  --color-bg: #0a0a0a;
+  --color-bg-secondary: #121212;
+  --color-surface: #1a1a1a;
+  --color-surface-elevated: #242424;
+  --color-border: #2a2a2a;
+  --color-text-main: #f5f5f5;
+  --color-text-muted: #b0b0b0;
+  --color-text-tertiary: #757575;
+  --color-primary: #f5c542;
+  --color-primary-hover: #ffd966;
+  --color-primary-active: #d4a017;
+  --color-primary-dark: #e6b422;
+  --color-text-on-primary: #0a0a0a;
+  --color-success: #2e7d32;
+  --color-success-light: #4caf50;
+  --color-error: #b71c1c;
+  --color-error-light: #ef5350;
+  --color-warning: #ffb74d;
+  --color-badge-pago: #003300;
+  --color-badge-pago-text: #4caf50;
+  --color-badge-pendente: #332a1a;
+  --color-badge-pendente-text: #f5c542;
+  --color-badge-erro: #330000;
+  --color-badge-erro-text: #ef5350;
+  --color-badge-estoque: #332200;
+  --color-badge-estoque-text: #ffb74d;
+  --color-input-bg: #1a1a1a;
+  --color-input-border: #333333;
+  --color-sidebar-active-bg: #242424;
+  --color-sidebar-hover: #242424;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Transição suave ao alternar tema */
+html.dark body,
+html body {
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 body {
   font-family: 'Manrope', sans-serif;
   margin: 0;
   padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* Safe area para celulares com notch */
@@ -20,6 +98,50 @@ body {
 
 * {
   box-sizing: border-box;
+}
+
+/* ========== Scrollbars no tema escuro ========== */
+html.dark {
+  scrollbar-color: #404040 #1a1a1a;
+}
+
+html.dark ::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 6px;
+  border: 3px solid #1a1a1a;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Campos de texto, select e textarea seguem o tema (fundo e texto legível no dark) */
+input,
+select,
+textarea {
+  background-color: var(--color-input-bg);
+  color: var(--color-text-main);
+  border-color: var(--color-input-border);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+/* Select no dark mode: opções com fundo escuro (Chrome/Edge) */
+html.dark select option {
+  background-color: #1a1a1a;
+  color: #f5f5f5;
 }
 
 /* Área de toque mínima e sem zoom em inputs no iOS */

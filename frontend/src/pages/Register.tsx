@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import ThemeToggle from '../components/ThemeToggle';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -45,10 +46,13 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-background-light p-4">
+    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-background-light p-4 relative">
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md">
         <div className="text-center mb-6 sm:mb-8">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white shadow-lg mx-auto mb-4">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-text-on-primary shadow-lg mx-auto mb-4">
             <span className="material-symbols-outlined text-2xl sm:text-3xl">diamond</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-2">Aurix</h1>
@@ -119,7 +123,7 @@ export default function Register() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 rounded-lg transition-colors disabled:opacity-50 min-h-[48px] touch-manipulation"
+              className="w-full bg-primary hover:bg-primary-hover text-text-on-primary font-bold py-3 rounded-lg transition-colors duration-300 disabled:opacity-50 min-h-[48px] touch-manipulation"
             >
               {loading ? 'Cadastrando...' : 'Cadastrar'}
             </button>

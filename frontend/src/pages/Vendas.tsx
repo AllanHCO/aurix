@@ -3,16 +3,11 @@ import { api } from '../services/api';
 import toast from 'react-hot-toast';
 import { formatCurrency, formatDate } from '../utils/format';
 import VendaModal from '../components/VendaModal';
+import VendaDetalheModal, { type VendaDetalhe } from '../components/VendaDetalheModal';
 
-interface Venda {
-  id: string;
-  total: number;
-  desconto: number;
-  forma_pagamento: string;
-  status: 'PAGO' | 'PENDENTE';
-  createdAt: string;
-  cliente: { nome: string };
+interface Venda extends VendaDetalhe {
   itens: Array<{
+    id: string;
     quantidade: number;
     preco_unitario: number;
     produto: { nome: string };
@@ -23,6 +18,8 @@ export default function Vendas() {
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [detalheVenda, setDetalheVenda] = useState<VendaDetalhe | null>(null);
+  const [vendaEditando, setVendaEditando] = useState<Venda | null>(null);
 
   useEffect(() => {
     loadVendas();
@@ -41,7 +38,21 @@ export default function Vendas() {
 
   const handleCloseModal = () => {
     setModalOpen(false);
+    setVendaEditando(null);
     loadVendas();
+  };
+
+  const handleVerDetalhe = (venda: Venda) => {
+    setDetalheVenda(venda);
+  };
+
+  const handleEditarVenda = (venda: VendaDetalhe) => {
+    setDetalheVenda(null);
+    const full = vendas.find((v) => v.id === venda.id);
+    if (full) {
+      setVendaEditando(full);
+      setModalOpen(true);
+    }
   };
 
   if (loading) {
@@ -102,6 +113,9 @@ export default function Vendas() {
                 <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted">
                   Status
                 </th>
+                <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-light">
@@ -117,12 +131,22 @@ export default function Vendas() {
                     <span
                       className={`text-xs px-2 py-1 rounded shrink-0 ${
                         venda.status === 'PAGO'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-yellow-100 text-yellow-700'
+                          ? 'bg-badge-pago text-badge-pago-text'
+                          : 'bg-badge-pendente text-badge-pendente-text'
                       }`}
                     >
                       {venda.status}
                     </span>
+                  </td>
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+                    <button
+                      type="button"
+                      onClick={() => handleVerDetalhe(venda)}
+                      className="p-2 text-primary hover:bg-primary/10 rounded touch-manipulation"
+                      title="Ver detalhes"
+                    >
+                      <span className="material-symbols-outlined">visibility</span>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -133,7 +157,20 @@ export default function Vendas() {
         </div>
       )}
 
-      {modalOpen && <VendaModal onClose={handleCloseModal} />}
+      {modalOpen && (
+        <VendaModal
+          onClose={handleCloseModal}
+          vendaId={vendaEditando?.id}
+          venda={vendaEditando ?? undefined}
+        />
+      )}
+      {detalheVenda && (
+        <VendaDetalheModal
+          venda={detalheVenda}
+          onClose={() => setDetalheVenda(null)}
+          onEdit={handleEditarVenda}
+        />
+      )}
     </div>
   );
 }

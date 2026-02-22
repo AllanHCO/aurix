@@ -4,6 +4,9 @@ import toast from 'react-hot-toast';
 import { formatCurrency } from '../utils/format';
 import ProdutoModal from '../components/ProdutoModal';
 
+type FiltroDesempenho = 'todos' | 'mais_vendidos' | 'menos_vendidos';
+type PeriodoDesempenho = 'este_mes' | 'ultimos_3_meses';
+
 interface Produto {
   id: string;
   nome: string;
@@ -11,6 +14,9 @@ interface Produto {
   custo: number;
   estoque_atual: number;
   estoque_minimo: number;
+  categoria_id?: string;
+  categoria_nome?: string;
+  qtdVendidaMesAtual?: number;
 }
 
 export default function Produtos() {
@@ -18,14 +24,17 @@ export default function Produtos() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [produtoEditando, setProdutoEditando] = useState<Produto | null>(null);
+  const [filtro, setFiltro] = useState<FiltroDesempenho>('todos');
+  const [periodo, setPeriodo] = useState<PeriodoDesempenho>('este_mes');
 
-  useEffect(() => {
-    loadProdutos();
-  }, []);
-
-  const loadProdutos = async () => {
+  const loadProdutos = async (filtroAtual?: FiltroDesempenho, periodoAtual?: PeriodoDesempenho) => {
+    const f = filtroAtual ?? filtro;
+    const p = periodoAtual ?? periodo;
     try {
-      const response = await api.get('/produtos');
+      setLoading(true);
+      const response = await api.get<Produto[]>('/produtos', {
+        params: { filtro: f, periodo: p }
+      });
       setProdutos(response.data);
     } catch (error: any) {
       toast.error('Erro ao carregar produtos');
@@ -34,13 +43,17 @@ export default function Produtos() {
     }
   };
 
+  useEffect(() => {
+    loadProdutos('todos', 'este_mes');
+  }, []);
+
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este produto?')) return;
 
     try {
       await api.delete(`/produtos/${id}`);
       toast.success('Produto excluído com sucesso!');
-      loadProdutos();
+      loadProdutos(filtro, periodo);
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Erro ao excluir produto');
     }
@@ -54,7 +67,17 @@ export default function Produtos() {
   const handleCloseModal = () => {
     setModalOpen(false);
     setProdutoEditando(null);
-    loadProdutos();
+    loadProdutos(filtro, periodo);
+  };
+
+  const handleFiltroChange = (novoFiltro: FiltroDesempenho) => {
+    setFiltro(novoFiltro);
+    loadProdutos(novoFiltro, periodo);
+  };
+
+  const handlePeriodoChange = (novoPeriodo: PeriodoDesempenho) => {
+    setPeriodo(novoPeriodo);
+    loadProdutos(filtro, novoPeriodo);
   };
 
   const isEstoqueBaixo = (produto: Produto) =>
@@ -97,14 +120,54 @@ export default function Produtos() {
           </button>
         </div>
       ) : (
-        <div className="bg-surface-light rounded-xl border border-border-light shadow-sm overflow-hidden">
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <div className="inline-block min-w-full align-middle px-4 sm:px-0">
-          <table className="w-full min-w-[520px]">
+        <>
+          {/* Período e filtros de desempenho */}
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-text-muted">Período:</span>
+            <div className="flex flex-wrap gap-2">
+              {(['este_mes', 'ultimos_3_meses'] as PeriodoDesempenho[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => handlePeriodoChange(p)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[40px] touch-manipulation ${
+                    periodo === p
+                      ? 'bg-primary text-white'
+                      : 'bg-surface-light text-text-main border border-border-light hover:bg-background-light'
+                  }`}
+                >
+                  {p === 'este_mes' ? 'Este mês' : 'Últimos 3 meses'}
+                </button>
+              ))}
+            </div>
+            <span className="text-sm text-text-muted ml-1 sm:ml-0">Filtro:</span>
+            <div className="flex flex-wrap gap-2">
+              {(['todos', 'mais_vendidos', 'menos_vendidos'] as FiltroDesempenho[]).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => handleFiltroChange(f)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[40px] touch-manipulation ${
+                    filtro === f
+                      ? 'bg-primary text-white'
+                      : 'bg-surface-light text-text-main border border-border-light hover:bg-background-light'
+                  }`}
+                >
+                  {f === 'todos' ? 'Todos' : f === 'mais_vendidos' ? 'Mais Vendidos' : 'Menos Vendidos'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-surface-light rounded-xl border border-border-light shadow-sm overflow-hidden">
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <div className="inline-block min-w-full align-middle px-4 sm:px-0">
+          <table className="w-full min-w-[640px]">
             <thead className="bg-background-light border-b border-border-light">
               <tr>
                 <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
                   Nome
+                </th>
+                <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
+                  Categoria
                 </th>
                 <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted">
                   Preço
@@ -118,28 +181,44 @@ export default function Produtos() {
                 <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted">
                   Mínimo
                 </th>
+                <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted" title="Apenas vendas com status PAGO no período selecionado">
+                  Qtd vendida
+                </th>
                 <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted">
                   Ações
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-light">
-              {produtos.map((produto) => (
+              {produtos.map((produto, index) => {
+                const qtd = produto.qtdVendidaMesAtual ?? 0;
+                const top3MaisVendidos = filtro === 'mais_vendidos' && index < 3;
+                const zeroVendasMenosVendidos = filtro === 'menos_vendidos' && qtd === 0;
+                return (
                 <tr
                   key={produto.id}
                   className={`hover:bg-background-light ${
-                    isEstoqueBaixo(produto) ? 'bg-red-50' : ''
+                    isEstoqueBaixo(produto) ? 'bg-badge-estoque' : ''
                   }`}
                 >
                   <td className="px-3 sm:px-6 py-3 sm:py-4">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="font-semibold text-text-main truncate">{produto.nome}</span>
                       {isEstoqueBaixo(produto) && (
-                        <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded shrink-0">
+                        <span className="text-xs bg-badge-estoque text-badge-estoque-text px-2 py-1 rounded shrink-0">
                           Estoque Baixo
                         </span>
                       )}
+                      {top3MaisVendidos && (
+                        <span className="text-amber-500 shrink-0" title={periodo === 'este_mes' ? 'Top 3 mais vendidos no mês' : 'Top 3 mais vendidos no período'}>🔥</span>
+                      )}
+                      {zeroVendasMenosVendidos && (
+                        <span className="text-amber-600 shrink-0" title={periodo === 'este_mes' ? 'Sem vendas no mês' : 'Sem vendas no período'}>⚠️</span>
+                      )}
                     </div>
+                  </td>
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">
+                    {produto.categoria_nome ?? '-'}
                   </td>
                   <td className="px-3 sm:px-6 py-3 sm:py-4 text-right font-semibold text-text-main text-sm sm:text-base">
                     {formatCurrency(produto.preco)}
@@ -153,6 +232,9 @@ export default function Produtos() {
                   <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-text-muted">
                     {produto.estoque_minimo}
                   </td>
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-right font-medium text-text-main">
+                    {produto.qtdVendidaMesAtual ?? 0}
+                  </td>
                   <td className="px-3 sm:px-6 py-3 sm:py-4">
                     <div className="flex items-center justify-center gap-1 sm:gap-2">
                       <button
@@ -163,19 +245,21 @@ export default function Produtos() {
                       </button>
                       <button
                         onClick={() => handleDelete(produto.id)}
-                        className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-red-600 hover:bg-red-50 rounded touch-manipulation"
+                        className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-error hover:bg-badge-erro rounded touch-manipulation"
                       >
                         <span className="material-symbols-outlined">delete</span>
                       </button>
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {modalOpen && (

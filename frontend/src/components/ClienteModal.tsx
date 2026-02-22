@@ -74,7 +74,7 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
           <button
             type="button"
             onClick={onClose}
-            className="p-2 -m-2 rounded-lg text-text-muted hover:text-text-main hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+            className="p-2 -m-2 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-elevated min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
             aria-label="Fechar"
           >
             <span className="material-symbols-outlined">close</span>

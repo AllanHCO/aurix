@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import ThemeToggle from './ThemeToggle';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -44,13 +45,14 @@ export default function Layout() {
     <>
       <div className="p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-8 sm:mb-10">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white shadow-lg shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-text-on-primary shadow-lg shrink-0">
             <span className="material-symbols-outlined text-2xl">diamond</span>
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="text-xl font-bold text-text-main">Aurix</h1>
             <span className="text-xs text-text-muted">Gestão Comercial</span>
           </div>
+          <ThemeToggle />
         </div>
 
         <nav className="flex flex-col gap-1 sm:gap-2">
@@ -58,10 +60,10 @@ export default function Layout() {
             <button
               key={item.path}
               onClick={() => goTo(item.path)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left min-h-[44px] touch-manipulation ${
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-300 text-left min-h-[44px] touch-manipulation ${
                 isActive(item.path)
-                  ? 'bg-primary/10 text-primary font-semibold border border-primary/20'
-                  : 'text-text-muted hover:bg-gray-50 hover:text-text-main'
+                  ? 'bg-sidebar-active-bg text-primary font-semibold border-l-4 border-l-primary border border-transparent'
+                  : 'text-text-muted hover:bg-sidebar-hover hover:text-text-main'
               }`}
             >
               <span className="material-symbols-outlined shrink-0">{item.icon}</span>
@@ -88,7 +90,7 @@ export default function Layout() {
             setMenuOpen(false);
             logout();
           }}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:bg-gray-50 hover:text-text-main transition-colors min-h-[44px] touch-manipulation"
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:bg-sidebar-hover hover:text-text-main transition-colors duration-300 min-h-[44px] touch-manipulation"
         >
           <span className="material-symbols-outlined">logout</span>
           Sair
@@ -124,17 +126,18 @@ export default function Layout() {
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
-            className="p-2 -ml-2 rounded-lg text-text-main hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+            className="p-2 -ml-2 rounded-lg text-text-main hover:bg-sidebar-hover min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
             aria-label="Abrir menu"
           >
             <span className="material-symbols-outlined text-2xl">menu</span>
           </button>
           <div className="flex-1 min-w-0 flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-text-on-primary shrink-0">
               <span className="material-symbols-outlined text-lg">diamond</span>
             </div>
             <span className="font-bold text-text-main truncate">Aurix</span>
           </div>
+          <ThemeToggle />
         </header>
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8">

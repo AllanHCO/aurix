@@ -158,8 +158,8 @@ export default function Relatorios() {
                           <span
                             className={`text-xs px-2 py-1 rounded ${
                               venda.status === 'PAGO'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-yellow-100 text-yellow-700'
+                                ? 'bg-badge-pago text-badge-pago-text'
+                                : 'bg-badge-pendente text-badge-pendente-text'
                             }`}
                           >
                             {venda.status}

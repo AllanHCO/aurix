@@ -194,3 +194,121 @@ export const criarVenda = async (req: AuthRequest, res: Response) => {
     throw error;
   }
 };
+
+const vendaUpdateSchema = z.object({
+  cliente_id: z.string().uuid('ID do cliente inválido').optional(),
+  itens: z.array(itemVendaSchema).min(1, 'Venda deve ter pelo menos um item').optional(),
+  desconto: z.union([z.number(), z.string()]).transform(val => Number(val)).pipe(z.number().nonnegative()).default(0),
+  forma_pagamento: z.string().min(1).optional(),
+  status: z.enum(['PAGO', 'PENDENTE']).optional()
+});
+
+/** Atualiza venda: reverte impacto anterior no estoque e aplica novo. Transação atômica. */
+export const atualizarVenda = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const userId = req.userId!;
+  const body = vendaUpdateSchema.parse(req.body);
+
+  const vendaExistente = await prisma.venda.findFirst({
+    where: { id, usuario_id: userId },
+    include: { itens: true }
+  });
+
+  if (!vendaExistente) {
+    throw new AppError('Venda não encontrada', 404);
+  }
+
+  const itensNovos = body.itens ?? vendaExistente.itens.map(i => ({
+    produto_id: i.produto_id,
+    quantidade: i.quantidade,
+    preco_unitario: Number(i.preco_unitario)
+  }));
+  const desconto = body.desconto ?? Number(vendaExistente.desconto);
+  const forma_pagamento = body.forma_pagamento ?? vendaExistente.forma_pagamento;
+  const statusNovo = body.status ?? vendaExistente.status;
+  const cliente_id = body.cliente_id ?? vendaExistente.cliente_id;
+
+  // Validar cliente se informado
+  if (body.cliente_id) {
+    const cliente = await prisma.cliente.findFirst({ where: { id: body.cliente_id } });
+    if (!cliente) throw new AppError('Cliente não encontrado', 404);
+  }
+
+  // Validar produtos e estoque para os novos itens (será revalidado na tx após reverter estoque)
+  for (const item of itensNovos) {
+    const produto = await prisma.produto.findUnique({ where: { id: item.produto_id } });
+    if (!produto) throw new AppError(`Produto ${item.produto_id} não encontrado`, 404);
+  }
+
+  const subtotal = itensNovos.reduce(
+    (acc, item) => acc + Number(item.preco_unitario) * Number(item.quantidade),
+    0
+  );
+  const total = subtotal - desconto;
+
+  const vendaAtualizada = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const statusAntigo = vendaExistente.status as 'PAGO' | 'PENDENTE';
+
+    // 1) Reverter estoque dos itens antigos (se a venda estava PAGA)
+    if (statusAntigo === 'PAGO') {
+      for (const item of vendaExistente.itens) {
+        await tx.produto.update({
+          where: { id: item.produto_id },
+          data: { estoque_atual: { increment: item.quantidade } }
+        });
+      }
+    }
+
+    // 2) Remover itens antigos (evita duplicados)
+    await tx.itemVenda.deleteMany({ where: { venda_id: id } });
+
+    // 3) Criar novos itens
+    await tx.itemVenda.createMany({
+      data: itensNovos.map(item => ({
+        venda_id: id,
+        produto_id: item.produto_id,
+        quantidade: item.quantidade,
+        preco_unitario: item.preco_unitario
+      }))
+    });
+
+    // 4) Se nova status for PAGO, validar estoque e decrementar
+    if (statusNovo === 'PAGO') {
+      for (const item of itensNovos) {
+        const prod = await tx.produto.findUnique({ where: { id: item.produto_id } });
+        if (!prod || prod.estoque_atual < item.quantidade) {
+          throw new AppError(
+            `Estoque insuficiente para o produto ${prod?.nome ?? item.produto_id}. Disponível: ${prod?.estoque_atual ?? 0}`,
+            400
+          );
+        }
+        await tx.produto.update({
+          where: { id: item.produto_id },
+          data: { estoque_atual: { decrement: item.quantidade } }
+        });
+      }
+    }
+
+    // 5) Atualizar cabeçalho da venda
+    await tx.venda.update({
+      where: { id },
+      data: {
+        cliente_id,
+        total,
+        desconto,
+        forma_pagamento,
+        status: statusNovo
+      }
+    });
+
+    return tx.venda.findUnique({
+      where: { id },
+      include: {
+        cliente: true,
+        itens: { include: { produto: true } }
+      }
+    });
+  });
+
+  res.json(vendaAtualizada);
+};

@@ -11,6 +11,7 @@ import dashboardRoutes from './routes/dashboard.routes';
 import produtosRoutes from './routes/produtos.routes';
 import clientesRoutes from './routes/clientes.routes';
 import vendasRoutes from './routes/vendas.routes';
+import categoriasRoutes from './routes/categorias.routes';
 import relatoriosRoutes from './routes/relatorios.routes';
 
 dotenv.config();
@@ -76,6 +77,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/produtos', produtosRoutes);
 app.use('/api/clientes', clientesRoutes);
 app.use('/api/vendas', vendasRoutes);
+app.use('/api/categorias', categoriasRoutes);
 app.use('/api/relatorios', relatoriosRoutes);
 
 // Error handler

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import ThemeToggle from '../components/ThemeToggle';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -51,10 +52,13 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-background-light p-4">
+    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-background-light p-4 relative">
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white shadow-lg mx-auto mb-4">
+          <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-text-on-primary shadow-lg mx-auto mb-4">
             <span className="material-symbols-outlined text-3xl">diamond</span>
           </div>
           <h1 className="text-3xl font-bold text-text-main mb-2">Aurix</h1>
@@ -96,7 +100,7 @@ export default function Login() {
             </div>
 
             {loginError && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-badge-erro border border-error/30 text-badge-erro-text text-sm">
                 <span className="material-symbols-outlined text-lg shrink-0">error</span>
                 <p>{loginError}</p>
               </div>
@@ -105,7 +109,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 rounded-lg transition-colors disabled:opacity-50 min-h-[48px] touch-manipulation"
+              className="w-full bg-primary hover:bg-primary-hover text-text-on-primary font-bold py-3 rounded-lg transition-colors duration-300 disabled:opacity-50 min-h-[48px] touch-manipulation"
             >
               {loading ? 'Entrando...' : 'Entrar'}
             </button>

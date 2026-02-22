@@ -11,6 +11,14 @@
     <title>Aurix - Gestão Comercial</title>
   </head>
   <body>
+    <script>
+      (function() {
+        var stored = localStorage.getItem('aurix-theme');
+        var theme = (stored === 'dark' || stored === 'light') ? stored : 'light';
+        document.documentElement.classList.add(theme);
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

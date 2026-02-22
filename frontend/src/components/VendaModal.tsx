@@ -27,6 +27,12 @@ interface Produto {
   nome: string;
   preco: number;
   estoque_atual: number;
+  categoria_id?: string;
+}
+
+interface Categoria {
+  id: string;
+  nome: string;
 }
 
 interface Cliente {
@@ -34,20 +40,42 @@ interface Cliente {
   nome: string;
 }
 
-interface VendaModalProps {
-  onClose: () => void;
+interface VendaParaEdicao {
+  id: string;
+  cliente_id?: string;
+  cliente?: { nome: string };
+  desconto: number;
+  forma_pagamento: string;
+  status: 'PAGO' | 'PENDENTE';
+  itens: Array<{
+    produto_id: string;
+    quantidade: number;
+    preco_unitario: number;
+    produto?: { nome: string };
+  }>;
 }
 
-export default function VendaModal({ onClose }: VendaModalProps) {
+interface VendaModalProps {
+  onClose: () => void;
+  vendaId?: string;
+  venda?: VendaParaEdicao | null;
+}
+
+export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps) {
+  const isEdit = Boolean(vendaId && venda);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [itens, setItens] = useState<ItemForm[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCategoriaIds, setSelectedCategoriaIds] = useState<string[]>([]);
+  const [searchNome, setSearchNome] = useState('');
 
   const {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors }
   } = useForm<VendaForm>({
     resolver: zodResolver(vendaSchema),
@@ -63,19 +91,60 @@ export default function VendaModal({ onClose }: VendaModalProps) {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!loading && venda && venda.itens?.length) {
+      reset({
+        cliente_id: venda.cliente_id ?? '',
+        desconto: Number(venda.desconto) || 0,
+        forma_pagamento: venda.forma_pagamento || '',
+        status: venda.status || 'PENDENTE'
+      });
+      setItens(
+        venda.itens.map((i) => ({
+          produto_id: i.produto_id,
+          quantidade: i.quantidade,
+          preco_unitario: Number(i.preco_unitario)
+        }))
+      );
+    }
+  }, [loading, venda, reset]);
+
   const loadData = async () => {
+    setLoading(true);
     try {
-      const [produtosRes, clientesRes] = await Promise.all([
-        api.get('/produtos'),
-        api.get('/clientes')
+      const [clientesRes, categoriasRes] = await Promise.all([
+        api.get('/clientes'),
+        api.get('/categorias')
       ]);
-      setProdutos(produtosRes.data);
       setClientes(clientesRes.data);
+      setCategorias(categoriasRes.data);
     } catch (error) {
       toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadProdutos = async (categoriaIds: string[], nome: string) => {
+    try {
+      const params: Record<string, string | string[]> = {};
+      if (categoriaIds.length) params.categoria_ids = categoriaIds;
+      if (nome.trim()) params.nome = nome.trim();
+      const res = await api.get<Produto[]>('/produtos', { params });
+      setProdutos(res.data);
+    } catch {
+      setProdutos([]);
+    }
+  };
+
+  useEffect(() => {
+    if (!loading) loadProdutos(selectedCategoriaIds, searchNome);
+  }, [loading, selectedCategoriaIds, searchNome]);
+
+  const toggleCategoria = (id: string) => {
+    setSelectedCategoriaIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   };
 
   const adicionarItem = () => {
@@ -158,7 +227,6 @@ export default function VendaModal({ onClose }: VendaModalProps) {
     }
 
     try {
-      // Garantir que os tipos estão corretos
       const vendaData = {
         cliente_id: data.cliente_id,
         desconto: Number(data.desconto) || 0,
@@ -171,12 +239,16 @@ export default function VendaModal({ onClose }: VendaModalProps) {
         }))
       };
 
-      await api.post('/vendas', vendaData);
-      toast.success('Venda registrada com sucesso!');
+      if (isEdit && vendaId) {
+        await api.put(`/vendas/${vendaId}`, vendaData);
+        toast.success('Venda atualizada com sucesso!');
+      } else {
+        await api.post('/vendas', vendaData);
+        toast.success('Venda registrada com sucesso!');
+      }
       onClose();
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Erro ao registrar venda';
-      console.error('Erro ao criar venda:', error.response?.data || error);
+      const errorMessage = error.response?.data?.error || error.message || (isEdit ? 'Erro ao atualizar venda' : 'Erro ao registrar venda');
       toast.error(errorMessage);
     }
   };
@@ -195,11 +267,11 @@ export default function VendaModal({ onClose }: VendaModalProps) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-surface-light rounded-xl shadow-lg max-w-4xl w-full my-4 sm:my-8 max-h-[90vh] overflow-y-auto">
         <div className="p-4 sm:p-6 border-b border-border-light flex items-center justify-between shrink-0">
-          <h2 className="text-lg sm:text-xl font-bold text-text-main">Nova Venda</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-text-main">{isEdit ? 'Editar Venda' : 'Nova Venda'}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 -m-2 rounded-lg text-text-muted hover:text-text-main hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+            className="p-2 -m-2 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-elevated min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
             aria-label="Fechar"
           >
             <span className="material-symbols-outlined">close</span>
@@ -240,6 +312,39 @@ export default function VendaModal({ onClose }: VendaModalProps) {
                 <span className="material-symbols-outlined text-lg">add</span>
                 Adicionar Item
               </button>
+            </div>
+
+            <div className="mb-3 p-3 bg-background-light rounded-lg border border-border-light">
+              <p className="text-xs font-medium text-text-muted mb-2">Filtrar produtos por categoria</p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedCategoriaIds.length === 0}
+                    onChange={() => setSelectedCategoriaIds([])}
+                    className="rounded border-border-light"
+                  />
+                  <span className="text-sm text-text-main">Todos</span>
+                </label>
+                {categorias.map((c) => (
+                  <label key={c.id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCategoriaIds.includes(c.id)}
+                      onChange={() => toggleCategoria(c.id)}
+                      className="rounded border-border-light"
+                    />
+                    <span className="text-sm text-text-main">{c.nome}</span>
+                  </label>
+                ))}
+              </div>
+              <input
+                type="text"
+                value={searchNome}
+                onChange={(e) => setSearchNome(e.target.value)}
+                placeholder="Buscar por nome do produto"
+                className="w-full px-3 py-2 text-sm border border-border-light rounded-lg outline-none focus:ring-2 focus:ring-primary"
+              />
             </div>
 
             {itens.length === 0 ? (
@@ -297,7 +402,7 @@ export default function VendaModal({ onClose }: VendaModalProps) {
                       <button
                         type="button"
                         onClick={() => removerItem(index)}
-                        className="text-red-600 hover:bg-red-50 p-2 rounded"
+                        className="text-error hover:bg-badge-erro p-2 rounded"
                       >
                         <span className="material-symbols-outlined">delete</span>
                       </button>
@@ -391,7 +496,7 @@ export default function VendaModal({ onClose }: VendaModalProps) {
               type="submit"
               className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-2 rounded-lg"
             >
-              Registrar Venda
+              {isEdit ? 'Salvar alterações' : 'Registrar Venda'}
             </button>
           </div>
         </form>
