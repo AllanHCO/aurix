@@ -17,6 +17,13 @@ async function main() {
     }
   });
 
+  // Garantir categoria padrão (obrigatória para produtos)
+  const categoria = await prisma.categoria.upsert({
+    where: { nome: 'Geral' },
+    update: {},
+    create: { nome: 'Geral' }
+  });
+
   // Criar produtos de exemplo
   const produtos = await Promise.all([
     prisma.produto.upsert({
@@ -28,7 +35,8 @@ async function main() {
         preco: 100.00,
         custo: 50.00,
         estoque_atual: 20,
-        estoque_minimo: 5
+        estoque_minimo: 5,
+        categoria_id: categoria.id
       }
     }),
     prisma.produto.upsert({
@@ -40,7 +48,8 @@ async function main() {
         preco: 200.00,
         custo: 120.00,
         estoque_atual: 15,
-        estoque_minimo: 10
+        estoque_minimo: 10,
+        categoria_id: categoria.id
       }
     })
   ]);
