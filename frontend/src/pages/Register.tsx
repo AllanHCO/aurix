@@ -86,7 +86,7 @@ export default function Register() {
                 placeholder="seu@email.com"
               />
               {errors.email && (
-                <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+                <p className="text-error text-sm mt-1">{errors.email.message}</p>
               )}
             </div>
 
@@ -101,7 +101,7 @@ export default function Register() {
                 placeholder="••••••"
               />
               {errors.senha && (
-                <p className="text-red-500 text-sm mt-1">{errors.senha.message}</p>
+                <p className="text-error text-sm mt-1">{errors.senha.message}</p>
               )}
             </div>
 
@@ -116,7 +116,7 @@ export default function Register() {
                 placeholder="••••••"
               />
               {errors.confirmarSenha && (
-                <p className="text-red-500 text-sm mt-1">{errors.confirmarSenha.message}</p>
+                <p className="text-error text-sm mt-1">{errors.confirmarSenha.message}</p>
               )}
             </div>
 

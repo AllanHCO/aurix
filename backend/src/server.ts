@@ -13,6 +13,12 @@ import clientesRoutes from './routes/clientes.routes';
 import vendasRoutes from './routes/vendas.routes';
 import categoriasRoutes from './routes/categorias.routes';
 import relatoriosRoutes from './routes/relatorios.routes';
+import agendaConfigRoutes from './routes/agendaConfig.routes';
+import agendamentosRoutes from './routes/agendamentos.routes';
+import bloqueiosRoutes from './routes/bloqueios.routes';
+import agendaPublicRoutes from './routes/agendaPublic.routes';
+import configuracoesAgendamentoRoutes from './routes/configuracoesAgendamento.routes';
+import empresasRoutes from './routes/empresas.routes';
 
 dotenv.config();
 
@@ -79,6 +85,12 @@ app.use('/api/clientes', clientesRoutes);
 app.use('/api/vendas', vendasRoutes);
 app.use('/api/categorias', categoriasRoutes);
 app.use('/api/relatorios', relatoriosRoutes);
+app.use('/api/agenda', agendaConfigRoutes);
+app.use('/api/agendamentos', agendamentosRoutes);
+app.use('/api/bloqueios', bloqueiosRoutes);
+app.use('/api/configuracoes/agendamento', configuracoesAgendamentoRoutes);
+app.use('/api/empresas', empresasRoutes);
+app.use('/api/public/agenda', agendaPublicRoutes);
 
 // Error handler
 app.use(errorHandler);

@@ -42,11 +42,11 @@ export default function StockStatusBadge({
   if (status === 'ok') {
     return (
       <span
-        className={`${baseClasses} bg-[#10b981]/10 text-[#10b981] border-[#10b981]/20 ${className}`}
+        className={`${baseClasses} bg-badge-pago text-badge-pago-text border-badge-pago ${className}`}
         role="status"
         aria-label={label(status, estoque)}
       >
-        <span className="size-1.5 rounded-full bg-[#10b981] shrink-0" aria-hidden />
+        <span className="size-1.5 rounded-full bg-success shrink-0" aria-hidden />
         {label(status, estoque)}
       </span>
     );
@@ -55,11 +55,11 @@ export default function StockStatusBadge({
   if (status === 'low') {
     return (
       <span
-        className={`${baseClasses} bg-[#f5c542]/10 text-[#f5c542] border-[#f5c542]/20 ${className}`}
+        className={`${baseClasses} bg-badge-pendente text-badge-pendente-text border-badge-pendente ${className}`}
         role="status"
         aria-label={label(status, estoque)}
       >
-        <span className="size-1.5 rounded-full bg-[#f5c542] shrink-0" aria-hidden />
+        <span className="size-1.5 rounded-full bg-info shrink-0" aria-hidden />
         {label(status, estoque)}
       </span>
     );
@@ -67,11 +67,11 @@ export default function StockStatusBadge({
 
   return (
     <span
-      className={`${baseClasses} bg-red-500/10 text-red-500 border-red-500/20 ${className}`}
+      className={`${baseClasses} bg-badge-erro text-badge-erro-text border-badge-erro ${className}`}
       role="status"
       aria-label={label(status, estoque)}
     >
-      <span className="size-1.5 rounded-full bg-red-500 shrink-0" aria-hidden />
+      <span className="size-1.5 rounded-full bg-error shrink-0" aria-hidden />
       {label(status, estoque)}
     </span>
   );

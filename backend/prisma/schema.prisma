@@ -11,14 +11,24 @@ datasource db {
 }
 
 model Usuario {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  senha     String
-  nome      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  email              String   @unique
+  senha              String
+  nome               String?
+  agenda_slug        String?  @unique
+  nome_organizacao   String?
+  nome_unidade       String?
+  logo_url           String?
+  cor_primaria_hex   String?
+  status_operacao    String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  vendas Venda[]
+  vendas                  Venda[]
+  agendamentos            Agendamento[]
+  bloqueios                Bloqueio[]
+  configuracao_agenda     ConfiguracaoAgenda?
+  disponibilidade_semanal DisponibilidadeSemanal[]
 
   @@map("usuarios")
 }
@@ -110,4 +120,83 @@ model ItemVenda {
 enum VendaStatus {
   PAGO
   PENDENTE
+}
+
+// ---- Agendamentos (V1) ----
+
+model ConfiguracaoAgenda {
+  usuario_id                 String  @id
+  hora_inicio_funcionamento  String  // "08:00" (fallback quando não há disponibilidade_semanal)
+  hora_fim_funcionamento     String  // "18:00"
+  duracao_padrao_minutos     Int     // 30
+  buffer_minutos             Int     // 10
+  antecedencia_minima_dias   Int     // 2
+  limite_maximo_dias         Int     // 30
+  servico_padrao_nome        String? // "Corte de Cabelo & Barba" (opcional, para resumo público)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@map("configuracao_agenda")
+}
+
+model DisponibilidadeSemanal {
+  id          String   @id @default(uuid())
+  usuario_id  String
+  dia_semana  Int      // 0=dom, 1=seg, ..., 6=sab
+  ativo       Boolean  @default(true)
+  hora_inicio String   // "08:00"
+  hora_fim    String   // "18:00"
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@unique([usuario_id, dia_semana])
+  @@index([usuario_id])
+  @@map("disponibilidade_semanal")
+}
+
+enum AgendamentoStatus {
+  PENDENTE
+  CONFIRMADO
+  CANCELADO
+}
+
+model Agendamento {
+  id               String            @id @default(uuid())
+  usuario_id       String
+  nome_cliente     String
+  telefone_cliente String
+  observacao       String?           @db.Text
+  data             DateTime         @db.Date
+  hora_inicio      String            // "09:00"
+  hora_fim         String            // "09:30"
+  status           AgendamentoStatus @default(PENDENTE)
+  createdAt        DateTime         @default(now())
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@index([usuario_id, data])
+  @@map("agendamentos")
+}
+
+enum BloqueioTipo {
+  RECORRENTE
+  INTERVALO_DATA
+}
+
+model Bloqueio {
+  id          String       @id @default(uuid())
+  usuario_id  String
+  tipo        BloqueioTipo
+  dia_semana  Int?         // 0-6 (domingo=0), para RECORRENTE
+  data_inicio DateTime?    @db.Date // para INTERVALO_DATA
+  data_fim    DateTime?    @db.Date
+  hora_inicio String?      // "08:00"
+  hora_fim    String?      // "15:00"
+  createdAt   DateTime    @default(now())
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@index([usuario_id])
+  @@index([usuario_id, tipo])
+  @@map("bloqueios")
 }

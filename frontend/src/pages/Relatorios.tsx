@@ -89,14 +89,14 @@ export default function Relatorios() {
             <button
               onClick={gerarRelatorio}
               disabled={loading}
-              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 rounded-lg disabled:opacity-50 min-h-[44px] touch-manipulation"
+              className="flex-1 bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 rounded-lg disabled:opacity-50 min-h-[44px] touch-manipulation"
             >
               {loading ? 'Gerando...' : 'Gerar Relatório'}
             </button>
             {relatorio && (
               <button
                 onClick={exportarCSV}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-3 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation"
+                className="flex-1 bg-success hover:bg-success/90 text-text-on-primary font-bold px-4 py-3 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation"
               >
                 <span className="material-symbols-outlined">download</span>
                 CSV

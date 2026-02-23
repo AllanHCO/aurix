@@ -69,7 +69,7 @@ export default function Vendas() {
         </div>
         <button
           onClick={() => setModalOpen(true)}
-          className="bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
+          className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
         >
           <span className="material-symbols-outlined">add</span>
           Nova Venda
@@ -87,7 +87,7 @@ export default function Vendas() {
           </p>
           <button
             onClick={() => setModalOpen(true)}
-            className="bg-primary hover:bg-primary-dark text-white font-bold px-6 py-3 rounded-lg"
+            className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-6 py-3 rounded-lg"
           >
             Registrar Venda
           </button>

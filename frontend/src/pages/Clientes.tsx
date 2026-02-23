@@ -111,11 +111,11 @@ export default function Clientes() {
   const getStatusInfo = (status: ClienteStatusManual) => {
     switch (status) {
       case 'ativo':
-        return { cor: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30', label: 'Ativo' };
+        return { cor: 'text-badge-pago-text', bg: 'bg-badge-pago', label: 'Ativo' };
       case 'atencao':
-        return { cor: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30', label: 'Atenção' };
+        return { cor: 'text-badge-pendente-text', bg: 'bg-badge-pendente', label: 'Atenção' };
       case 'inativo':
-        return { cor: 'text-red-600 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30', label: 'Inativo' };
+        return { cor: 'text-badge-erro-text', bg: 'bg-badge-erro', label: 'Inativo' };
     }
   };
 
@@ -170,7 +170,7 @@ export default function Clientes() {
         </div>
         <button
           onClick={() => setModalOpen(true)}
-          className="bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
+          className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
         >
           <span className="material-symbols-outlined">add</span>
           Novo Cliente
@@ -189,7 +189,7 @@ export default function Clientes() {
               onClick={() => setFiltroStatus(filtro)}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                 filtroStatus === filtro
-                  ? 'bg-primary text-white'
+                  ? 'bg-primary text-text-on-primary'
                   : 'bg-surface-light text-text-main hover:bg-background-light border border-border-light'
               }`}
             >
@@ -210,7 +210,7 @@ export default function Clientes() {
           </p>
           <button
             onClick={() => setModalOpen(true)}
-            className="bg-primary hover:bg-primary-dark text-white font-bold px-6 py-3 rounded-lg"
+            className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-6 py-3 rounded-lg"
           >
             Adicionar Cliente
           </button>
@@ -267,7 +267,7 @@ export default function Clientes() {
                             {cliente.telefone && (
                               <button
                                 onClick={() => abrirWhatsApp(cliente)}
-                                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-green-600 hover:bg-green-50 rounded touch-manipulation"
+                                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-success hover:bg-primary-light rounded touch-manipulation"
                                 title="Abrir WhatsApp"
                               >
                                 <span className="material-symbols-outlined">chat</span>
@@ -282,7 +282,7 @@ export default function Clientes() {
                             </button>
                             <button
                               onClick={() => handleDelete(cliente.id)}
-                              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-red-600 hover:bg-red-50 rounded touch-manipulation"
+                              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-error hover:bg-badge-erro rounded touch-manipulation"
                               title="Excluir"
                             >
                               <span className="material-symbols-outlined">delete</span>
@@ -326,7 +326,7 @@ export default function Clientes() {
                       onClick={() => setPaginaAtual(pagina)}
                       className={`px-3 py-2 rounded-lg text-sm ${
                         paginaAtual === pagina
-                          ? 'bg-primary text-white'
+                          ? 'bg-primary text-text-on-primary'
                           : 'bg-background-light text-text-main hover:bg-background-light border border-border-light'
                       }`}
                     >

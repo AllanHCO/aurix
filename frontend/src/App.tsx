@@ -9,6 +9,12 @@ import Produtos from './pages/Produtos';
 import Clientes from './pages/Clientes';
 import Vendas from './pages/Vendas';
 import Relatorios from './pages/Relatorios';
+import Agendamentos from './pages/Agendamentos';
+import AgendaConfig from './pages/AgendaConfig';
+import Bloqueios from './pages/Bloqueios';
+import ConfiguracoesHub from './pages/ConfiguracoesHub';
+import ConfiguracoesAgendamento from './pages/ConfiguracoesAgendamento';
+import AgendaPublica from './pages/AgendaPublica';
 import Layout from './components/Layout';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -32,8 +38,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+        <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/agenda/:slug" element={<AgendaPublica />} />
       <Route
         path="/"
         element={
@@ -47,7 +54,15 @@ function AppRoutes() {
         <Route path="produtos" element={<Produtos />} />
         <Route path="clientes" element={<Clientes />} />
         <Route path="vendas" element={<Vendas />} />
+        <Route path="agendamentos" element={<Agendamentos />} />
+        <Route path="agendamentos/config" element={<AgendaConfig />} />
+        <Route path="agendamentos/bloqueios" element={<Bloqueios />} />
+        <Route path="configuracoes" element={<ConfiguracoesHub />} />
+        <Route path="configuracoes/agendamento" element={<ConfiguracoesAgendamento />} />
         <Route path="relatorios" element={<Relatorios />} />
+        {/* Redirects antigos para não quebrar */}
+        <Route path="agendamento" element={<Navigate to="/configuracoes/agendamento" replace />} />
+        <Route path="config/agendamento" element={<Navigate to="/configuracoes/agendamento" replace />} />
       </Route>
     </Routes>
   );
@@ -59,7 +74,18 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <AppRoutes />
-          <Toaster position="top-right" />
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              style: {
+                background: 'var(--color-surface)',
+                color: 'var(--color-text-main)',
+                border: '1px solid var(--color-border)',
+              },
+              success: { iconTheme: { primary: 'var(--color-success)' } },
+              error: { iconTheme: { primary: 'var(--color-error)' } },
+            }}
+          />
         </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>

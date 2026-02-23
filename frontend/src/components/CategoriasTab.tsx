@@ -98,7 +98,7 @@ export default function CategoriasTab() {
         <button
           type="button"
           onClick={openNew}
-          className="bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
+          className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
         >
           <span className="material-symbols-outlined">add</span>
           Nova Categoria
@@ -117,7 +117,7 @@ export default function CategoriasTab() {
           <button
             type="button"
             onClick={openNew}
-            className="bg-primary hover:bg-primary-dark text-white font-bold px-6 py-3 rounded-lg"
+            className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-6 py-3 rounded-lg"
           >
             Nova Categoria
           </button>
@@ -189,7 +189,7 @@ export default function CategoriasTab() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-3 rounded-lg bg-primary hover:bg-primary-dark text-white font-bold"
+                  className="flex-1 px-4 py-3 rounded-lg bg-primary hover:bg-primary-hover text-text-on-primary font-bold"
                 >
                   {categoriaEditando ? 'Salvar' : 'Criar'}
                 </button>

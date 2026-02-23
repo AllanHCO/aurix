@@ -126,7 +126,7 @@ export default function VendaDetalheModal({ venda, onClose, onEdit }: VendaDetal
             <button
               type="button"
               onClick={() => onEdit(venda)}
-              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2"
+              className="flex-1 bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2"
             >
               <span className="material-symbols-outlined text-lg">edit</span>
               Editar venda

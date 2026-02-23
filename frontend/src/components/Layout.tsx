@@ -14,10 +14,16 @@ export default function Layout() {
     { path: '/clientes', label: 'Clientes', icon: 'group' },
     { path: '/produtos', label: 'Produtos', icon: 'diamond' },
     { path: '/vendas', label: 'Vendas', icon: 'payments' },
+    { path: '/agendamentos', label: 'Agendamentos', icon: 'calendar_month' },
     { path: '/relatorios', label: 'Relatórios', icon: 'bar_chart' }
   ];
 
-  const isActive = (path: string) => location.pathname === path;
+  const configPath = '/configuracoes';
+  const isConfigActive = location.pathname === configPath || location.pathname.startsWith(configPath + '/');
+  const isActive = (path: string) => {
+    if (path === '/agendamentos') return location.pathname === path || location.pathname.startsWith(path + '/');
+    return location.pathname === path;
+  };
 
   // Fechar menu ao navegar (mobile)
   useEffect(() => {
@@ -70,6 +76,20 @@ export default function Layout() {
               <span>{item.label}</span>
             </button>
           ))}
+          <div className="pt-2 mt-2 border-t border-border-light">
+            <p className="px-4 py-1 text-xs font-semibold uppercase tracking-wide text-text-muted">Configurações</p>
+            <button
+              onClick={() => goTo(configPath)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-300 text-left min-h-[44px] touch-manipulation w-full ${
+                isConfigActive
+                  ? 'bg-sidebar-active-bg text-primary font-semibold border-l-4 border-l-primary border border-transparent'
+                  : 'text-text-muted hover:bg-sidebar-hover hover:text-text-main'
+              }`}
+            >
+              <span className="material-symbols-outlined shrink-0">settings</span>
+              <span>Configurações</span>
+            </button>
+          </div>
         </nav>
       </div>
 

@@ -96,7 +96,7 @@ export default function CadastroProdutos() {
         </div>
         <button
           onClick={() => setModalOpen(true)}
-          className="bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
+          className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
         >
           <span className="material-symbols-outlined">add</span>
           Novo Produto
@@ -114,7 +114,7 @@ export default function CadastroProdutos() {
           </p>
           <button
             onClick={() => setModalOpen(true)}
-            className="bg-primary hover:bg-primary-dark text-white font-bold px-6 py-3 rounded-lg"
+            className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-6 py-3 rounded-lg"
           >
             Adicionar Produto
           </button>
@@ -130,7 +130,7 @@ export default function CadastroProdutos() {
                   onClick={() => handlePeriodoChange(p)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[40px] touch-manipulation ${
                     periodo === p
-                      ? 'bg-primary text-white'
+                      ? 'bg-primary text-text-on-primary'
                       : 'bg-surface-light text-text-main border border-border-light hover:bg-background-light'
                   }`}
                 >
@@ -146,7 +146,7 @@ export default function CadastroProdutos() {
                   onClick={() => handleFiltroChange(f)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[40px] touch-manipulation ${
                     filtro === f
-                      ? 'bg-primary text-white'
+                      ? 'bg-primary text-text-on-primary'
                       : 'bg-surface-light text-text-main border border-border-light hover:bg-background-light'
                   }`}
                 >
@@ -209,10 +209,10 @@ export default function CadastroProdutos() {
                                 </span>
                               )}
                               {top3MaisVendidos && (
-                                <span className="text-amber-500 shrink-0" title={periodo === 'este_mes' ? 'Top 3 mais vendidos no mês' : 'Top 3 mais vendidos no período'}>🔥</span>
+                                <span className="text-info shrink-0" title={periodo === 'este_mes' ? 'Top 3 mais vendidos no mês' : 'Top 3 mais vendidos no período'}>🔥</span>
                               )}
                               {zeroVendasMenosVendidos && (
-                                <span className="text-amber-600 shrink-0" title={periodo === 'este_mes' ? 'Sem vendas no mês' : 'Sem vendas no período'}>⚠️</span>
+                                <span className="text-warning shrink-0" title={periodo === 'este_mes' ? 'Sem vendas no mês' : 'Sem vendas no período'}>⚠️</span>
                               )}
                             </div>
                           </td>

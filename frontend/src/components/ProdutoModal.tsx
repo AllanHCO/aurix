@@ -154,7 +154,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
               className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
             />
             {errors.nome && (
-              <p className="text-red-500 text-sm mt-1">{errors.nome.message}</p>
+              <p className="text-error text-sm mt-1">{errors.nome.message}</p>
             )}
           </div>
 
@@ -165,7 +165,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
             <div className="flex gap-2">
               <select
                 {...register('categoria_id')}
-                className="flex-1 px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
+                className="flex-1 pl-4 pr-8 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               >
                 <option value="">Selecione uma categoria</option>
                 {categorias.map((c) => (
@@ -185,7 +185,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
               </button>
             </div>
             {errors.categoria_id && (
-              <p className="text-red-500 text-sm mt-1">{errors.categoria_id.message}</p>
+              <p className="text-error text-sm mt-1">{errors.categoria_id.message}</p>
             )}
           </div>
 
@@ -199,7 +199,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
                 className="flex-1 px-3 py-2 border border-border-light rounded-lg outline-none focus:ring-2 focus:ring-primary"
                 autoFocus
               />
-              <button type="button" onClick={criarCategoria} className="px-3 py-2 bg-primary text-white rounded-lg font-medium">
+              <button type="button" onClick={criarCategoria} className="px-3 py-2 bg-primary text-text-on-primary rounded-lg font-medium">
                 Criar
               </button>
               <button type="button" onClick={() => { setNovaCategoriaOpen(false); setNovaCategoriaNome(''); }} className="px-3 py-2 border border-border-light rounded-lg">
@@ -220,7 +220,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
                 className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               />
               {errors.preco && (
-                <p className="text-red-500 text-sm mt-1">{errors.preco.message}</p>
+                <p className="text-error text-sm mt-1">{errors.preco.message}</p>
               )}
             </div>
 
@@ -235,7 +235,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
                 className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               />
               {errors.custo && (
-                <p className="text-red-500 text-sm mt-1">{errors.custo.message}</p>
+                <p className="text-error text-sm mt-1">{errors.custo.message}</p>
               )}
             </div>
           </div>
@@ -251,7 +251,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
                 className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               />
               {errors.estoque_atual && (
-                <p className="text-red-500 text-sm mt-1">{errors.estoque_atual.message}</p>
+                <p className="text-error text-sm mt-1">{errors.estoque_atual.message}</p>
               )}
             </div>
 
@@ -265,7 +265,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
                 className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               />
               {errors.estoque_minimo && (
-                <p className="text-red-500 text-sm mt-1">{errors.estoque_minimo.message}</p>
+                <p className="text-error text-sm mt-1">{errors.estoque_minimo.message}</p>
               )}
             </div>
           </div>
@@ -282,7 +282,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 rounded-lg min-h-[44px] touch-manipulation flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="flex-1 bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 rounded-lg min-h-[44px] touch-manipulation flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
                 <>

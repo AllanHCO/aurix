@@ -64,14 +64,14 @@ export default function Dashboard() {
           <button
             type="button"
             onClick={() => setPeriodo('este_mes')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${periodo === 'este_mes' ? 'bg-primary text-white' : 'bg-surface-light border border-border-light text-text-main'}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${periodo === 'este_mes' ? 'bg-primary text-text-on-primary' : 'bg-surface-light border border-border-light text-text-main'}`}
           >
             Este mês
           </button>
           <button
             type="button"
             onClick={() => setPeriodo('ultimos_3_meses')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${periodo === 'ultimos_3_meses' ? 'bg-primary text-white' : 'bg-surface-light border border-border-light text-text-main'}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${periodo === 'ultimos_3_meses' ? 'bg-primary text-text-on-primary' : 'bg-surface-light border border-border-light text-text-main'}`}
           >
             Últimos 3 meses
           </button>
@@ -127,7 +127,7 @@ export default function Dashboard() {
 
       {/* Produtos com Estoque Baixo */}
       {data.produtosEstoqueBaixo.length > 0 && (
-        <div className="bg-surface-light rounded-xl border border-red-100 shadow-sm p-4 sm:p-6">
+        <div className="bg-surface-light rounded-xl border border-badge-erro shadow-sm p-4 sm:p-6">
           <h3 className="text-base sm:text-lg font-bold text-text-main mb-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-badge-estoque-text">warning</span>
             Produtos com Estoque Baixo

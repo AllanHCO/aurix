@@ -2,73 +2,94 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ========== Tema claro (padrão) ========== */
+/* ========== Tokens globais de cor (paleta azul, zero amarelo) ========== */
 :root,
 html.light {
+  /* Backgrounds */
+  --color-background: #ffffff;
+  --color-background-secondary: #f5f5f5;
   --color-bg: #f5f5f5;
   --color-bg-secondary: #ffffff;
   --color-surface: #ffffff;
   --color-surface-elevated: #f5f5f5;
-  --color-border: #e0e0e0;
-  --color-text-main: #1e1e1e;
-  --color-text-muted: #666666;
-  --color-text-tertiary: #999999;
-  --color-primary: #f5c542;
-  --color-primary-hover: #ffd966;
-  --color-primary-active: #d4a017;
-  --color-primary-dark: #e6b422;
-  --color-text-on-primary: #0a0a0a;
-  --color-success: #2e7d32;
-  --color-success-light: #4caf50;
-  --color-error: #b71c1c;
-  --color-error-light: #ef5350;
-  --color-warning: #ffb74d;
-  --color-badge-pago: #e8f5e9;
-  --color-badge-pago-text: #2e7d32;
-  --color-badge-pendente: #fff8e1;
-  --color-badge-pendente-text: #f5c542;
-  --color-badge-erro: #ffebee;
-  --color-badge-erro-text: #b71c1c;
-  --color-badge-estoque: #fff3e0;
-  --color-badge-estoque-text: #e65100;
+  --color-border: #e5e7eb;
+  /* Text */
+  --color-text-primary: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-main: #111827;
+  --color-text-muted: #6b7280;
+  --color-text-tertiary: #9ca3af;
+  /* Primary (azul) */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-dark: #1e40af;
+  --color-primary-active: #1e40af;
+  --color-primary-light: #dbeafe;
+  --color-text-on-primary: #ffffff;
+  /* Semantic */
+  --color-success: #059669;
+  --color-success-light: #10b981;
+  --color-danger: #dc2626;
+  --color-error: #dc2626;
+  --color-error-light: #ef4444;
+  --color-info: #2563eb;
+  --color-warning: #64748b;
+  /* Inputs */
   --color-input-bg: #ffffff;
-  --color-input-border: #e0e0e0;
-  --color-sidebar-active-bg: rgba(245, 197, 66, 0.1);
-  --color-sidebar-hover: #f5f5f5;
+  --color-input-border: #e5e7eb;
+  /* Sidebar */
+  --color-sidebar-active-bg: #dbeafe;
+  --color-sidebar-hover: #f3f4f6;
+  /* Badges */
+  --color-badge-pago: #d1fae5;
+  --color-badge-pago-text: #059669;
+  --color-badge-pendente: #dbeafe;
+  --color-badge-pendente-text: #2563eb;
+  --color-badge-erro: #fee2e2;
+  --color-badge-erro-text: #dc2626;
+  --color-badge-estoque: #e0e7ff;
+  --color-badge-estoque-text: #4f46e5;
 }
 
 /* ========== Tema escuro ========== */
 html.dark {
+  --color-background: #0a0a0a;
+  --color-background-secondary: #121212;
   --color-bg: #0a0a0a;
   --color-bg-secondary: #121212;
   --color-surface: #1a1a1a;
   --color-surface-elevated: #242424;
   --color-border: #2a2a2a;
+  --color-text-primary: #f5f5f5;
+  --color-text-secondary: #b0b0b0;
   --color-text-main: #f5f5f5;
   --color-text-muted: #b0b0b0;
   --color-text-tertiary: #757575;
-  --color-primary: #f5c542;
-  --color-primary-hover: #ffd966;
-  --color-primary-active: #d4a017;
-  --color-primary-dark: #e6b422;
-  --color-text-on-primary: #0a0a0a;
-  --color-success: #2e7d32;
-  --color-success-light: #4caf50;
-  --color-error: #b71c1c;
-  --color-error-light: #ef5350;
-  --color-warning: #ffb74d;
-  --color-badge-pago: #003300;
-  --color-badge-pago-text: #4caf50;
-  --color-badge-pendente: #332a1a;
-  --color-badge-pendente-text: #f5c542;
-  --color-badge-erro: #330000;
-  --color-badge-erro-text: #ef5350;
-  --color-badge-estoque: #332200;
-  --color-badge-estoque-text: #ffb74d;
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-active: #2563eb;
+  --color-primary-light: #1e3a5f;
+  --color-text-on-primary: #ffffff;
+  --color-success: #10b981;
+  --color-success-light: #34d399;
+  --color-danger: #ef4444;
+  --color-error: #ef4444;
+  --color-error-light: #f87171;
+  --color-info: #3b82f6;
+  --color-warning: #94a3b8;
   --color-input-bg: #1a1a1a;
   --color-input-border: #333333;
-  --color-sidebar-active-bg: #242424;
+  --color-sidebar-active-bg: #1e3a5f;
   --color-sidebar-hover: #242424;
+  --color-badge-pago: #064e3b;
+  --color-badge-pago-text: #34d399;
+  --color-badge-pendente: #1e3a5f;
+  --color-badge-pendente-text: #93c5fd;
+  --color-badge-erro: #450a0a;
+  --color-badge-erro-text: #f87171;
+  --color-badge-estoque: #312e81;
+  --color-badge-estoque-text: #a5b4fc;
 }
 
 html {
@@ -76,7 +97,6 @@ html {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Transição suave ao alternar tema */
 html.dark body,
 html body {
   transition: background-color 0.3s ease, color 0.3s ease;
@@ -90,7 +110,6 @@ body {
   color: var(--color-text-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Safe area para celulares com notch */
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
   padding-bottom: env(safe-area-inset-bottom);
@@ -100,7 +119,6 @@ body {
   box-sizing: border-box;
 }
 
-/* ========== Scrollbars no tema escuro ========== */
 html.dark {
   scrollbar-color: #404040 #1a1a1a;
 }
@@ -124,7 +142,6 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
 
-/* Campos de texto, select e textarea seguem o tema (fundo e texto legível no dark) */
 input,
 select,
 textarea {
@@ -133,21 +150,23 @@ textarea {
   border-color: var(--color-input-border);
 }
 
+select {
+  padding-right: 2rem;
+}
+
 input::placeholder,
 textarea::placeholder {
   color: var(--color-text-tertiary);
 }
 
-/* Select no dark mode: opções com fundo escuro (Chrome/Edge) */
 html.dark select option {
   background-color: #1a1a1a;
   color: #f5f5f5;
 }
 
-/* Área de toque mínima e sem zoom em inputs no iOS */
 @media (max-width: 768px) {
   input, select, textarea, button {
-    font-size: 16px !important; /* Evita zoom ao focar no iOS */
+    font-size: 16px !important;
   }
 }
 
@@ -157,4 +176,14 @@ html.dark select option {
 
 .material-symbols-outlined.filled {
   font-variation-settings: 'FILL' 1;
+}
+
+/* Focus ring consistente (azul) */
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-primary);
 }

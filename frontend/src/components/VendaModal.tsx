@@ -237,7 +237,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
             </label>
             <select
               {...register('cliente_id')}
-              className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
+              className="w-full pl-4 pr-8 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
             >
               <option value="">Selecione um cliente</option>
               {clientes.map((cliente) => (
@@ -247,7 +247,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
               ))}
             </select>
             {errors.cliente_id && (
-              <p className="text-red-500 text-sm mt-1">{errors.cliente_id.message}</p>
+              <p className="text-error text-sm mt-1">{errors.cliente_id.message}</p>
             )}
           </div>
 
@@ -259,7 +259,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
               <button
                 type="button"
                 onClick={() => setShowSelecaoProdutos(true)}
-                className="bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-1.5"
+                className="bg-primary hover:bg-primary-hover text-text-on-primary text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-1.5"
               >
                 <span className="material-symbols-outlined">add</span>
                 Adicionar Produtos
@@ -340,7 +340,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
                 <span className="text-text-muted font-medium shrink-0">%</span>
               </div>
               {errors.desconto_percentual && (
-                <p className="text-red-500 text-sm mt-1">{errors.desconto_percentual.message}</p>
+                <p className="text-error text-sm mt-1">{errors.desconto_percentual.message}</p>
               )}
             </div>
 
@@ -350,7 +350,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
               </label>
               <select
                 {...register('forma_pagamento')}
-                className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                className="w-full pl-4 pr-8 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               >
                 <option value="">Selecione</option>
                 <option value="Dinheiro">Dinheiro</option>
@@ -359,7 +359,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
                 <option value="Pix">Pix</option>
               </select>
               {errors.forma_pagamento && (
-                <p className="text-red-500 text-sm mt-1">{errors.forma_pagamento.message}</p>
+                <p className="text-error text-sm mt-1">{errors.forma_pagamento.message}</p>
               )}
             </div>
           </div>
@@ -370,7 +370,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
             </label>
             <select
               {...register('status')}
-              className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+              className="w-full pl-4 pr-8 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
             >
               <option value="PENDENTE">Pendente</option>
               <option value="PAGO">Pago</option>
@@ -410,7 +410,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
             <button
               type="submit"
               disabled={isSubmitting || itens.length === 0}
-              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed min-h-[44px]"
+              className="flex-1 bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed min-h-[44px]"
             >
               {isSubmitting ? (
                 <>

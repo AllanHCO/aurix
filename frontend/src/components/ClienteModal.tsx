@@ -15,9 +15,9 @@ const clienteSchema = z.object({
 type ClienteForm = z.infer<typeof clienteSchema>;
 
 const STATUS_OPCOES: { valor: ClienteStatusManual; label: string; cor: string; bg: string }[] = [
-  { valor: 'ativo', label: 'Ativo', cor: 'text-green-700 dark:text-green-300', bg: 'bg-green-500' },
-  { valor: 'atencao', label: 'Atenção', cor: 'text-amber-800 dark:text-amber-200', bg: 'bg-amber-400' },
-  { valor: 'inativo', label: 'Inativo', cor: 'text-red-700 dark:text-red-300', bg: 'bg-red-500' }
+  { valor: 'ativo', label: 'Ativo', cor: 'text-badge-pago-text', bg: 'bg-success' },
+  { valor: 'atencao', label: 'Atenção', cor: 'text-badge-pendente-text', bg: 'bg-info' },
+  { valor: 'inativo', label: 'Inativo', cor: 'text-badge-erro-text', bg: 'bg-error' }
 ];
 
 interface ClienteModalProps {
@@ -104,7 +104,7 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
               className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
             />
             {errors.nome && (
-              <p className="text-red-500 text-sm mt-1">{errors.nome.message}</p>
+              <p className="text-error text-sm mt-1">{errors.nome.message}</p>
             )}
           </div>
 
@@ -172,7 +172,7 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
             </button>
             <button
               type="submit"
-              className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold px-4 py-3 rounded-lg min-h-[44px] touch-manipulation"
+              className="flex-1 bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 rounded-lg min-h-[44px] touch-manipulation"
             >
               {cliente ? 'Atualizar' : 'Criar'}
             </button>

@@ -8,13 +8,12 @@ export default {
   theme: {
     extend: {
       colors: {
-        /* Cores que mudam com o tema via variáveis CSS ( :root / .dark ) */
         primary: "var(--color-primary)",
         "primary-dark": "var(--color-primary-dark)",
         "primary-hover": "var(--color-primary-hover)",
         "primary-active": "var(--color-primary-active)",
+        "primary-light": "var(--color-primary-light)",
         "text-on-primary": "var(--color-text-on-primary)",
-        "primary-light": "#fefce8",
         "background-light": "var(--color-bg)",
         "background-dark": "var(--color-bg-secondary)",
         "surface-light": "var(--color-surface)",
@@ -35,10 +34,11 @@ export default {
         "badge-erro-text": "var(--color-badge-erro-text)",
         "badge-estoque": "var(--color-badge-estoque)",
         "badge-estoque-text": "var(--color-badge-estoque-text)",
-        "success": "var(--color-success)",
-        "error": "var(--color-error)",
-        "warning": "var(--color-warning)",
-        "mint": "#10b981",
+        success: "var(--color-success)",
+        error: "var(--color-error)",
+        danger: "var(--color-danger)",
+        info: "var(--color-info)",
+        warning: "var(--color-warning)",
       },
       fontFamily: {
         display: ["Manrope", "sans-serif"],

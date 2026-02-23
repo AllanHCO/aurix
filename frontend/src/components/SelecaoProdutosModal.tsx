@@ -261,7 +261,7 @@ export default function SelecaoProdutosModal({
                             disabled={!disponivel}
                             className={
                               disponivel
-                                ? 'bg-primary hover:bg-primary-dark text-text-on-primary px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 focus:ring-0 focus:outline-none h-[26px] min-w-[4.5rem]'
+                                ? 'bg-primary hover:bg-primary-hover text-text-on-primary px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 focus:ring-0 focus:outline-none h-[26px] min-w-[4.5rem]'
                                 : 'bg-surface-elevated text-text-muted cursor-not-allowed px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 focus:ring-0 focus:outline-none h-[26px] min-w-[4.5rem]'
                             }
                           >
@@ -287,7 +287,7 @@ export default function SelecaoProdutosModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2.5 bg-primary hover:bg-primary-dark text-white font-semibold rounded-lg"
+              className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-text-on-primary font-semibold rounded-lg"
             >
               Finalizar Seleção
             </button>
