@@ -82,8 +82,8 @@ function App() {
                 color: 'var(--color-text-main)',
                 border: '1px solid var(--color-border)',
               },
-              success: { iconTheme: { primary: 'var(--color-success)' } },
-              error: { iconTheme: { primary: 'var(--color-error)' } },
+              success: { iconTheme: { primary: 'var(--color-success)', secondary: 'transparent' } },
+              error: { iconTheme: { primary: 'var(--color-error)', secondary: 'transparent' } },
             }}
           />
         </BrowserRouter>

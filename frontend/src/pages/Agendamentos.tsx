@@ -145,7 +145,6 @@ export default function Agendamentos() {
 
   const diasNoMes = new Date(ano, mes, 0).getDate();
   const primeiroDia = new Date(ano, mes - 1, 1).getDay();
-  const hoje = new Date();
 
   const agendamentosPorDia: Record<string, Agendamento[]> = {};
   agendamentos.forEach((a) => {
