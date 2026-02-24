@@ -98,7 +98,26 @@ export const getHorarios = async (req: Request, res: Response) => {
   res.json({ horarios });
 };
 
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 15;
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+function checkRateLimit(ip: string): void {
+  const now = Date.now();
+  let entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    rateLimitMap.set(ip, entry);
+  }
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX) {
+    throw new AppError('Muitas tentativas. Aguarde um minuto e tente novamente.', 429);
+  }
+}
+
 export const createAgendamento = async (req: Request, res: Response) => {
+  const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+  checkRateLimit(ip);
+
   const slugNorm = (req.params.empresaSlug || '').trim().toLowerCase();
   const idempotencyKey = req.headers['idempotency-key'] as string | undefined;
   if (!slugNorm) throw new AppError('Agenda não encontrada.', 404);

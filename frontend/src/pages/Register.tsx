@@ -46,7 +46,7 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-background-light p-4 relative">
+    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-bg-main p-4 relative">
       <div className="absolute top-4 right-4 z-10">
         <ThemeToggle />
       </div>
@@ -59,7 +59,7 @@ export default function Register() {
           <p className="text-sm sm:text-base text-text-muted">Gestão Comercial</p>
         </div>
 
-        <div className="bg-surface-light rounded-xl shadow-sm border border-border-light p-4 sm:p-8">
+        <div className="bg-bg-card rounded-xl shadow-sm border border-border p-4 sm:p-8">
           <h2 className="text-xl sm:text-2xl font-bold text-text-main mb-6">Criar Conta</h2>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -70,7 +70,7 @@ export default function Register() {
               <input
                 type="text"
                 {...register('nome')}
-                className="w-full px-4 py-3 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
+                className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
                 placeholder="Seu nome"
               />
             </div>
@@ -82,7 +82,7 @@ export default function Register() {
               <input
                 type="email"
                 {...register('email')}
-                className="w-full px-4 py-3 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
+                className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
                 placeholder="seu@email.com"
               />
               {errors.email && (
@@ -97,7 +97,7 @@ export default function Register() {
               <input
                 type="password"
                 {...register('senha')}
-                className="w-full px-4 py-3 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
+                className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
                 placeholder="••••••"
               />
               {errors.senha && (
@@ -112,7 +112,7 @@ export default function Register() {
               <input
                 type="password"
                 {...register('confirmarSenha')}
-                className="w-full px-4 py-3 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
+                className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
                 placeholder="••••••"
               />
               {errors.confirmarSenha && (

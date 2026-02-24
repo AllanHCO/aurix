@@ -7,11 +7,12 @@ import toast from 'react-hot-toast';
 
 const produtoSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
-  preco: z.number().positive('Preço deve ser positivo'),
+  preco: z.number().nonnegative('Preço não pode ser negativo'),
   custo: z.number().nonnegative('Custo não pode ser negativo'),
   estoque_atual: z.number().int().nonnegative('Estoque atual não pode ser negativo'),
   estoque_minimo: z.number().int().nonnegative('Estoque mínimo não pode ser negativo'),
-  categoria_id: z.string().min(1, 'Categoria é obrigatória')
+  categoria_id: z.string().min(1, 'Categoria é obrigatória'),
+  linha: z.string().max(100).optional().or(z.literal(''))
 });
 
 type ProdutoForm = z.infer<typeof produtoSchema>;
@@ -30,6 +31,7 @@ interface ProdutoModalProps {
     estoque_atual: number;
     estoque_minimo: number;
     categoria_id?: string;
+    linha?: string | null;
   } | null;
   onClose: () => void;
 }
@@ -49,7 +51,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
     watch
   } = useForm<ProdutoForm>({
     resolver: zodResolver(produtoSchema),
-    defaultValues: { categoria_id: '' }
+    defaultValues: { categoria_id: '', linha: '' }
   });
 
   const categoriaId = watch('categoria_id');
@@ -66,7 +68,8 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
         custo: produto.custo,
         estoque_atual: produto.estoque_atual,
         estoque_minimo: produto.estoque_minimo,
-        categoria_id: produto.categoria_id ?? ''
+        categoria_id: produto.categoria_id ?? '',
+        linha: (produto as { linha?: string | null }).linha ?? ''
       });
     } else {
       reset({
@@ -75,7 +78,8 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
         custo: 0,
         estoque_atual: 0,
         estoque_minimo: 0,
-        categoria_id: ''
+        categoria_id: '',
+        linha: ''
       });
     }
   }, [produto, reset]);
@@ -91,12 +95,13 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
     setIsSubmitting(true);
 
     try {
+      const payload = { ...data, linha: data.linha?.trim() || undefined };
       if (produto) {
-        await api.put(`/produtos/${produto.id}`, data);
+        await api.put(`/produtos/${produto.id}`, payload);
         toast.success('Produto atualizado com sucesso!');
       } else {
         const idempotencyKey = crypto.randomUUID?.() ?? `produto-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        await api.post('/produtos', data, {
+        await api.post('/produtos', payload, {
           headers: { 'Idempotency-Key': idempotencyKey }
         });
         toast.success('Produto criado com sucesso!');
@@ -127,16 +132,16 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-surface-light rounded-xl shadow-lg max-w-2xl w-full my-auto max-h-[90vh] overflow-y-auto">
-        <div className="p-4 sm:p-6 border-b border-border-light flex items-center justify-between shrink-0">
+    <div className="fixed inset-0 flex items-center justify-center z-50 p-4 overflow-y-auto" style={{ backgroundColor: 'var(--color-overlay)' }}>
+      <div className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-2xl w-full my-auto max-h-[90vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 border-b border-border flex items-center justify-between shrink-0">
           <h2 className="text-lg sm:text-xl font-bold text-text-main">
             {produto ? 'Editar Produto' : 'Novo Produto'}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 -m-2 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-elevated min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+            className="p-2 -m-2 rounded-lg text-text-muted hover:text-text-main hover:bg-bg-elevated min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
             aria-label="Fechar"
           >
             <span className="material-symbols-outlined">close</span>
@@ -151,7 +156,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
             <input
               type="text"
               {...register('nome')}
-              className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
+              className="w-full px-4 py-3 sm:py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
             />
             {errors.nome && (
               <p className="text-error text-sm mt-1">{errors.nome.message}</p>
@@ -165,7 +170,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
             <div className="flex gap-2">
               <select
                 {...register('categoria_id')}
-                className="flex-1 pl-4 pr-8 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
+                className="flex-1 pl-4 pr-8 py-3 sm:py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               >
                 <option value="">Selecione uma categoria</option>
                 {categorias.map((c) => (
@@ -189,20 +194,33 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
             )}
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-text-main mb-1">
+              Linha <span className="text-text-muted font-normal">(opcional)</span>
+            </label>
+            <input
+              type="text"
+              {...register('linha')}
+              placeholder="Ex: Premium, Básico"
+              className="w-full px-4 py-3 sm:py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
+              maxLength={100}
+            />
+          </div>
+
           {novaCategoriaOpen && (
-            <div className="flex gap-2 p-3 bg-background-light rounded-lg border border-border-light">
+            <div className="flex gap-2 p-3 bg-bg-elevated rounded-lg border border-border">
               <input
                 type="text"
                 value={novaCategoriaNome}
                 onChange={(e) => setNovaCategoriaNome(e.target.value)}
                 placeholder="Nome da nova categoria"
-                className="flex-1 px-3 py-2 border border-border-light rounded-lg outline-none focus:ring-2 focus:ring-primary"
+                className="flex-1 px-3 py-2 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary"
                 autoFocus
               />
               <button type="button" onClick={criarCategoria} className="px-3 py-2 bg-primary text-text-on-primary rounded-lg font-medium">
                 Criar
               </button>
-              <button type="button" onClick={() => { setNovaCategoriaOpen(false); setNovaCategoriaNome(''); }} className="px-3 py-2 border border-border-light rounded-lg">
+              <button type="button" onClick={() => { setNovaCategoriaOpen(false); setNovaCategoriaNome(''); }} className="px-3 py-2 border border-border rounded-lg">
                 Cancelar
               </button>
             </div>
@@ -217,7 +235,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
                 type="number"
                 step="0.01"
                 {...register('preco', { valueAsNumber: true })}
-                className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
+                className="w-full px-4 py-3 sm:py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               />
               {errors.preco && (
                 <p className="text-error text-sm mt-1">{errors.preco.message}</p>
@@ -232,7 +250,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
                 type="number"
                 step="0.01"
                 {...register('custo', { valueAsNumber: true })}
-                className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
+                className="w-full px-4 py-3 sm:py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               />
               {errors.custo && (
                 <p className="text-error text-sm mt-1">{errors.custo.message}</p>
@@ -248,7 +266,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
               <input
                 type="number"
                 {...register('estoque_atual', { valueAsNumber: true })}
-                className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
+                className="w-full px-4 py-3 sm:py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               />
               {errors.estoque_atual && (
                 <p className="text-error text-sm mt-1">{errors.estoque_atual.message}</p>
@@ -262,7 +280,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
               <input
                 type="number"
                 {...register('estoque_minimo', { valueAsNumber: true })}
-                className="w-full px-4 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
+                className="w-full px-4 py-3 sm:py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
               />
               {errors.estoque_minimo && (
                 <p className="text-error text-sm mt-1">{errors.estoque_minimo.message}</p>
@@ -275,7 +293,7 @@ export default function ProdutoModal({ produto, onClose }: ProdutoModalProps) {
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="flex-1 px-4 py-3 border border-border-light rounded-lg text-text-main hover:bg-background-light min-h-[44px] touch-manipulation disabled:opacity-50 disabled:pointer-events-none"
+              className="flex-1 px-4 py-3 border border-border rounded-lg text-text-main hover:bg-bg-elevated min-h-[44px] touch-manipulation disabled:opacity-50 disabled:pointer-events-none"
             >
               Cancelar
             </button>

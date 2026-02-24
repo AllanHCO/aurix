@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
+import { checkPlanBlock } from '../middleware/checkPlanBlock';
 import {
   listarProdutos,
   obterProduto,
@@ -9,9 +10,8 @@ import {
 } from '../controllers/produtos.controller';
 
 const router = Router();
-
 router.use(authenticate);
-
+router.use(checkPlanBlock);
 router.get('/', listarProdutos);
 router.get('/:id', obterProduto);
 router.post('/', criarProduto);

@@ -10,10 +10,12 @@ import Clientes from './pages/Clientes';
 import Vendas from './pages/Vendas';
 import Relatorios from './pages/Relatorios';
 import Agendamentos from './pages/Agendamentos';
+import Pendencias from './pages/Pendencias';
 import AgendaConfig from './pages/AgendaConfig';
 import Bloqueios from './pages/Bloqueios';
 import ConfiguracoesHub from './pages/ConfiguracoesHub';
 import ConfiguracoesAgendamento from './pages/ConfiguracoesAgendamento';
+import AssinaturaBloqueio from './pages/AssinaturaBloqueio';
 import AgendaPublica from './pages/AgendaPublica';
 import Layout from './components/Layout';
 
@@ -54,11 +56,13 @@ function AppRoutes() {
         <Route path="produtos" element={<Produtos />} />
         <Route path="clientes" element={<Clientes />} />
         <Route path="vendas" element={<Vendas />} />
+        <Route path="pendencias" element={<Pendencias />} />
         <Route path="agendamentos" element={<Agendamentos />} />
         <Route path="agendamentos/config" element={<AgendaConfig />} />
         <Route path="agendamentos/bloqueios" element={<Bloqueios />} />
         <Route path="configuracoes" element={<ConfiguracoesHub />} />
         <Route path="configuracoes/agendamento" element={<ConfiguracoesAgendamento />} />
+        <Route path="assinatura-bloqueio" element={<AssinaturaBloqueio />} />
         <Route path="relatorios" element={<Relatorios />} />
         {/* Redirects antigos para não quebrar */}
         <Route path="agendamento" element={<Navigate to="/configuracoes/agendamento" replace />} />
@@ -78,9 +82,9 @@ function App() {
             position="top-right"
             toastOptions={{
               style: {
-                background: 'var(--color-surface)',
+                background: 'var(--color-bg-elevated)',
                 color: 'var(--color-text-main)',
-                border: '1px solid var(--color-border)',
+                border: '1px solid var(--color-border-soft)',
               },
               success: { iconTheme: { primary: 'var(--color-success)', secondary: 'transparent' } },
               error: { iconTheme: { primary: 'var(--color-error)', secondary: 'transparent' } },

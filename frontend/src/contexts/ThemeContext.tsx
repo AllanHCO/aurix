@@ -25,8 +25,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useLayoutEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('light', 'dark');
-    root.classList.add(theme);
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
     root.setAttribute('data-theme', theme);
     localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);

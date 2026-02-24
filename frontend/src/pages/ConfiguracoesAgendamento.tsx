@@ -132,6 +132,7 @@ export default function ConfiguracoesAgendamento() {
         duracao_slot_min: config.duracao_slot_min,
         antecedencia_min_dias: config.antecedencia_min_dias,
         buffer_min: config.buffer_min,
+        limite_maximo_dias: config.limite_maximo_dias ?? 30,
         servico_padrao_nome: config.servico_padrao_nome ?? null,
         disponibilidade: config.disponibilidade
       });
@@ -195,7 +196,7 @@ export default function ConfiguracoesAgendamento() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Cabeçalho (não fixo ao rolar) */}
-      <div className="-mx-4 px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 bg-background-light border-b border-border-light flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="-mx-4 px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 bg-bg-main border-b border-border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <nav className="text-sm text-text-muted mb-1 flex items-center gap-1 flex-wrap">
             <Link to="/dashboard" className="hover:text-text-main">Home</Link>
@@ -218,7 +219,7 @@ export default function ConfiguracoesAgendamento() {
           <button
             type="button"
             onClick={handleDescartar}
-            className="px-4 py-2 rounded-lg border border-border-light bg-surface-light text-text-main hover:bg-surface-elevated font-medium"
+            className="px-4 py-2 rounded-lg border border-border bg-bg-card text-text-main hover:bg-bg-elevated font-medium"
           >
             Descartar
           </button>
@@ -235,7 +236,7 @@ export default function ConfiguracoesAgendamento() {
       </div>
 
       {/* Seção 1 — Link público */}
-      <div className="rounded-xl border border-border-light bg-surface-light shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-border bg-bg-card shadow-sm overflow-hidden">
         <div className="flex">
           <div className="w-1 bg-primary shrink-0" />
           <div className="p-4 sm:p-6 flex-1 space-y-4">
@@ -251,13 +252,13 @@ export default function ConfiguracoesAgendamento() {
                 readOnly
                 value={publicLink || ''}
                 placeholder={!displaySlug ? 'Carregando...' : ''}
-                className="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-border-light bg-input-bg text-text-main text-sm placeholder:text-text-muted"
+                className="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-border bg-input-bg text-text-main text-sm placeholder:text-text-muted"
               />
               <button
                 type="button"
                 onClick={copyLink}
                 disabled={!publicLink}
-                className="p-2 rounded-lg border border-border-light hover:bg-surface-elevated text-text-main shrink-0 disabled:opacity-50"
+                className="p-2 rounded-lg border border-border hover:bg-bg-elevated text-text-main shrink-0 disabled:opacity-50"
                 title="Copiar link"
               >
                 <span className="material-symbols-outlined">content_copy</span>
@@ -266,13 +267,13 @@ export default function ConfiguracoesAgendamento() {
                 href={publicLink || '#'}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-lg border border-border-light hover:bg-surface-elevated text-text-main shrink-0"
+                className="p-2 rounded-lg border border-border hover:bg-bg-elevated text-text-main shrink-0"
                 title="Abrir página"
               >
                 <span className="material-symbols-outlined">open_in_new</span>
               </a>
             </div>
-            <div className="pt-2 border-t border-border-light">
+            <div className="pt-2 border-t border-border">
               <label className="block text-xs font-medium text-text-muted mb-1" htmlFor="slug-input">Apelido do link (slug)</label>
               <input
                 id="slug-input"
@@ -280,7 +281,7 @@ export default function ConfiguracoesAgendamento() {
                 value={slugInput}
                 onChange={(e) => setSlugInput(e.target.value)}
                 placeholder="ex: minha-empresa"
-                className="w-full max-w-xs px-3 py-2 rounded-lg border border-border-light bg-input-bg text-text-main text-sm placeholder:text-text-muted"
+                className="w-full max-w-xs px-3 py-2 rounded-lg border border-border bg-input-bg text-text-main text-sm placeholder:text-text-muted"
               />
               <p className="text-xs text-text-muted mt-1">Altere o apelido e use &quot;Salvar Alterações&quot; no topo da página.</p>
             </div>
@@ -291,7 +292,7 @@ export default function ConfiguracoesAgendamento() {
       {/* Grid principal: 2 col + 1 col */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Esquerda (2 col): Dias e Horários */}
-        <div className="lg:col-span-2 rounded-xl border border-border-light bg-surface-light shadow-sm p-6">
+        <div className="lg:col-span-2 rounded-xl border border-border bg-bg-card shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-text-main">Dias e Horários de Atendimento</h2>
@@ -303,7 +304,7 @@ export default function ConfiguracoesAgendamento() {
             {config.disponibilidade.map((d) => (
               <li
                 key={d.dia_semana}
-                className="flex flex-wrap items-center gap-3 p-3 rounded-lg border border-border-light hover:bg-surface-elevated/50 transition-colors"
+                className="flex flex-wrap items-center gap-3 p-3 rounded-lg border border-border hover:bg-bg-elevated/50 transition-colors"
               >
                 <button
                   type="button"
@@ -315,7 +316,7 @@ export default function ConfiguracoesAgendamento() {
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-surface-light shadow transition-transform ${
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-bg-card shadow transition-transform ${
                       d.ativo ? 'translate-x-5' : 'translate-x-0'
                     }`}
                   />
@@ -327,14 +328,14 @@ export default function ConfiguracoesAgendamento() {
                       type="time"
                       value={d.hora_inicio}
                       onChange={(e) => updateDisponibilidade(d.dia_semana, { hora_inicio: e.target.value })}
-                      className="px-2 py-1.5 rounded border border-border-light bg-input-bg text-text-main text-sm"
+                      className="px-2 py-1.5 rounded border border-border bg-input-bg text-text-main text-sm"
                     />
                     <span className="text-text-muted text-sm">até</span>
                     <input
                       type="time"
                       value={d.hora_fim}
                       onChange={(e) => updateDisponibilidade(d.dia_semana, { hora_fim: e.target.value })}
-                      className="px-2 py-1.5 rounded border border-border-light bg-input-bg text-text-main text-sm"
+                      className="px-2 py-1.5 rounded border border-border bg-input-bg text-text-main text-sm"
                     />
                     <button
                       type="button"
@@ -356,7 +357,7 @@ export default function ConfiguracoesAgendamento() {
         {/* Direita (1 col): Parâmetros + Regras */}
         <div className="space-y-6">
           {/* Parâmetros de Tempo */}
-          <div className="rounded-xl border border-border-light bg-surface-light shadow-sm p-6">
+          <div className="rounded-xl border border-border bg-bg-card shadow-sm p-6">
             <h2 className="text-lg font-semibold text-text-main mb-1">Parâmetros de Tempo</h2>
             <p className="text-sm text-text-muted mb-4">Controle o ritmo da sua agenda</p>
             <div className="space-y-4">
@@ -367,7 +368,7 @@ export default function ConfiguracoesAgendamento() {
                 <select
                   value={config.duracao_slot_min}
                   onChange={(e) => setConfig((c) => c ? { ...c, duracao_slot_min: Number(e.target.value) } : c)}
-                  className="w-full px-3 py-2 rounded-lg border border-border-light bg-input-bg text-text-main"
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-input-bg text-text-main"
                 >
                   {DURACAO_OPCOES.map((m) => (
                     <option key={m} value={m}>
@@ -389,7 +390,7 @@ export default function ConfiguracoesAgendamento() {
                     onChange={(e) =>
                       setConfig((c) => c ? { ...c, antecedencia_min_dias: Number(e.target.value) } : c)
                     }
-                    className="w-20 px-3 py-2 rounded-lg border border-border-light bg-input-bg text-text-main"
+                    className="w-20 px-3 py-2 rounded-lg border border-border bg-input-bg text-text-main"
                   />
                   <span className="text-sm text-text-muted">dias</span>
                 </div>
@@ -405,7 +406,7 @@ export default function ConfiguracoesAgendamento() {
                     max={60}
                     value={config.buffer_min}
                     onChange={(e) => setConfig((c) => c ? { ...c, buffer_min: Number(e.target.value) } : c)}
-                    className="w-20 px-3 py-2 rounded-lg border border-border-light bg-input-bg text-text-main"
+                    className="w-20 px-3 py-2 rounded-lg border border-border bg-input-bg text-text-main"
                   />
                   <span className="text-sm text-text-muted">min</span>
                 </div>
@@ -420,14 +421,14 @@ export default function ConfiguracoesAgendamento() {
                   onChange={(e) => setConfig((c) => c ? { ...c, servico_padrao_nome: e.target.value || null } : c)}
                   placeholder="ex: Corte de Cabelo & Barba"
                   maxLength={200}
-                  className="w-full px-3 py-2 rounded-lg border border-border-light bg-input-bg text-text-main"
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-input-bg text-text-main"
                 />
               </div>
             </div>
           </div>
 
           {/* Regras de Bloqueio */}
-          <div className="rounded-xl border border-border-light bg-surface-light shadow-sm p-6">
+          <div className="rounded-xl border border-border bg-bg-card shadow-sm p-6">
             <div className="flex items-center gap-2 mb-1">
               <h2 className="text-lg font-semibold text-text-main">Regras de Bloqueio</h2>
               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-badge-erro text-badge-erro-text">
@@ -442,7 +443,7 @@ export default function ConfiguracoesAgendamento() {
                 {bloqueios.map((b) => (
                   <li
                     key={b.id}
-                    className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-surface-elevated border border-border-light"
+                    className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-bg-elevated border border-border"
                   >
                     <span className="text-sm text-text-main truncate">
                       {b.tipo === 'RECORRENTE' && (
@@ -541,9 +542,9 @@ function ModalNovoBloqueio({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--color-overlay)' }} onClick={onClose}>
       <div
-        className="bg-surface-light border border-border-light rounded-xl shadow-xl max-w-md w-full p-6"
+        className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-md w-full p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-semibold text-text-main mb-4">Novo Intervalo</h3>
@@ -553,7 +554,7 @@ function ModalNovoBloqueio({
             <select
               value={tipo}
               onChange={(e) => setTipo(e.target.value as 'RECORRENTE' | 'INTERVALO_DATA')}
-              className="w-full px-3 py-2 rounded-lg border border-border-light bg-input-bg text-text-main"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-input-bg text-text-main"
             >
               <option value="INTERVALO_DATA">Por data (intervalo)</option>
               <option value="RECORRENTE">Recorrente (dia da semana)</option>
@@ -566,7 +567,7 @@ function ModalNovoBloqueio({
                 <select
                   value={dia_semana}
                   onChange={(e) => setDiaSemana(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-lg border border-border-light bg-input-bg text-text-main"
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-input-bg text-text-main"
                 >
                   {[0, 1, 2, 3, 4, 5, 6].map((d) => (
                     <option key={d} value={d}>
@@ -582,7 +583,7 @@ function ModalNovoBloqueio({
                     type="time"
                     value={hora_inicio}
                     onChange={(e) => setHoraInicio(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-border-light bg-input-bg text-text-main"
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-input-bg text-text-main"
                   />
                 </div>
                 <div>
@@ -591,7 +592,7 @@ function ModalNovoBloqueio({
                     type="time"
                     value={hora_fim}
                     onChange={(e) => setHoraFim(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-border-light bg-input-bg text-text-main"
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-input-bg text-text-main"
                   />
                 </div>
               </div>
@@ -605,7 +606,7 @@ function ModalNovoBloqueio({
                   type="date"
                   value={data_inicio}
                   onChange={(e) => setDataInicio(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-border-light bg-input-bg text-text-main"
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-input-bg text-text-main"
                 />
               </div>
               <div>
@@ -614,13 +615,13 @@ function ModalNovoBloqueio({
                   type="date"
                   value={data_fim}
                   onChange={(e) => setDataFim(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-border-light bg-input-bg text-text-main"
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-input-bg text-text-main"
                 />
               </div>
             </div>
           )}
           <div className="flex gap-2 justify-end pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-border-light text-text-main hover:bg-surface-elevated">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-border text-text-main hover:bg-bg-elevated">
               Cancelar
             </button>
             <button

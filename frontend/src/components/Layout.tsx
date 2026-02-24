@@ -25,12 +25,10 @@ export default function Layout() {
     return location.pathname === path;
   };
 
-  // Fechar menu ao navegar (mobile)
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
 
-  // Evitar scroll do body quando menu aberto no mobile
   useEffect(() => {
     if (menuOpen) {
       document.body.style.overflow = 'hidden';
@@ -51,12 +49,12 @@ export default function Layout() {
     <>
       <div className="p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-8 sm:mb-10">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-text-on-primary shadow-lg shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-[var(--color-text-on-primary)] shadow-lg shrink-0">
             <span className="material-symbols-outlined text-2xl">diamond</span>
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold text-text-main">Aurix</h1>
-            <span className="text-xs text-text-muted">Gestão Comercial</span>
+            <h1 className="text-xl font-bold text-[var(--color-text-main)]">Aurix</h1>
+            <span className="text-xs text-[var(--color-text-muted)]">Gestão Comercial</span>
           </div>
           <ThemeToggle />
         </div>
@@ -68,22 +66,22 @@ export default function Layout() {
               onClick={() => goTo(item.path)}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-300 text-left min-h-[44px] touch-manipulation ${
                 isActive(item.path)
-                  ? 'bg-sidebar-active-bg text-primary font-semibold border-l-4 border-l-primary border border-transparent'
-                  : 'text-text-muted hover:bg-sidebar-hover hover:text-text-main'
+                  ? 'sidebar-item-active font-semibold border border-transparent'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-text-main)]'
               }`}
             >
               <span className="material-symbols-outlined shrink-0">{item.icon}</span>
               <span>{item.label}</span>
             </button>
           ))}
-          <div className="pt-2 mt-2 border-t border-border-light">
-            <p className="px-4 py-1 text-xs font-semibold uppercase tracking-wide text-text-muted">Configurações</p>
+          <div className="pt-2 mt-2 border-t border-[var(--color-border)]">
+            <p className="px-4 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Configurações</p>
             <button
               onClick={() => goTo(configPath)}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-300 text-left min-h-[44px] touch-manipulation w-full ${
                 isConfigActive
-                  ? 'bg-sidebar-active-bg text-primary font-semibold border-l-4 border-l-primary border border-transparent'
-                  : 'text-text-muted hover:bg-sidebar-hover hover:text-text-main'
+                  ? 'sidebar-item-active font-semibold border border-transparent'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-text-main)]'
               }`}
             >
               <span className="material-symbols-outlined shrink-0">settings</span>
@@ -93,16 +91,16 @@ export default function Layout() {
         </nav>
       </div>
 
-      <div className="p-4 sm:p-6 border-t border-border-light mt-auto">
+      <div className="p-4 sm:p-6 border-t border-[var(--color-border)] mt-auto">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold shrink-0">
             {user?.nome?.[0] || user?.email[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-text-main truncate">
+            <p className="text-sm font-semibold text-[var(--color-text-main)] truncate">
               {user?.nome || 'Usuário'}
             </p>
-            <p className="text-xs text-text-muted truncate">{user?.email}</p>
+            <p className="text-xs text-[var(--color-text-muted)] truncate">{user?.email}</p>
           </div>
         </div>
         <button
@@ -110,7 +108,7 @@ export default function Layout() {
             setMenuOpen(false);
             logout();
           }}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted hover:bg-sidebar-hover hover:text-text-main transition-colors duration-300 min-h-[44px] touch-manipulation"
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-text-main)] transition-colors duration-300 min-h-[44px] touch-manipulation"
         >
           <span className="material-symbols-outlined">logout</span>
           Sair
@@ -120,42 +118,38 @@ export default function Layout() {
   );
 
   return (
-    <div className="flex h-screen bg-background-light overflow-hidden">
+    <div className="flex h-screen bg-[var(--color-bg-main)] overflow-hidden">
       {/* Overlay mobile */}
       <div
-        className={`fixed inset-0 bg-black/50 z-40 lg:hidden transition-opacity ${
-          menuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-        onClick={() => setMenuOpen(false)}
+        className={`fixed inset-0 z-40 lg:hidden transition-opacity ${menuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        style={{ background: 'var(--color-overlay)' }}
         aria-hidden="true"
+        onClick={() => setMenuOpen(false)}
       />
 
-      {/* Sidebar: drawer no mobile, fixo no desktop */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-surface-light border-r border-border-light flex flex-col transform transition-transform duration-200 ease-out lg:transform-none ${
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-[var(--color-bg-sidebar)] border-r border-[var(--color-border)] flex flex-col transform transition-transform duration-200 ease-out lg:transform-none ${
           menuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         <SidebarContent />
       </aside>
 
-      {/* Main */}
-      <main className="flex-1 flex flex-col min-w-0">
-        {/* Header mobile: hamburger + título */}
-        <header className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-border-light bg-surface-light shrink-0">
+      <main className="flex-1 flex flex-col min-w-0 bg-[var(--color-bg-main)]">
+        <header className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg-sidebar)] shrink-0">
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
-            className="p-2 -ml-2 rounded-lg text-text-main hover:bg-sidebar-hover min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+            className="p-2 -ml-2 rounded-lg text-[var(--color-text-main)] hover:bg-[var(--color-sidebar-hover)] min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
             aria-label="Abrir menu"
           >
             <span className="material-symbols-outlined text-2xl">menu</span>
           </button>
           <div className="flex-1 min-w-0 flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-text-on-primary shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-[var(--color-text-on-primary)] shrink-0">
               <span className="material-symbols-outlined text-lg">diamond</span>
             </div>
-            <span className="font-bold text-text-main truncate">Aurix</span>
+            <span className="font-bold text-[var(--color-text-main)] truncate">Aurix</span>
           </div>
           <ThemeToggle />
         </header>

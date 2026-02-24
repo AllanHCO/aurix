@@ -233,7 +233,7 @@ export default function AgendaPublica() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background-light text-text-muted p-4">
+      <div className="min-h-screen flex items-center justify-center bg-bg-main text-text-muted p-4">
         <div className="animate-pulse space-y-4 w-full max-w-md">
           <div className="h-8 bg-surface-elevated rounded w-3/4" />
           <div className="h-32 bg-surface-elevated rounded" />
@@ -244,7 +244,7 @@ export default function AgendaPublica() {
   }
   if (brandingError || !branding) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background-light p-4">
+      <div className="min-h-screen flex items-center justify-center bg-bg-main p-4">
         <p className="text-text-main text-center">Link inválido ou agenda não encontrada.</p>
       </div>
     );
@@ -253,9 +253,9 @@ export default function AgendaPublica() {
   if (sucesso) {
     const whatsappUrl = sucesso.whatsappUrl ?? sucesso.whatsapp_url;
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background-light p-4" style={wrapperStyle}>
-        <div className="bg-surface-light rounded-xl border border-border-light shadow-lg p-8 max-w-md w-full text-center">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 text-white" style={{ backgroundColor: brandColor }}>
+      <div className="min-h-screen flex items-center justify-center bg-bg-main p-4" style={wrapperStyle}>
+        <div className="bg-bg-card rounded-xl border border-border shadow-lg p-8 max-w-md w-full text-center">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 text-[var(--color-text-on-primary)]" style={{ backgroundColor: brandColor }}>
             <span className="material-symbols-outlined text-3xl">check</span>
           </div>
           <h1 className="text-xl font-bold text-text-main mb-2">Agendamento solicitado!</h1>
@@ -280,7 +280,7 @@ export default function AgendaPublica() {
   }
 
   return (
-    <div className="min-h-screen bg-background-light p-4 sm:p-6" style={wrapperStyle}>
+    <div className="min-h-screen bg-bg-main p-4 sm:p-6" style={wrapperStyle}>
       <div className="max-w-5xl mx-auto">
         <header className="mb-6">
           <div className="flex items-center gap-3 mb-1">
@@ -306,7 +306,7 @@ export default function AgendaPublica() {
         <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Coluna esquerda: Calendário mensal */}
           <div className="lg:col-span-1">
-            <div className="rounded-xl border border-border-light bg-surface-light shadow-sm overflow-hidden">
+            <div className="rounded-xl border border-border bg-bg-card shadow-sm overflow-hidden">
               <h2 className="text-lg font-semibold text-text-main p-4 pb-2">Selecione a Data</h2>
               <div className="flex items-center justify-between px-4 pb-3">
                 <button
@@ -377,13 +377,13 @@ export default function AgendaPublica() {
                       );
                     })}
                   </div>
-                  <div className="flex flex-wrap gap-3 px-4 py-3 border-t border-border-light text-xs text-text-muted">
+                  <div className="flex flex-wrap gap-3 px-4 py-3 border-t border-border text-xs text-text-muted">
                     <span className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: brandColor }} />
                       Selecionado
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-surface-elevated border border-border-light" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-surface-elevated border border-border" />
                       Disponível
                     </span>
                     <span className="flex items-center gap-1.5">
@@ -399,7 +399,7 @@ export default function AgendaPublica() {
           {/* Coluna direita: Horários, Resumo, Form, CTA */}
           <div className="lg:col-span-2 space-y-4">
             {/* Horários disponíveis */}
-            <div className="rounded-xl border border-border-light bg-surface-light shadow-sm p-4">
+            <div className="rounded-xl border border-border bg-bg-card shadow-sm p-4">
               <h2 className="text-lg font-semibold text-text-main mb-2 flex items-center gap-2">
                 <span className="material-symbols-outlined text-xl">schedule</span>
                 Horários disponíveis
@@ -425,7 +425,7 @@ export default function AgendaPublica() {
                           type="button"
                           onClick={() => setHoraEscolhida(h.hora_inicio)}
                           className={`py-2 rounded-lg text-sm font-medium ${
-                            horaEscolhida === h.hora_inicio ? 'text-text-on-primary' : 'bg-surface-elevated text-text-main border border-border-light hover:border-primary/30'
+                            horaEscolhida === h.hora_inicio ? 'text-text-on-primary' : 'bg-surface-elevated text-text-main border border-border hover:border-primary/30'
                           }`}
                           style={horaEscolhida === h.hora_inicio ? { backgroundColor: brandColor } : undefined}
                         >
@@ -440,7 +440,7 @@ export default function AgendaPublica() {
 
             {/* Resumo da seleção */}
             {dataEscolhida && horaEscolhida && (
-              <div className="rounded-xl border border-border-light bg-surface-light shadow-sm p-4">
+              <div className="rounded-xl border border-border bg-bg-card shadow-sm p-4">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted mb-3 flex items-center gap-2">
                   <span className="material-symbols-outlined text-lg" style={{ color: brandColor }}>check_circle</span>
                   Resumo da seleção
@@ -458,7 +458,7 @@ export default function AgendaPublica() {
             )}
 
             {/* Seus dados */}
-            <div className="rounded-xl border border-border-light bg-surface-light shadow-sm p-4">
+            <div className="rounded-xl border border-border bg-bg-card shadow-sm p-4">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted mb-2">Seus dados</h2>
               <p className="text-text-muted text-sm mb-4">Preencha para confirmar seu agendamento na unidade {unidadeOuOrg}.</p>
               <div className="space-y-4">
@@ -471,7 +471,7 @@ export default function AgendaPublica() {
                     minLength={2}
                     required
                     placeholder="Seu nome"
-                    className="w-full px-4 py-2 border border-border-light rounded-lg bg-input-bg text-text-main"
+                    className="w-full px-4 py-2 border border-border rounded-lg bg-input-bg text-text-main"
                   />
                 </div>
                 <div>
@@ -484,7 +484,7 @@ export default function AgendaPublica() {
                     onChange={(e) => setTelefone(e.target.value.replace(/\D/g, ''))}
                     required
                     placeholder="11999999999"
-                    className="w-full px-4 py-2 border border-border-light rounded-lg bg-input-bg text-text-main"
+                    className="w-full px-4 py-2 border border-border rounded-lg bg-input-bg text-text-main"
                   />
                 </div>
                 <div>
@@ -495,7 +495,7 @@ export default function AgendaPublica() {
                     rows={2}
                     maxLength={OBSERVACAO_MAX}
                     placeholder="Alguma observação?"
-                    className="w-full px-4 py-2 border border-border-light rounded-lg bg-input-bg text-text-main resize-none"
+                    className="w-full px-4 py-2 border border-border rounded-lg bg-input-bg text-text-main resize-none"
                   />
                   <p className="text-xs text-text-muted mt-0.5">{observacao.length}/{OBSERVACAO_MAX}</p>
                 </div>
@@ -520,7 +520,7 @@ export default function AgendaPublica() {
           </div>
         </form>
 
-        <footer className="mt-8 pt-6 border-t border-border-light text-center text-text-muted text-sm">
+        <footer className="mt-8 pt-6 border-t border-border text-center text-text-muted text-sm">
           <p>© {anoAtual} {nomeExibicao}</p>
           <p className="text-[10px] opacity-70 mt-1">Powered by Aurix</p>
         </footer>

@@ -3,6 +3,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
+import { invalidatePrefix } from '../services/cache.service';
 
 const prisma = new PrismaClient();
 
@@ -27,15 +28,16 @@ const PrismaRaw = Prisma as typeof Prisma & {
 };
 
 const produtoSchema = z.object({
-  nome: z.string().min(1, 'Nome é obrigatório'),
-  preco: z.number().positive('Preço deve ser positivo'),
+  nome: z.string().min(1, 'Nome é obrigatório').max(200),
+  preco: z.number().nonnegative('Preço não pode ser negativo'),
   custo: z.number().nonnegative('Custo não pode ser negativo'),
   estoque_atual: z.number().int().nonnegative('Estoque atual não pode ser negativo'),
   estoque_minimo: z.number().int().nonnegative('Estoque mínimo não pode ser negativo'),
-  categoria_id: z.string().uuid('Categoria é obrigatória')
+  categoria_id: z.string().uuid('Categoria é obrigatória'),
+  linha: z.string().max(100).optional().nullable()
 });
 
-type FiltroDesempenho = 'todos' | 'mais_vendidos' | 'menos_vendidos';
+type FiltroDesempenho = 'todos' | 'mais_vendidos' | 'menos_vendidos' | 'estoque_baixo';
 type PeriodoDesempenho = 'este_mes' | 'ultimos_3_meses';
 
 /** Início e fim do período (UTC) para filtrar vendas PAGO */
@@ -65,7 +67,7 @@ export const listarProdutos = async (req: AuthRequest, res: Response) => {
   const periodo = (req.query.periodo as PeriodoDesempenho) || 'este_mes';
   const categoriaIds = parseCategoriaIds(req.query);
   const nome = (req.query.nome as string)?.trim() || '';
-  const validFiltros: FiltroDesempenho[] = ['todos', 'mais_vendidos', 'menos_vendidos'];
+  const validFiltros: FiltroDesempenho[] = ['todos', 'mais_vendidos', 'menos_vendidos', 'estoque_baixo'];
   const validPeriodos: PeriodoDesempenho[] = ['este_mes', 'ultimos_3_meses'];
   const filtroSafe = validFiltros.includes(filtro) ? filtro : 'todos';
   const periodoSafe = validPeriodos.includes(periodo) ? periodo : 'este_mes';
@@ -78,6 +80,9 @@ export const listarProdutos = async (req: AuthRequest, res: Response) => {
   const whereNome = nome
     ? PrismaRaw.sql`AND p.nome ILIKE ${'%' + nome + '%'}`
     : PrismaRaw.empty;
+  const whereEstoqueBaixo = filtroSafe === 'estoque_baixo'
+    ? PrismaRaw.sql`AND p.estoque_atual <= p.estoque_minimo`
+    : PrismaRaw.empty;
 
   type Row = {
     id: string;
@@ -88,6 +93,7 @@ export const listarProdutos = async (req: AuthRequest, res: Response) => {
     estoque_minimo: number;
     categoria_id: string;
     categoria_nome: string | null;
+    linha: string | null;
     createdAt: Date;
     updatedAt: Date;
     total_sold: bigint;
@@ -95,7 +101,7 @@ export const listarProdutos = async (req: AuthRequest, res: Response) => {
 
   const rows = await prisma.$queryRaw<Row[]>`
     SELECT p.id, p.nome, p.preco, p.custo, p.estoque_atual, p.estoque_minimo, p.categoria_id, c.nome AS categoria_nome,
-      p."createdAt", p."updatedAt", COALESCE(SUM(iv.quantidade), 0)::bigint AS total_sold
+      p.linha, p."createdAt", p."updatedAt", COALESCE(SUM(iv.quantidade), 0)::bigint AS total_sold
     FROM produtos p
     LEFT JOIN categorias c ON c.id = p.categoria_id
     LEFT JOIN itens_venda iv ON iv.produto_id = p.id
@@ -103,7 +109,8 @@ export const listarProdutos = async (req: AuthRequest, res: Response) => {
     WHERE 1=1
     ${whereCategoria}
     ${whereNome}
-    GROUP BY p.id, p.nome, p.preco, p.custo, p.estoque_atual, p.estoque_minimo, p.categoria_id, c.nome, p."createdAt", p."updatedAt"
+    ${whereEstoqueBaixo}
+    GROUP BY p.id, p.nome, p.preco, p.custo, p.estoque_atual, p.estoque_minimo, p.categoria_id, c.nome, p.linha, p."createdAt", p."updatedAt"
     ORDER BY p."createdAt" DESC
   `;
 
@@ -116,6 +123,7 @@ export const listarProdutos = async (req: AuthRequest, res: Response) => {
     estoque_minimo: r.estoque_minimo,
     categoria_id: r.categoria_id,
     categoria_nome: r.categoria_nome ?? undefined,
+    linha: r.linha ?? undefined,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     qtdVendidaMesAtual: Number(r.total_sold)
@@ -179,16 +187,16 @@ export const criarProduto = async (req: AuthRequest, res: Response) => {
         );
       }
 
-      const payload = {
-        nome: data.nome.trim(),
-        preco: data.preco,
-        custo: data.custo,
-        estoque_atual: data.estoque_atual,
-        estoque_minimo: data.estoque_minimo,
-        categoria_id: data.categoria_id
-      };
       const created = await tx.produto.create({
-        data: payload,
+        data: {
+          nome: data.nome.trim(),
+          preco: data.preco,
+          custo: data.custo,
+          estoque_atual: data.estoque_atual,
+          estoque_minimo: data.estoque_minimo,
+          categoria_id: data.categoria_id,
+          ...(data.linha != null && data.linha.trim() !== '' && { linha: data.linha.trim() })
+        },
         include: { categoria: true }
       });
       return created;
@@ -203,6 +211,9 @@ export const criarProduto = async (req: AuthRequest, res: Response) => {
       });
     }
     res.status(201).json(body);
+
+    // invalida cache de dashboard para este usuário (estoque baixo / totais)
+    invalidatePrefix(`dashboard:summary:${req.userId}:`);
   } catch (error: any) {
     if (error instanceof AppError) throw error;
     if (error.code === 'P2002') {
@@ -238,13 +249,21 @@ export const atualizarProduto = async (req: AuthRequest, res: Response) => {
     if (!categoria) throw new AppError('Categoria não encontrada', 400);
   }
 
+  const updateData = { ...data };
+  if ('linha' in updateData && updateData.linha !== undefined) {
+    updateData.linha = updateData.linha && typeof updateData.linha === 'string' && updateData.linha.trim() !== '' ? updateData.linha.trim() : null;
+  }
+
   const produto = await prisma.produto.update({
     where: { id },
-    data,
+    data: updateData,
     include: { categoria: true }
   });
 
   res.json(produto);
+
+  // invalida cache de dashboard para este usuário (estoque / desempenho)
+  invalidatePrefix(`dashboard:summary:${req.userId}:`);
 };
 
 export const excluirProduto = async (req: AuthRequest, res: Response) => {
@@ -273,4 +292,6 @@ export const excluirProduto = async (req: AuthRequest, res: Response) => {
   });
 
   res.status(204).send();
+
+  invalidatePrefix(`dashboard:summary:${req.userId}:`);
 };

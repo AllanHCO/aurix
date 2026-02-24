@@ -1,10 +1,12 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import swaggerUi from 'swagger-ui-express';
 import 'express-async-errors';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { errorHandler } from './middleware/errorHandler';
+import { perfLogger } from './middleware/perfLogger';
 import { swaggerDocument } from './swagger';
 import authRoutes from './routes/auth.routes';
 import dashboardRoutes from './routes/dashboard.routes';
@@ -18,7 +20,9 @@ import agendamentosRoutes from './routes/agendamentos.routes';
 import bloqueiosRoutes from './routes/bloqueios.routes';
 import agendaPublicRoutes from './routes/agendaPublic.routes';
 import configuracoesAgendamentoRoutes from './routes/configuracoesAgendamento.routes';
+import configuracoesRoutes from './routes/configuracoes.routes';
 import empresasRoutes from './routes/empresas.routes';
+import devRoutes from './routes/dev.routes';
 
 dotenv.config();
 
@@ -36,8 +40,10 @@ app.use(cors({
   },
   credentials: true
 }));
+app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(perfLogger);
 
 // Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -88,8 +94,10 @@ app.use('/api/relatorios', relatoriosRoutes);
 app.use('/api/agenda', agendaConfigRoutes);
 app.use('/api/agendamentos', agendamentosRoutes);
 app.use('/api/bloqueios', bloqueiosRoutes);
+app.use('/api/configuracoes', configuracoesRoutes);
 app.use('/api/configuracoes/agendamento', configuracoesAgendamentoRoutes);
 app.use('/api/empresas', empresasRoutes);
+app.use('/api/dev', devRoutes);
 app.use('/api/public/agenda', agendaPublicRoutes);
 
 // Error handler

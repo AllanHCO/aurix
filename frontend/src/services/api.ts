@@ -13,11 +13,14 @@ export const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response?.status === 403 && error.response?.data?.code === 'PLAN_BLOCKED') {
+      const reason = error.response?.data?.blocked_reason;
+      if (reason) sessionStorage.setItem('plan_blocked_reason', reason);
+      window.location.href = '/assinatura-bloqueio';
+      return Promise.reject(error);
+    }
     if (error.response?.status === 401) {
-      // Não redirecionar se já estamos na página de login
-      // Isso permite que o componente Login trate o erro de credenciais
       const isLoginPage = window.location.pathname === '/login';
-      
       if (!isLoginPage) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');

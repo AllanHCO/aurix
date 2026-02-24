@@ -3,6 +3,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
+import { invalidatePrefix } from '../services/cache.service';
 
 const prisma = new PrismaClient();
 
@@ -62,10 +63,17 @@ function consolidarItens(itens: ItemVendaParsed[]): ItemVendaParsed[] {
 
 export const listarVendas = async (req: AuthRequest, res: Response) => {
   const userId = req.userId!;
+  const status = req.query.status as string | undefined;
+  const statusFilter = status === 'PENDENTE' || status === 'PAGO' || status === 'FECHADA' ? status : undefined;
+
+  const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit), 10) || 50));
+  const skip = (page - 1) * limit;
 
   const vendas = await prisma.venda.findMany({
     where: {
-      usuario_id: userId
+      usuario_id: userId,
+      ...(statusFilter && { status: statusFilter })
     },
     include: {
       cliente: {
@@ -85,7 +93,9 @@ export const listarVendas = async (req: AuthRequest, res: Response) => {
     },
     orderBy: {
       createdAt: 'desc'
-    }
+    },
+    skip,
+    take: limit
   });
 
   res.json(vendas);
@@ -122,8 +132,10 @@ export const criarVenda = async (req: AuthRequest, res: Response) => {
   const idempotencyKey = (req.headers['idempotency-key'] ?? req.headers['x-idempotency-key']) as string | undefined;
 
   purgeExpiredIdempotency();
-  if (idempotencyKey && idempotencyKey.trim() !== '') {
-    const cached = idempotencyCache.get(idempotencyKey.trim());
+  const keyTrimmed = idempotencyKey?.trim();
+  if (keyTrimmed) {
+    const cacheKey = `${userId}:${keyTrimmed}`;
+    const cached = idempotencyCache.get(cacheKey);
     if (cached && Date.now() - cached.createdAt <= IDEMPOTENCY_TTL_MS) {
       return res.status(cached.statusCode).json(cached.body);
     }
@@ -198,22 +210,25 @@ export const criarVenda = async (req: AuthRequest, res: Response) => {
     });
 
     const body = JSON.parse(JSON.stringify(venda));
-    if (idempotencyKey && idempotencyKey.trim() !== '') {
-      idempotencyCache.set(idempotencyKey.trim(), {
+    if (keyTrimmed) {
+      idempotencyCache.set(`${userId}:${keyTrimmed}`, {
         statusCode: 201,
         body,
         createdAt: Date.now()
       });
     }
     res.status(201).json(body);
+
+    // invalida cache de dashboard para este usuário (faturamento, KPIs, gráfico)
+    invalidatePrefix(`dashboard:summary:${userId}:`);
   } catch (error: any) {
     if (error instanceof AppError) throw error;
     if (error.name === 'ZodError') {
-      const firstError = error.errors[0];
-      throw new AppError(firstError.message || 'Dados inválidos', 400);
+      const firstError = error.errors?.[0];
+      throw new AppError(firstError?.message || 'Dados inválidos', 400);
     }
-    console.error('=== ERRO AO CRIAR VENDA ===', error?.message, error?.stack);
-    throw error;
+    console.error('Erro ao criar venda:', error?.message);
+    throw new AppError('Não foi possível registrar a venda. Tente novamente.', 500);
   }
 };
 
@@ -242,6 +257,10 @@ export const atualizarVenda = async (req: AuthRequest, res: Response) => {
 
   if (!vendaExistente) {
     throw new AppError('Venda não encontrada', 404);
+  }
+
+  if (vendaExistente.status === 'FECHADA') {
+    throw new AppError('Venda fechada não pode ser editada.', 400);
   }
 
   type ItemVendaShape = { produto_id: string; quantidade: number; preco_unitario: number };
@@ -281,7 +300,7 @@ export const atualizarVenda = async (req: AuthRequest, res: Response) => {
   const total = subtotalCalc - valorDesconto;
 
   const vendaAtualizada = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const statusAntigo = vendaExistente.status as 'PAGO' | 'PENDENTE';
+    const statusAntigo = vendaExistente.status as 'PAGO' | 'PENDENTE' | 'FECHADA';
 
     // 1) Reverter estoque dos itens antigos (se a venda estava PAGA)
     if (statusAntigo === 'PAGO') {
@@ -345,4 +364,37 @@ export const atualizarVenda = async (req: AuthRequest, res: Response) => {
   });
 
   res.json(vendaAtualizada);
+
+  invalidatePrefix(`dashboard:summary:${userId}:`);
+};
+
+/** PATCH /vendas/:id/fechar — Marca venda como FECHADA (não editável). */
+export const marcarComoFechada = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const userId = req.userId!;
+
+  const venda = await prisma.venda.findFirst({
+    where: { id, usuario_id: userId }
+  });
+
+  if (!venda) {
+    throw new AppError('Venda não encontrada', 404);
+  }
+
+  if (venda.status === 'FECHADA') {
+    throw new AppError('Esta venda já está fechada.', 400);
+  }
+
+  const atualizada = await prisma.venda.update({
+    where: { id },
+    data: { status: 'FECHADA' },
+    include: {
+      cliente: true,
+      itens: { include: { produto: true } }
+    }
+  });
+
+  res.json(atualizada);
+
+  invalidatePrefix(`dashboard:summary:${userId}:`);
 };

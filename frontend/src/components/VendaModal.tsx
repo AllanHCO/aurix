@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -35,7 +35,7 @@ interface VendaParaEdicao {
   cliente?: { nome: string };
   desconto: number;
   forma_pagamento: string;
-  status: 'PAGO' | 'PENDENTE';
+  status: 'PAGO' | 'PENDENTE' | 'FECHADA';
   itens: Array<{
     produto_id: string;
     quantidade: number;
@@ -58,6 +58,7 @@ interface VendaModalProps {
 
 export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps) {
   const isEdit = Boolean(vendaId && venda);
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID?.() ?? `venda-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [itens, setItens] = useState<ItemVenda[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,8 +108,8 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
   const loadData = async () => {
     setLoading(true);
     try {
-      const clientesRes = await api.get('/clientes');
-      setClientes(clientesRes.data);
+      const clientesRes = await api.get('/clientes', { params: { limit: 500 } });
+      setClientes(Array.isArray(clientesRes.data?.data) ? clientesRes.data.data : []);
     } catch (error) {
       toast.error('Erro ao carregar dados');
     } finally {
@@ -132,21 +133,19 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
   const totalFinal = Math.round((subtotalItens - valorDesconto) * 100) / 100;
 
   const onSubmit = async (data: VendaForm) => {
+    if (isSubmitting) return;
     if (!data.cliente_id || data.cliente_id === '') {
       toast.error('Selecione um cliente');
       return;
     }
-
     if (!data.forma_pagamento || data.forma_pagamento === '') {
       toast.error('Selecione uma forma de pagamento');
       return;
     }
-
     if (itens.length === 0) {
       toast.error('Adicione pelo menos um produto à venda');
       return;
     }
-
     const itensInvalidos = itens.filter(
       (item) => !item.produto_id || item.quantidade <= 0 || item.preco_unitario <= 0
     );
@@ -155,6 +154,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
       return;
     }
 
+    setIsSubmitting(true);
     const payloadItens = itens.map((item) => ({
       produto_id: item.produto_id,
       quantidade: Number(item.quantidade),
@@ -163,7 +163,6 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
 
     if (isEdit && vendaId) {
       try {
-        setIsSubmitting(true);
         const vendaData = {
           cliente_id: data.cliente_id,
           desconto_percentual: Math.min(100, Math.max(0, Number(data.desconto_percentual) ?? 0)),
@@ -182,8 +181,6 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
       return;
     }
 
-    setIsSubmitting(true);
-    const idempotencyKey = crypto.randomUUID?.() ?? `venda-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const vendaData = {
       cliente_id: data.cliente_id,
       desconto_percentual: Math.min(100, Math.max(0, Number(data.desconto_percentual) ?? 0)),
@@ -194,7 +191,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
 
     try {
       await api.post('/vendas', vendaData, {
-        headers: { 'Idempotency-Key': idempotencyKey }
+        headers: { 'Idempotency-Key': idempotencyKeyRef.current }
       });
       toast.success('Venda registrada com sucesso!');
       onClose();
@@ -207,8 +204,8 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-surface-light rounded-xl p-8">
+      <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'var(--color-overlay)' }}>
+        <div className="bg-bg-elevated border border-border-soft rounded-2xl p-8">
           <p>Carregando...</p>
         </div>
       </div>
@@ -216,14 +213,14 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-surface-light rounded-xl shadow-lg max-w-4xl w-full my-4 sm:my-8 max-h-[90vh] overflow-y-auto">
-        <div className="p-4 sm:p-6 border-b border-border-light flex items-center justify-between shrink-0">
+    <div className="fixed inset-0 flex items-center justify-center z-50 p-4 overflow-y-auto" style={{ backgroundColor: 'var(--color-overlay)' }}>
+      <div className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-4xl w-full my-4 sm:my-8 max-h-[90vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 border-b border-border flex items-center justify-between shrink-0">
           <h2 className="text-lg sm:text-xl font-bold text-text-main">{isEdit ? 'Editar Venda' : 'Nova Venda'}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 -m-2 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-elevated min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+            className="p-2 -m-2 rounded-lg text-text-muted hover:text-text-main hover:bg-bg-elevated min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
             aria-label="Fechar"
           >
             <span className="material-symbols-outlined">close</span>
@@ -237,7 +234,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
             </label>
             <select
               {...register('cliente_id')}
-              className="w-full pl-4 pr-8 py-3 sm:py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
+              className="w-full pl-4 pr-8 py-3 sm:py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none text-base min-h-[44px] touch-manipulation"
             >
               <option value="">Selecione um cliente</option>
               {clientes.map((cliente) => (
@@ -267,37 +264,46 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
             </div>
 
             {itens.length === 0 ? (
-              <div className="text-center py-8 border border-border-light rounded-lg text-text-muted bg-background-light">
+              <div className="text-center py-8 border border-border rounded-lg text-text-muted bg-bg-elevated">
                 Nenhum item adicionado. Clique em &quot;Adicionar Produtos&quot; para abrir o catálogo.
               </div>
             ) : (
-              <div className="border border-border-light rounded-lg overflow-hidden">
+              <div className="border border-border rounded-lg overflow-hidden">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-background-light text-text-muted">
+                  <thead className="bg-bg-elevated text-text-muted">
                     <tr>
                       <th className="p-3 font-medium">Produto</th>
-                      <th className="p-3 font-medium w-24">Quantidade</th>
-                      <th className="p-3 font-medium w-28">Preço unit.</th>
+                      <th className="p-3 font-medium w-28">Quantidade</th>
+                      <th className="p-3 font-medium w-28">Preço</th>
                       <th className="p-3 font-medium w-28 text-right">Subtotal</th>
                       <th className="p-3 w-12" aria-label="Remover" />
                     </tr>
                   </thead>
-                  <tbody className="text-text-main divide-y divide-border-light">
+                  <tbody className="text-text-main divide-y divide-border">
                     {itens.map((item, index) => (
-                      <tr key={`${item.produto_id}-${index}`} className="hover:bg-surface-elevated/50">
+                      <tr key={`${item.produto_id}-${index}`} className="hover:bg-bg-elevated/50">
                         <td className="p-3 font-medium">{item.nome}</td>
                         <td className="p-3">
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.quantidade}
-                            onChange={(e) =>
-                              atualizarItemVenda(index, parseInt(e.target.value, 10) || 1)
-                            }
-                            className="w-16 px-2 py-1 border border-border-light rounded bg-input-bg text-text-main"
-                          />
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-text-muted">Quantidade</span>
+                            <input
+                              type="number"
+                              min={1}
+                              value={item.quantidade}
+                              onChange={(e) =>
+                                atualizarItemVenda(index, parseInt(e.target.value, 10) || 1)
+                              }
+                              className="w-20 px-2 py-1.5 border border-border rounded bg-input-bg text-text-main"
+                              aria-label="Quantidade"
+                            />
+                          </div>
                         </td>
-                        <td className="p-3">{formatCurrency(item.preco_unitario)}</td>
+                        <td className="p-3">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-text-muted">Preço</span>
+                            <span className="font-medium">{formatCurrency(item.preco_unitario)}</span>
+                          </div>
+                        </td>
                         <td className="p-3 text-right font-medium">
                           {formatCurrency(subtotalItem(item))}
                         </td>
@@ -330,14 +336,16 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
                   min={0}
                   max={100}
                   step="0.01"
+                  placeholder="0"
                   {...register('desconto_percentual', {
                     valueAsNumber: true,
                     min: { value: 0, message: 'Mínimo 0%' },
                     max: { value: 100, message: 'Máximo 100%' }
                   })}
-                  className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                  className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                  aria-label="Desconto percentual"
                 />
-                <span className="text-text-muted font-medium shrink-0">%</span>
+                <span className="text-text-muted font-medium shrink-0" aria-hidden="true">%</span>
               </div>
               {errors.desconto_percentual && (
                 <p className="text-error text-sm mt-1">{errors.desconto_percentual.message}</p>
@@ -350,7 +358,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
               </label>
               <select
                 {...register('forma_pagamento')}
-                className="w-full pl-4 pr-8 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                className="w-full pl-4 pr-8 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
               >
                 <option value="">Selecione</option>
                 <option value="Dinheiro">Dinheiro</option>
@@ -370,14 +378,14 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
             </label>
             <select
               {...register('status')}
-              className="w-full pl-4 pr-8 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+              className="w-full pl-4 pr-8 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
             >
               <option value="PENDENTE">Pendente</option>
               <option value="PAGO">Pago</option>
             </select>
           </div>
 
-          <div className="bg-background-light p-4 rounded-lg border border-border-light">
+          <div className="bg-bg-elevated p-4 rounded-lg border border-border">
             <div className="flex justify-between items-center mb-2">
               <span className="text-text-muted">Subtotal</span>
               <span className="font-semibold text-text-main">
@@ -390,7 +398,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
                 {formatCurrency(valorDesconto)}
               </span>
             </div>
-            <div className="flex justify-between items-center pt-2 border-t border-border-light">
+            <div className="flex justify-between items-center pt-2 border-t border-border">
               <span className="text-lg font-bold text-text-main">Total final</span>
               <span className="text-2xl font-bold text-primary">
                 {formatCurrency(totalFinal)}
@@ -403,7 +411,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2 border border-border-light rounded-lg text-text-main hover:bg-background-light disabled:opacity-50 disabled:pointer-events-none"
+              className="flex-1 px-4 py-2 border border-border rounded-lg text-text-main hover:bg-bg-elevated disabled:opacity-50 disabled:pointer-events-none"
             >
               Cancelar
             </button>
@@ -415,7 +423,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
               {isSubmitting ? (
                 <>
                   <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
-                  Processando...
+                  Salvando…
                 </>
               ) : isEdit ? (
                 'Salvar alterações'

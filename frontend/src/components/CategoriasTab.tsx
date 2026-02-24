@@ -14,6 +14,7 @@ export default function CategoriasTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [categoriaEditando, setCategoriaEditando] = useState<Categoria | null>(null);
   const [nome, setNome] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadCategorias = async () => {
     try {
@@ -52,23 +53,28 @@ export default function CategoriasTab() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const n = nome.trim();
+    if (isSubmitting) return;
+    const n = nome.trim().replace(/\s+/g, ' ');
     if (!n) {
       toast.error('Nome da categoria é obrigatório');
       return;
     }
+    setIsSubmitting(true);
     try {
       if (categoriaEditando) {
         await api.put(`/categorias/${categoriaEditando.id}`, { nome: n });
         toast.success('Categoria atualizada');
       } else {
-        await api.post('/categorias', { nome: n });
+        const idempotencyKey = crypto.randomUUID?.() ?? `cat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        await api.post('/categorias', { nome: n }, { headers: { 'Idempotency-Key': idempotencyKey } });
         toast.success('Categoria criada');
       }
       closeModal();
     } catch (err: any) {
       const msg = err.response?.data?.error || 'Erro ao salvar categoria';
       toast.error(msg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -106,7 +112,7 @@ export default function CategoriasTab() {
       </div>
 
       {categorias.length === 0 ? (
-        <div className="bg-surface-light rounded-xl border border-border-light p-12 text-center">
+        <div className="bg-bg-card rounded-xl border border-border p-12 text-center">
           <span className="material-symbols-outlined text-6xl text-text-muted mb-4 block">
             folder
           </span>
@@ -123,12 +129,12 @@ export default function CategoriasTab() {
           </button>
         </div>
       ) : (
-        <div className="bg-surface-light rounded-xl border border-border-light shadow-sm overflow-hidden">
-          <ul className="divide-y divide-border-light">
+        <div className="bg-bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+          <ul className="divide-y divide-border">
             {categorias.map((c) => (
               <li
                 key={c.id}
-                className="flex items-center justify-between gap-4 px-4 sm:px-6 py-4 hover:bg-background-light"
+                className="flex items-center justify-between gap-4 px-4 sm:px-6 py-4 hover:bg-bg-main"
               >
                 <span className="font-medium text-text-main">
                   {c.nome}
@@ -161,8 +167,8 @@ export default function CategoriasTab() {
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-light rounded-xl shadow-lg max-w-md w-full p-6">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ backgroundColor: 'var(--color-overlay)' }}>
+          <div className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-bold text-text-main mb-4">
               {categoriaEditando ? 'Editar categoria' : 'Nova categoria'}
             </h3>
@@ -174,7 +180,7 @@ export default function CategoriasTab() {
                 type="text"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-border-light bg-background-light text-text-main placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-4 py-3 rounded-lg border border-border bg-bg-main text-text-main placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="Ex: Bebidas"
                 maxLength={100}
                 autoFocus
@@ -183,15 +189,16 @@ export default function CategoriasTab() {
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="flex-1 px-4 py-3 rounded-lg border border-border-light text-text-main font-medium hover:bg-background-light"
+                  className="flex-1 px-4 py-3 rounded-lg border border-border text-text-main font-medium hover:bg-bg-main"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-3 rounded-lg bg-primary hover:bg-primary-hover text-text-on-primary font-bold"
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-3 rounded-lg bg-primary hover:bg-primary-hover text-text-on-primary font-bold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {categoriaEditando ? 'Salvar' : 'Criar'}
+                  {isSubmitting ? 'Salvando…' : categoriaEditando ? 'Salvar' : 'Criar'}
                 </button>
               </div>
             </form>

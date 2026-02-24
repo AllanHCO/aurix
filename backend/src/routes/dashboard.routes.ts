@@ -1,9 +1,12 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
-import { getDashboard } from '../controllers/dashboard.controller';
+import { checkPlanBlock } from '../middleware/checkPlanBlock';
+import { getDashboard, getDashboardSummary } from '../controllers/dashboard.controller';
 
 const router = Router();
-
-router.get('/', authenticate, getDashboard);
+router.use(authenticate);
+router.use(checkPlanBlock);
+router.get('/', getDashboard);
+router.get('/summary', getDashboardSummary);
 
 export default router;

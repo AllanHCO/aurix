@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getTotalSlotsNoDia } from '../services/availability.service';
+import { getTotalSlotsNoDia, getHorariosDisponiveis } from '../services/availability.service';
 import { createAgendamentoManual } from '../services/booking.service';
+import { invalidatePrefix } from '../services/cache.service';
 
 function toDateString(d: Date): string {
   const y = d.getFullYear();
@@ -51,6 +52,17 @@ export const listByDay = async (req: AuthRequest, res: Response) => {
   res.json(list);
 };
 
+/** GET /agendamentos/horarios-disponiveis?data=YYYY-MM-DD — slots livres (respeitando bloqueios e ocupados). */
+export const getHorariosDisponiveisInternal = async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const dataStr = (req.query.data as string)?.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataStr)) {
+    throw new AppError('Query data obrigatória (YYYY-MM-DD).', 400);
+  }
+  const horarios = await getHorariosDisponiveis(userId, dataStr);
+  res.json({ horarios });
+};
+
 export const listProximos = async (req: AuthRequest, res: Response) => {
   const userId = req.userId!;
   const limit = Math.min(Number(req.query.limit) || 10, 50);
@@ -72,6 +84,15 @@ export const listProximos = async (req: AuthRequest, res: Response) => {
     },
     orderBy: [{ data: 'asc' }, { hora_inicio: 'asc' }],
     take: limit
+  });
+  res.json(list);
+};
+
+export const listPendentes = async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const list = await prisma.agendamento.findMany({
+    where: { usuario_id: userId, status: 'PENDENTE' },
+    orderBy: [{ data: 'asc' }, { hora_inicio: 'asc' }]
   });
   res.json(list);
 };
@@ -122,6 +143,8 @@ export const createManual = async (req: AuthRequest, res: Response) => {
     observacao: body.observacao?.trim() || undefined
   });
   res.status(201).json(agendamento);
+
+  invalidatePrefix(`dashboard:summary:${userId}:`);
 };
 
 const updateStatusSchema = z.object({
@@ -144,5 +167,6 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
   });
   const { invalidateAgendaMesCache } = await import('../services/availability.service');
   invalidateAgendaMesCache(a.usuario_id);
+  invalidatePrefix(`dashboard:summary:${userId}:`);
   res.json(updated);
 };

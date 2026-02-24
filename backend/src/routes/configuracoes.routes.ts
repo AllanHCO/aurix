@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { checkPlanBlock } from '../middleware/checkPlanBlock';
-import * as ctrl from '../controllers/configuracoesAgendamento.controller';
+import { getConfiguracoes, putConfiguracoes, getConfiguracoesMensagens } from '../controllers/configuracoes.controller';
 
 const router = Router();
 router.use(authenticate);
 router.use(checkPlanBlock);
-router.get('/', ctrl.getConfiguracoesAgendamento);
-router.put('/', ctrl.putConfiguracoesAgendamento);
+router.get('/', getConfiguracoes);
+router.get('/mensagens', getConfiguracoesMensagens);
+router.put('/', putConfiguracoes);
 
 export default router;

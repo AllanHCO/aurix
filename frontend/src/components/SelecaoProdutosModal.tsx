@@ -39,7 +39,7 @@ export default function SelecaoProdutosModal({
   itensDaVenda,
   setItensDaVenda
 }: SelecaoProdutosModalProps) {
-  const [categoriaSelecionada, setCategoriaSelecionada] = useState<string | null>(null);
+  const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -47,7 +47,7 @@ export default function SelecaoProdutosModal({
   const [loadingCat, setLoadingCat] = useState(true);
   const [rowState, setRowState] = useState<Record<string, { quantidade: number }>>({});
 
-  const categoriaIds = categoriaSelecionada ? [categoriaSelecionada] : [];
+  const categoriaIds = categoriasSelecionadas.length > 0 ? categoriasSelecionadas : [];
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   const loadCategorias = async () => {
@@ -83,7 +83,18 @@ export default function SelecaoProdutosModal({
 
   useEffect(() => {
     if (open) loadProdutos();
-  }, [open, categoriaIds.join(','), debouncedSearch]);
+  }, [open, categoriasSelecionadas.join(','), debouncedSearch]);
+
+  const toggleCategoria = (id: string) => {
+    setCategoriasSelecionadas((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    );
+  };
+
+  const limparFiltros = () => {
+    setCategoriasSelecionadas([]);
+    setSearchQuery('');
+  };
 
   const listaProdutosFiltrados = produtos;
 
@@ -121,9 +132,9 @@ export default function SelecaoProdutosModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
-      <div className="bg-surface-light rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col border border-border-light">
-        <div className="p-4 border-b border-border-light flex items-center justify-between shrink-0">
+    <div className="fixed inset-0 flex items-center justify-center z-[60] p-4" style={{ backgroundColor: 'var(--color-overlay)' }}>
+      <div className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+        <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
           <div>
             <h2 className="text-xl font-bold text-text-main">Seleção de Produtos</h2>
             <p className="text-sm text-text-muted mt-0.5">
@@ -137,7 +148,7 @@ export default function SelecaoProdutosModal({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-elevated"
+              className="p-2 rounded-lg text-text-muted hover:text-text-main hover:bg-bg-elevated"
               aria-label="Fechar"
             >
               <span className="material-symbols-outlined">close</span>
@@ -156,35 +167,46 @@ export default function SelecaoProdutosModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Pesquisar por nome, SKU ou código de barras..."
-                className="w-full pl-10 pr-4 py-2.5 border border-border-light rounded-lg bg-input-bg text-text-main placeholder:text-text-muted focus:ring-2 focus:ring-primary outline-none"
+                className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg bg-input-bg text-text-main placeholder:text-text-muted focus:ring-2 focus:ring-primary outline-none"
               />
             </div>
           </div>
 
           <div>
-            <p className="text-xs font-medium text-text-muted mb-2">Filtrar por categoria</p>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-medium text-text-muted">Filtro por categorias (multi-seleção)</p>
+              {(categoriasSelecionadas.length > 0 || searchQuery.trim()) && (
+                <button
+                  type="button"
+                  onClick={limparFiltros}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Limpar filtros
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => setCategoriaSelecionada(null)}
+                onClick={() => setCategoriasSelecionadas([])}
                 className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  categoriaSelecionada === null
+                  categoriasSelecionadas.length === 0
                     ? 'bg-primary text-text-on-primary'
-                    : 'bg-surface-elevated text-text-main hover:bg-surface-light border border-border-light'
+                    : 'bg-bg-elevated text-text-main hover:bg-bg-card border border-border'
                 }`}
               >
-                Todos ({totalProdutos})
+                Todos os produtos ({totalProdutos})
               </button>
               {!loadingCat &&
                 categorias.map((c) => (
                   <button
                     key={c.id}
                     type="button"
-                    onClick={() => setCategoriaSelecionada(c.id)}
+                    onClick={() => toggleCategoria(c.id)}
                     className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                      categoriaSelecionada === c.id
+                      categoriasSelecionadas.includes(c.id)
                         ? 'bg-primary text-text-on-primary'
-                        : 'bg-surface-elevated text-text-main hover:bg-surface-light border border-border-light'
+                        : 'bg-bg-elevated text-text-main hover:bg-bg-card border border-border'
                     }`}
                   >
                     {c.nome} ({c.produtosCount ?? 0})
@@ -193,9 +215,9 @@ export default function SelecaoProdutosModal({
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-auto border border-border-light rounded-lg">
+          <div className="flex-1 min-h-0 overflow-auto border border-border rounded-lg">
             <table className="w-full text-left text-sm">
-              <thead className="bg-background-light text-text-muted sticky top-0 z-10">
+              <thead className="bg-bg-elevated text-text-muted sticky top-0 z-10">
                 <tr>
                   <th className="p-3 font-medium">Produto</th>
                   <th className="p-3 font-medium w-28">Preço unit.</th>
@@ -204,7 +226,7 @@ export default function SelecaoProdutosModal({
                   <th className="p-3 font-medium w-28">Ação</th>
                 </tr>
               </thead>
-              <tbody className="text-text-main divide-y divide-border-light">
+              <tbody className="text-text-main divide-y divide-border">
                 {loading ? (
                   <tr>
                     <td colSpan={5} className="p-8 text-center text-text-muted">
@@ -225,7 +247,7 @@ export default function SelecaoProdutosModal({
                     return (
                       <tr
                         key={p.id}
-                        className={`transition-all duration-200 hover:bg-surface-elevated/50 ${
+                        className={`transition-all duration-200 hover:bg-bg-elevated/50 ${
                           adicionado ? 'ring-1 ring-inset ring-mint/60' : ''
                         }`}
                       >
@@ -250,7 +272,7 @@ export default function SelecaoProdutosModal({
                                 })
                               }
                               disabled={!disponivel}
-                              className="w-14 px-2 py-1 border border-border-light rounded bg-input-bg text-text-main disabled:opacity-50"
+                              className="w-14 px-2 py-1 border border-border rounded bg-input-bg text-text-main disabled:opacity-50"
                             />
                           </div>
                         </td>
@@ -262,7 +284,7 @@ export default function SelecaoProdutosModal({
                             className={
                               disponivel
                                 ? 'bg-primary hover:bg-primary-hover text-text-on-primary px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 focus:ring-0 focus:outline-none h-[26px] min-w-[4.5rem]'
-                                : 'bg-surface-elevated text-text-muted cursor-not-allowed px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 focus:ring-0 focus:outline-none h-[26px] min-w-[4.5rem]'
+                                : 'bg-bg-elevated text-text-muted cursor-not-allowed px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 focus:ring-0 focus:outline-none h-[26px] min-w-[4.5rem]'
                             }
                           >
                             {disponivel ? (

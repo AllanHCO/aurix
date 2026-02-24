@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
-import { formatCurrency, formatDate } from '../utils/format';
+import { formatCurrency, formatDateTime } from '../utils/format';
 import VendaModal from '../components/VendaModal';
 import VendaDetalheModal, { type VendaDetalhe } from '../components/VendaDetalheModal';
 
@@ -16,6 +17,9 @@ interface Venda extends VendaDetalhe {
 }
 
 export default function Vendas() {
+  const [searchParams] = useSearchParams();
+  const statusFilter = searchParams.get('status') === 'PENDENTE' ? 'PENDENTE' : undefined;
+
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -24,11 +28,11 @@ export default function Vendas() {
 
   useEffect(() => {
     loadVendas();
-  }, []);
+  }, [statusFilter]);
 
   const loadVendas = async () => {
     try {
-      const response = await api.get('/vendas');
+      const response = await api.get('/vendas', { params: statusFilter ? { status: statusFilter } : {} });
       setVendas(response.data);
     } catch (error: any) {
       toast.error('Erro ao carregar vendas');
@@ -77,7 +81,7 @@ export default function Vendas() {
       </div>
 
       {vendas.length === 0 ? (
-        <div className="bg-surface-light rounded-xl border border-border-light p-12 text-center">
+        <div className="bg-bg-card rounded-xl border border-border p-12 text-center">
           <span className="material-symbols-outlined text-6xl text-text-muted mb-4 block">
             payments
           </span>
@@ -93,14 +97,14 @@ export default function Vendas() {
           </button>
         </div>
       ) : (
-        <div className="bg-surface-light rounded-xl border border-border-light shadow-sm overflow-hidden">
+        <div className="bg-bg-card rounded-xl border border-border shadow-sm overflow-hidden">
           <div className="overflow-x-auto -mx-4 sm:mx-0">
             <div className="inline-block min-w-full align-middle px-4 sm:px-0">
           <table className="w-full min-w-[480px]">
-            <thead className="bg-background-light border-b border-border-light">
+            <thead className="bg-bg-elevated border-b border-border">
               <tr>
                 <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
-                  Data
+                  Data / Hora
                 </th>
                 <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
                   Cliente
@@ -119,38 +123,49 @@ export default function Vendas() {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border-light">
-              {vendas.map((venda) => (
-                <tr key={venda.id} className="hover:bg-background-light">
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">{formatDate(venda.createdAt)}</td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 font-semibold text-text-main truncate max-w-[120px] sm:max-w-none">{venda.cliente.nome}</td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-right font-bold text-text-main">
-                    {formatCurrency(Number(venda.total))}
-                  </td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">{venda.forma_pagamento}</td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
-                    <span
-                      className={`text-xs px-2 py-1 rounded shrink-0 ${
-                        venda.status === 'PAGO'
-                          ? 'bg-badge-pago text-badge-pago-text'
-                          : 'bg-badge-pendente text-badge-pendente-text'
-                      }`}
-                    >
-                      {venda.status}
-                    </span>
-                  </td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
-                    <button
-                      type="button"
-                      onClick={() => handleVerDetalhe(venda)}
-                      className="p-2 text-primary hover:bg-primary/10 rounded touch-manipulation"
-                      title="Ver detalhes"
-                    >
-                      <span className="material-symbols-outlined">visibility</span>
-                    </button>
-                  </td>
-                </tr>
-              ))}
+            <tbody className="divide-y divide-border">
+              {vendas.map((venda) => {
+                const status = venda.status || 'PENDENTE';
+                const statusLabel = status === 'PAGO' ? 'Pago' : status === 'FECHADA' ? 'Fechada' : 'Pendente';
+                const statusClass = status === 'PAGO' ? 'bg-badge-pago text-badge-pago-text' : status === 'FECHADA' ? 'bg-text-muted/20 text-text-muted' : 'bg-badge-pendente text-badge-pendente-text';
+                return (
+                  <tr key={venda.id} className="hover:bg-bg-elevated">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">{formatDateTime(venda.createdAt)}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 font-semibold text-text-main truncate max-w-[120px] sm:max-w-none">{venda.cliente.nome}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-right font-bold text-text-main">
+                      {formatCurrency(Number(venda.total))}
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">{venda.forma_pagamento}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+                      <span className={`text-xs px-2 py-1 rounded shrink-0 ${statusClass}`}>
+                        {statusLabel}
+                      </span>
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleVerDetalhe(venda)}
+                          className="p-2 text-primary hover:bg-primary/10 rounded touch-manipulation"
+                          title="Ver detalhes"
+                        >
+                          <span className="material-symbols-outlined">visibility</span>
+                        </button>
+                        {status !== 'FECHADA' && (
+                          <button
+                            type="button"
+                            onClick={() => handleEditarVenda(venda)}
+                            className="p-2 text-text-muted hover:bg-surface-elevated rounded touch-manipulation"
+                            title="Editar"
+                          >
+                            <span className="material-symbols-outlined">edit</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
             </div>
@@ -170,6 +185,7 @@ export default function Vendas() {
           venda={detalheVenda}
           onClose={() => setDetalheVenda(null)}
           onEdit={handleEditarVenda}
+          onFechada={loadVendas}
         />
       )}
     </div>

@@ -29,8 +29,36 @@ model Usuario {
   bloqueios                Bloqueio[]
   configuracao_agenda     ConfiguracaoAgenda?
   disponibilidade_semanal DisponibilidadeSemanal[]
+  company_settings        CompanySettings?
 
   @@map("usuarios")
+}
+
+enum PlanoTipo {
+  FREE
+  TRIAL
+  PAID
+}
+
+model CompanySettings {
+  usuario_id                    String    @id
+  dias_atencao                  Int       @default(30)
+  dias_inativo                  Int       @default(45)
+  msg_whatsapp_atencao          String?   @db.Text
+  msg_whatsapp_inativo          String?   @db.Text
+  msg_whatsapp_pos_venda        String?   @db.Text
+  msg_whatsapp_confirmacao_agenda String? @db.Text
+  msg_whatsapp_lembrete_agenda  String?   @db.Text
+  plano                         PlanoTipo @default(FREE)
+  trial_ends_at                 DateTime? @db.Date
+  is_active                     Boolean   @default(true)
+  blocked_reason                String?   @db.VarChar(500)
+  meta_faturamento_mes         Decimal?  @db.Decimal(12, 2)
+  updatedAt                     DateTime  @updatedAt
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@map("company_settings")
 }
 
 model Categoria {
@@ -52,6 +80,7 @@ model Produto {
   estoque_atual   Int      @default(0)
   estoque_minimo  Int      @default(0)
   categoria_id    String
+  linha           String?  // agrupamento opcional (ex: linha de produto)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -60,6 +89,7 @@ model Produto {
 
   @@unique([nome, categoria_id])
   @@index([categoria_id])
+  @@index([estoque_atual])
   @@map("produtos")
 }
 
@@ -99,6 +129,9 @@ model Venda {
   itens   ItemVenda[]
 
   @@index([status, createdAt])
+  @@index([usuario_id, status, cliente_id])
+  @@index([usuario_id, status, createdAt])
+  @@index([usuario_id, createdAt])
   @@map("vendas")
 }
 
@@ -114,12 +147,15 @@ model ItemVenda {
   produto Produto @relation(fields: [produto_id], references: [id])
 
   @@index([produto_id, venda_id])
+  @@index([venda_id])
+  @@index([produto_id])
   @@map("itens_venda")
 }
 
 enum VendaStatus {
   PAGO
   PENDENTE
+  FECHADA
 }
 
 // ---- Agendamentos (V1) ----
@@ -175,6 +211,7 @@ model Agendamento {
   usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
 
   @@index([usuario_id, data])
+  @@index([usuario_id, data, hora_inicio, status])
   @@map("agendamentos")
 }
 

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.7.1",
+    "compression": "^1.7.4",
     "swagger-ui-express": "^5.0.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",

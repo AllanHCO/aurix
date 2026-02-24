@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { formatCurrency } from '../utils/format';
 import ProdutoModal from './ProdutoModal';
 
-type FiltroDesempenho = 'todos' | 'mais_vendidos' | 'menos_vendidos';
+type FiltroDesempenho = 'todos' | 'mais_vendidos' | 'menos_vendidos' | 'estoque_baixo';
 type PeriodoDesempenho = 'este_mes' | 'ultimos_3_meses';
 
 export interface Produto {
@@ -16,25 +16,43 @@ export interface Produto {
   estoque_minimo: number;
   categoria_id?: string;
   categoria_nome?: string;
+  linha?: string | null;
   qtdVendidaMesAtual?: number;
 }
 
-export default function CadastroProdutos() {
+interface CadastroProdutosProps {
+  initialFiltro?: FiltroDesempenho;
+  initialPeriodo?: PeriodoDesempenho;
+}
+
+function useDebounce<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
+}
+
+export default function CadastroProdutos({ initialFiltro, initialPeriodo }: CadastroProdutosProps = {}) {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [produtoEditando, setProdutoEditando] = useState<Produto | null>(null);
-  const [filtro, setFiltro] = useState<FiltroDesempenho>('todos');
-  const [periodo, setPeriodo] = useState<PeriodoDesempenho>('este_mes');
+  const [filtro, setFiltro] = useState<FiltroDesempenho>(initialFiltro ?? 'todos');
+  const [periodo, setPeriodo] = useState<PeriodoDesempenho>(initialPeriodo ?? 'este_mes');
+  const [buscaNome, setBuscaNome] = useState('');
+  const debouncedNome = useDebounce(buscaNome.trim(), 350);
 
-  const loadProdutos = async (filtroAtual?: FiltroDesempenho, periodoAtual?: PeriodoDesempenho) => {
+  const loadProdutos = async (filtroAtual?: FiltroDesempenho, periodoAtual?: PeriodoDesempenho, nome?: string) => {
     const f = filtroAtual ?? filtro;
     const p = periodoAtual ?? periodo;
+    const n = nome !== undefined ? nome : debouncedNome;
     try {
       setLoading(true);
-      const response = await api.get<Produto[]>('/produtos', {
-        params: { filtro: f, periodo: p }
-      });
+      const params: Record<string, string> = { filtro: f, periodo: p };
+      if (n) params.nome = n;
+      const response = await api.get<Produto[]>('/produtos', { params });
       setProdutos(response.data);
     } catch (error: any) {
       toast.error('Erro ao carregar produtos');
@@ -44,8 +62,8 @@ export default function CadastroProdutos() {
   };
 
   useEffect(() => {
-    loadProdutos('todos', 'este_mes');
-  }, []);
+    loadProdutos(filtro, periodo, debouncedNome);
+  }, [filtro, periodo, debouncedNome]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este produto?')) return;
@@ -70,15 +88,8 @@ export default function CadastroProdutos() {
     loadProdutos(filtro, periodo);
   };
 
-  const handleFiltroChange = (novoFiltro: FiltroDesempenho) => {
-    setFiltro(novoFiltro);
-    loadProdutos(novoFiltro, periodo);
-  };
-
-  const handlePeriodoChange = (novoPeriodo: PeriodoDesempenho) => {
-    setPeriodo(novoPeriodo);
-    loadProdutos(filtro, novoPeriodo);
-  };
+  const handleFiltroChange = (novoFiltro: FiltroDesempenho) => setFiltro(novoFiltro);
+  const handlePeriodoChange = (novoPeriodo: PeriodoDesempenho) => setPeriodo(novoPeriodo);
 
   const isEstoqueBaixo = (produto: Produto) =>
     produto.estoque_atual <= produto.estoque_minimo;
@@ -104,7 +115,7 @@ export default function CadastroProdutos() {
       </div>
 
       {produtos.length === 0 ? (
-        <div className="bg-surface-light rounded-xl border border-border-light p-12 text-center">
+        <div className="bg-bg-card rounded-xl border border-border p-12 text-center">
           <span className="material-symbols-outlined text-6xl text-text-muted mb-4 block">
             inventory_2
           </span>
@@ -121,6 +132,22 @@ export default function CadastroProdutos() {
         </div>
       ) : (
         <>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex-1 min-w-0 max-w-md">
+              <label htmlFor="busca-produto" className="block text-sm font-medium text-text-muted mb-1">Busca por nome</label>
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-lg pointer-events-none">search</span>
+                <input
+                  id="busca-produto"
+                  type="text"
+                  value={buscaNome}
+                  onChange={(e) => setBuscaNome(e.target.value)}
+                  placeholder="Nome do produto..."
+                  className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg bg-input-bg text-text-main placeholder:text-text-muted focus:ring-2 focus:ring-primary outline-none"
+                />
+              </div>
+            </div>
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm text-text-muted">Período:</span>
             <div className="flex flex-wrap gap-2">
@@ -131,7 +158,7 @@ export default function CadastroProdutos() {
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[40px] touch-manipulation ${
                     periodo === p
                       ? 'bg-primary text-text-on-primary'
-                      : 'bg-surface-light text-text-main border border-border-light hover:bg-background-light'
+                      : 'bg-bg-card text-text-main border border-border hover:bg-bg-elevated'
                   }`}
                 >
                   {p === 'este_mes' ? 'Este mês' : 'Últimos 3 meses'}
@@ -140,33 +167,36 @@ export default function CadastroProdutos() {
             </div>
             <span className="text-sm text-text-muted ml-1 sm:ml-0">Filtro:</span>
             <div className="flex flex-wrap gap-2">
-              {(['todos', 'mais_vendidos', 'menos_vendidos'] as FiltroDesempenho[]).map((f) => (
+              {(['todos', 'mais_vendidos', 'menos_vendidos', 'estoque_baixo'] as FiltroDesempenho[]).map((f) => (
                 <button
                   key={f}
                   onClick={() => handleFiltroChange(f)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[40px] touch-manipulation ${
                     filtro === f
                       ? 'bg-primary text-text-on-primary'
-                      : 'bg-surface-light text-text-main border border-border-light hover:bg-background-light'
+                      : 'bg-bg-card text-text-main border border-border hover:bg-bg-elevated'
                   }`}
                 >
-                  {f === 'todos' ? 'Todos' : f === 'mais_vendidos' ? 'Mais Vendidos' : 'Menos Vendidos'}
+                  {f === 'todos' ? 'Todos' : f === 'mais_vendidos' ? 'Mais Vendidos' : f === 'menos_vendidos' ? 'Menos Vendidos' : 'Estoque Baixo'}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="bg-surface-light rounded-xl border border-border-light shadow-sm overflow-hidden">
+          <div className="bg-bg-card rounded-xl border border-border shadow-sm overflow-hidden">
             <div className="overflow-x-auto -mx-4 sm:mx-0">
               <div className="inline-block min-w-full align-middle px-4 sm:px-0">
                 <table className="w-full min-w-[640px]">
-                  <thead className="bg-background-light border-b border-border-light">
+                  <thead className="bg-bg-elevated border-b border-border">
                     <tr>
                       <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
                         Nome
                       </th>
                       <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
                         Categoria
+                      </th>
+                      <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
+                        Linha
                       </th>
                       <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted">
                         Preço
@@ -188,7 +218,7 @@ export default function CadastroProdutos() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border-light">
+                  <tbody className="divide-y divide-border">
                     {produtos.map((produto, index) => {
                       const qtd = produto.qtdVendidaMesAtual ?? 0;
                       const top3MaisVendidos = filtro === 'mais_vendidos' && index < 3;
@@ -196,7 +226,7 @@ export default function CadastroProdutos() {
                       return (
                         <tr
                           key={produto.id}
-                          className={`hover:bg-background-light ${
+                          className={`hover:bg-bg-elevated ${
                             isEstoqueBaixo(produto) ? 'bg-badge-estoque' : ''
                           }`}
                         >
@@ -218,6 +248,9 @@ export default function CadastroProdutos() {
                           </td>
                           <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">
                             {produto.categoria_nome ?? '-'}
+                          </td>
+                          <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">
+                            {produto.linha ?? '-'}
                           </td>
                           <td className="px-3 sm:px-6 py-3 sm:py-4 text-right font-semibold text-text-main text-sm sm:text-base">
                             {formatCurrency(produto.preco)}

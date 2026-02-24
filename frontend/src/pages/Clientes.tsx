@@ -1,114 +1,176 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
 import { formatDate } from '../utils/format';
 import ClienteModal from '../components/ClienteModal';
+import ClienteImportModal from '../components/ClienteImportModal';
 
-export type ClienteStatusManual = 'ativo' | 'atencao' | 'inativo';
-type FiltroStatus = 'TODOS' | ClienteStatusManual;
+export type ClienteStatusAuto = 'ativo' | 'atencao' | 'inativo';
+
+type FiltroRapido =
+  | 'TODOS'
+  | 'ativo'
+  | 'atencao'
+  | 'inativo'
+  | 'novos_no_mes'
+  | 'retornaram_no_mes';
 
 interface Cliente {
   id: string;
   nome: string;
   telefone: string | null;
   observacoes: string | null;
-  status: ClienteStatusManual;
+  status: ClienteStatusAuto;
   ultimaCompra: string | null;
   diasInativo: number | null;
 }
 
-const ITENS_POR_PAGINA = 10;
+const LIMITE_POR_PAGINA = 20;
 
 export default function Clientes() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [clienteEditando, setClienteEditando] = useState<Cliente | null>(null);
-  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('TODOS');
+  const [filtro, setFiltro] = useState<FiltroRapido>(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('status') === 'inativo') return 'inativo';
+    if (p.get('status') === 'atencao') return 'atencao';
+    if (p.get('novos_no_mes') === '1') return 'novos_no_mes';
+    if (p.get('retornaram_no_mes') === '1') return 'retornaram_no_mes';
+    return 'TODOS';
+  });
+  const [busca, setBusca] = useState('');
+  const [buscaDebounce, setBuscaDebounce] = useState('');
   const [paginaAtual, setPaginaAtual] = useState(1);
+  const [mensagensWhatsApp, setMensagensWhatsApp] = useState<{
+    msg_whatsapp_atencao: string;
+    msg_whatsapp_inativo: string;
+    msg_whatsapp_pos_venda: string | null;
+  } | null>(null);
 
   useEffect(() => {
-    loadClientes();
+    api.get<{
+      msg_whatsapp_atencao: string;
+      msg_whatsapp_inativo: string;
+      msg_whatsapp_pos_venda: string | null;
+    }>('/configuracoes/mensagens')
+      .then((r) => setMensagensWhatsApp(r.data))
+      .catch(() => setMensagensWhatsApp(null));
   }, []);
 
-  useEffect(() => {
-    // Resetar página ao mudar filtro
-    setPaginaAtual(1);
-  }, [filtroStatus]);
-
-  const loadClientes = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get('/clientes');
-      
-      console.log('Resposta da API:', response.data);
-      
-      // Validar se os dados estão no formato esperado
-      if (Array.isArray(response.data)) {
-        // Normalizar os dados para garantir formato correto
-        const clientesNormalizados: Cliente[] = response.data.map((cliente: any) => ({
-          id: cliente.id || '',
-          nome: cliente.nome || cliente.name || '',
-          telefone: cliente.telefone || null,
-          observacoes: cliente.observacoes || null,
-          status: cliente.status === 'atencao' || cliente.status === 'inativo' ? cliente.status : 'ativo',
-          ultimaCompra: cliente.ultimaCompra || null,
-          diasInativo: cliente.diasInativo !== undefined ? cliente.diasInativo : null
-        }));
-        
-        console.log('Clientes normalizados:', clientesNormalizados);
-        setClientes(clientesNormalizados);
-      } else {
-        console.error('Resposta inválida do servidor:', response.data);
-        toast.error('Formato de dados inválido');
-        setClientes([]);
+  const buildParams = useCallback(
+    (pagina: number) => {
+      const params: Record<string, string | number> = {
+        sort: 'dias_inativo_desc',
+        page: pagina,
+        limit: LIMITE_POR_PAGINA
+      };
+      if (filtro === 'ativo' || filtro === 'atencao' || filtro === 'inativo') {
+        params.status = filtro;
+      } else if (filtro === 'novos_no_mes') {
+        params.novos_no_mes = 'true';
+      } else if (filtro === 'retornaram_no_mes') {
+        params.retornaram_no_mes = 'true';
       }
-    } catch (error: any) {
-      console.error('Erro ao carregar clientes:', error);
-      const errorMessage = error.response?.data?.error || error.message || 'Erro ao carregar clientes';
-      toast.error(errorMessage);
-      setClientes([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (searchParams.get('reativar') === '1') params.reativar = '1';
+      if (buscaDebounce.trim()) params.search = buscaDebounce.trim();
+      return params;
+    },
+    [filtro, buscaDebounce, searchParams]
+  );
 
-  // Usar useMemo para calcular clientes filtrados
-  const clientesFiltrados = useMemo(() => {
-    if (!clientes || !Array.isArray(clientes) || clientes.length === 0) {
-      return [];
-    }
-    
-    if (filtroStatus === 'TODOS') {
-      return clientes;
-    }
-    return clientes.filter((c) => c && c.status === filtroStatus);
-  }, [clientes, filtroStatus]);
+  const loadClientes = useCallback(
+    async (pagina: number = 1) => {
+      try {
+        setLoading(true);
+        const res = await api.get<{ data: Cliente[]; total: number }>('/clientes', {
+          params: buildParams(pagina)
+        });
+        const list = Array.isArray(res.data?.data) ? res.data.data : [];
+        const totalCount = typeof res.data?.total === 'number' ? res.data.total : 0;
+        setClientes(
+          list.map((c: any) => ({
+            id: c.id || '',
+            nome: c.nome || '',
+            telefone: c.telefone ?? null,
+            observacoes: c.observacoes ?? null,
+            status: c.status === 'atencao' || c.status === 'inativo' ? c.status : 'ativo',
+            ultimaCompra: c.ultimaCompra ?? null,
+            diasInativo: c.diasInativo !== undefined ? c.diasInativo : null
+          }))
+        );
+        setTotal(totalCount);
+      } catch (err: any) {
+        const msg = err.response?.data?.error || err.message || 'Erro ao carregar clientes';
+        toast.error(msg);
+        setClientes([]);
+        setTotal(0);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [buildParams]
+  );
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setBuscaDebounce(busca);
+      setPaginaAtual(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [busca]);
+
+  useEffect(() => {
+    const status = searchParams.get('status');
+    if (status === 'inativo') setFiltro('inativo');
+    else if (status === 'atencao') setFiltro('atencao');
+    else if (searchParams.get('reativar') === '1') setFiltro('TODOS');
+    else if (searchParams.get('novos_no_mes') === '1') setFiltro('novos_no_mes');
+    else if (searchParams.get('retornaram_no_mes') === '1') setFiltro('retornaram_no_mes');
+  }, [searchParams]);
+
+  useEffect(() => {
+    loadClientes(paginaAtual);
+  }, [paginaAtual, filtro, buscaDebounce, searchParams.get('reativar')]);
+
+  const handleFiltro = (f: FiltroRapido) => {
+    setFiltro(f);
+    setPaginaAtual(1);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (f === 'TODOS') next.delete('reativar');
+      return next;
+    });
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
-
     try {
       await api.delete(`/clientes/${id}`);
       toast.success('Cliente excluído com sucesso!');
-      loadClientes();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Erro ao excluir cliente');
+      loadClientes(paginaAtual);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Erro ao excluir cliente');
     }
   };
 
-  const handleEdit = (cliente: Cliente) => {
-    setClienteEditando(cliente);
+  const handleEdit = (c: Cliente) => {
+    setClienteEditando(c);
     setModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setModalOpen(false);
     setClienteEditando(null);
-    loadClientes();
+    loadClientes(paginaAtual);
   };
 
-  const getStatusInfo = (status: ClienteStatusManual) => {
+  const getStatusInfo = (status: ClienteStatusAuto) => {
     switch (status) {
       case 'ativo':
         return { cor: 'text-badge-pago-text', bg: 'bg-badge-pago', label: 'Ativo' };
@@ -119,46 +181,57 @@ export default function Clientes() {
     }
   };
 
-  const formatarTelefoneWhatsApp = (telefone: string | null): string | null => {
+  const telefoneValido = (telefone: string | null): string | null => {
     if (!telefone) return null;
-    // Remove caracteres não numéricos
-    const apenasNumeros = telefone.replace(/\D/g, '');
-    // Se começar com 0, remove
-    const semZeroInicial = apenasNumeros.startsWith('0') ? apenasNumeros.slice(1) : apenasNumeros;
-    return semZeroInicial;
+    const num = telefone.replace(/\D/g, '');
+    const semZero = num.startsWith('0') ? num.slice(1) : num;
+    return semZero.length >= 10 ? semZero : null;
   };
 
-  const abrirWhatsApp = (cliente: Cliente) => {
-    const telefoneFormatado = formatarTelefoneWhatsApp(cliente.telefone);
-    if (!telefoneFormatado) {
-      toast.error('Telefone não disponível para este cliente');
+  const applyVars = (template: string, vars: Record<string, string>): string => {
+    let s = template;
+    Object.entries(vars).forEach(([k, v]) => {
+      s = s.replace(new RegExp(`\\{${k}\\}`, 'gi'), v);
+    });
+    return s.replace(/\{[A-Z_]+\}/g, '').trim() || 'Olá!';
+  };
+
+  const mensagemWhatsApp = (c: Cliente): string => {
+    const nome = c.nome || 'Cliente';
+    const dias = String(c.diasInativo ?? 0);
+    const vars = { NOME: nome, DIAS: dias };
+    if (c.status === 'atencao' && mensagensWhatsApp?.msg_whatsapp_atencao) {
+      return applyVars(mensagensWhatsApp.msg_whatsapp_atencao, vars);
+    }
+    if (c.status === 'inativo' && mensagensWhatsApp?.msg_whatsapp_inativo) {
+      return applyVars(mensagensWhatsApp.msg_whatsapp_inativo, vars);
+    }
+    if (mensagensWhatsApp?.msg_whatsapp_pos_venda && c.status === 'ativo') {
+      return applyVars(mensagensWhatsApp.msg_whatsapp_pos_venda, vars);
+    }
+    return `Olá ${nome}! Tudo bem? Quer agendar um horário? 🙂`;
+  };
+
+  const abrirWhatsApp = (c: Cliente) => {
+    const tel = telefoneValido(c.telefone);
+    if (!tel) {
+      toast.error('Telefone não cadastrado');
       return;
     }
-    const dias = cliente.diasInativo ?? null;
-    const mensagem = dias !== null
-      ? `Olá ${cliente.nome}! Tudo bem? Faz ${dias} ${dias === 1 ? 'dia' : 'dias'} que você não aparece por aqui. Quer agendar um horário? 😊`
-      : `Olá ${cliente.nome}! Tudo bem? Quer agendar um horário? 😊`;
-    const url = `https://wa.me/55${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`;
-    window.open(url, '_blank');
+    const msg = mensagemWhatsApp(c);
+    window.open(`https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  // Paginação usando useMemo
-  const { clientesPaginados, totalPaginas, inicio, fim } = useMemo(() => {
-    const total = Math.ceil(clientesFiltrados.length / ITENS_POR_PAGINA);
-    const inicioIdx = (paginaAtual - 1) * ITENS_POR_PAGINA;
-    const fimIdx = inicioIdx + ITENS_POR_PAGINA;
-    const paginados = clientesFiltrados.slice(inicioIdx, fimIdx);
-    
-    return {
-      clientesPaginados: paginados,
-      totalPaginas: total,
-      inicio: inicioIdx,
-      fim: fimIdx
-    };
-  }, [clientesFiltrados, paginaAtual]);
+  const totalPaginas = Math.max(1, Math.ceil(total / LIMITE_POR_PAGINA));
+  const inicio = (paginaAtual - 1) * LIMITE_POR_PAGINA;
+  const fim = Math.min(inicio + LIMITE_POR_PAGINA, total);
 
-  if (loading) {
-    return <div className="text-center py-12">Carregando...</div>;
+  if (loading && clientes.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center py-20">
+        <span className="text-text-muted">Carregando...</span>
+      </div>
+    );
   }
 
   return (
@@ -166,62 +239,97 @@ export default function Clientes() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-1 sm:mb-2">Clientes</h1>
-          <p className="text-sm sm:text-base text-text-muted">Gerencie sua base de clientes e monitore a inatividade</p>
-        </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
-        >
-          <span className="material-symbols-outlined">add</span>
-          Novo Cliente
-        </button>
-      </div>
-
-      {/* Filtros rápidos por status */}
-      <div className="flex gap-2 flex-wrap">
-        {(['TODOS', 'ativo', 'atencao', 'inativo'] as FiltroStatus[]).map((filtro) => {
-          const count = filtro === 'TODOS'
-            ? (clientes?.length || 0)
-            : (clientes?.filter((c) => c && c.status === filtro).length || 0);
-          return (
-            <button
-              key={filtro}
-              onClick={() => setFiltroStatus(filtro)}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filtroStatus === filtro
-                  ? 'bg-primary text-text-on-primary'
-                  : 'bg-surface-light text-text-main hover:bg-background-light border border-border-light'
-              }`}
-            >
-              {filtro === 'TODOS' ? 'Todos' : filtro === 'ativo' ? 'Ativo' : filtro === 'atencao' ? 'Atenção' : 'Inativo'} ({count})
-            </button>
-          );
-        })}
-      </div>
-
-      {!clientes || clientes.length === 0 ? (
-        <div className="bg-surface-light rounded-xl border border-border-light p-12 text-center">
-          <span className="material-symbols-outlined text-6xl text-text-muted mb-4 block">
-            group
-          </span>
-          <h3 className="text-xl font-bold text-text-main mb-2">Nenhum cliente cadastrado</h3>
-          <p className="text-text-muted mb-6">
-            Comece adicionando seu primeiro cliente
+          <p className="text-sm sm:text-base text-text-muted">
+            Centro de retenção — reative quem está parado e não perca vendas
           </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => setModalOpen(true)}
-            className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-6 py-3 rounded-lg"
+            type="button"
+            onClick={() => setImportOpen(true)}
+            className="bg-bg-card hover:bg-bg-elevated text-text-main font-medium px-4 py-3 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0 border border-border"
           >
-            Adicionar Cliente
+            <span className="material-symbols-outlined">upload_file</span>
+            Importar
           </button>
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
+          >
+            <span className="material-symbols-outlined">add</span>
+            Novo Cliente
+          </button>
+        </div>
+      </div>
+
+      {/* Busca */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex-1 relative">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-xl">
+            search
+          </span>
+          <input
+            type="text"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome ou telefone"
+            className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-bg-card text-text-main"
+          />
+        </div>
+      </div>
+
+      {/* Filtros rápidos */}
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            ['TODOS', 'Todos'],
+            ['ativo', 'Ativos'],
+            ['atencao', 'Atenção'],
+            ['inativo', 'Inativos'],
+            ['novos_no_mes', 'Novos no mês'],
+            ['retornaram_no_mes', 'Retornaram']
+          ] as [FiltroRapido, string][]
+        ).map(([valor, label]) => (
+          <button
+            key={valor}
+            type="button"
+            onClick={() => handleFiltro(valor)}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              filtro === valor
+                ? 'bg-primary text-text-on-primary'
+                : 'bg-bg-card text-text-main hover:bg-bg-elevated border border-border'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {total === 0 && !loading ? (
+        <div className="bg-bg-card rounded-xl border border-border p-12 text-center">
+          <span className="material-symbols-outlined text-6xl text-text-muted mb-4 block">group</span>
+          <h3 className="text-xl font-bold text-text-main mb-2">Nenhum cliente encontrado</h3>
+          <p className="text-text-muted mb-6">
+            {buscaDebounce || filtro !== 'TODOS'
+              ? 'Tente outro filtro ou busca.'
+              : 'Cadastre seu primeiro cliente.'}
+          </p>
+          {!buscaDebounce && filtro === 'TODOS' && (
+            <button
+              onClick={() => setModalOpen(true)}
+              className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-6 py-3 rounded-lg"
+            >
+              Adicionar Cliente
+            </button>
+          )}
         </div>
       ) : (
         <>
-          <div className="bg-surface-light rounded-xl border border-border-light shadow-sm overflow-hidden">
-            <div className="overflow-x-auto -mx-4 sm:mx-0">
-              <div className="inline-block min-w-full align-middle px-4 sm:px-0">
+          <div className="bg-bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
               <table className="w-full min-w-[640px]">
-                <thead className="bg-background-light border-b border-border-light">
+                <thead className="bg-bg-elevated border-b border-border">
                   <tr>
                     <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
                       Nome
@@ -230,10 +338,10 @@ export default function Clientes() {
                       Telefone
                     </th>
                     <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
-                      Última Compra
+                      Última compra
                     </th>
                     <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted">
-                      Dias Inativo
+                      Dias inativo
                     </th>
                     <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted">
                       Status
@@ -243,46 +351,64 @@ export default function Clientes() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border-light">
-                  {clientesPaginados && clientesPaginados.length > 0 ? (
-                    clientesPaginados.map((cliente) => {
-                        const statusInfo = getStatusInfo(cliente.status);
-                        return (
-                          <tr key={cliente.id} className="hover:bg-background-light">
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-semibold text-text-main">{cliente.nome}</td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">{cliente.telefone || '-'}</td>
+                <tbody className="divide-y divide-border">
+                  {clientes.map((c) => {
+                    const statusInfo = getStatusInfo(c.status);
+                    const temTelefone = !!telefoneValido(c.telefone);
+                    return (
+                      <tr key={c.id} className="hover:bg-bg-elevated">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-semibold text-text-main">
+                          {c.nome}
+                        </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">
-                          {cliente.ultimaCompra ? formatDate(cliente.ultimaCompra) : '-'}
+                          {c.telefone || '—'}
+                        </td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">
+                          {c.ultimaCompra ? formatDate(c.ultimaCompra) : '—'}
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-center text-text-muted text-sm">
-                          {cliente.diasInativo !== null ? `${cliente.diasInativo} ${cliente.diasInativo === 1 ? 'dia' : 'dias'}` : '-'}
+                          {c.diasInativo !== null
+                            ? `${c.diasInativo} ${c.diasInativo === 1 ? 'dia' : 'dias'}`
+                            : 'Sem compra'}
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
-                          <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.cor}`}>
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.cor}`}
+                          >
                             {statusInfo.label}
-                          </div>
+                          </span>
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4">
                           <div className="flex items-center justify-center gap-1 sm:gap-2">
-                            {cliente.telefone && (
+                            {temTelefone ? (
                               <button
-                                onClick={() => abrirWhatsApp(cliente)}
-                                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-success hover:bg-primary-light rounded touch-manipulation"
+                                type="button"
+                                onClick={() => abrirWhatsApp(c)}
+                                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-success hover:bg-success/10 rounded touch-manipulation"
                                 title="Abrir WhatsApp"
                               >
                                 <span className="material-symbols-outlined">chat</span>
                               </button>
+                            ) : (
+                              <span
+                                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-muted cursor-not-allowed rounded"
+                                title="Telefone não cadastrado"
+                              >
+                                <span className="material-symbols-outlined">chat</span>
+                              </span>
                             )}
                             <button
-                              onClick={() => handleEdit(cliente)}
+                              type="button"
+                              onClick={() => handleEdit(c)}
                               className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-primary hover:bg-primary/10 rounded touch-manipulation"
                               title="Editar"
                             >
                               <span className="material-symbols-outlined">edit</span>
                             </button>
                             <button
-                              onClick={() => handleDelete(cliente.id)}
-                              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-error hover:bg-badge-erro rounded touch-manipulation"
+                              type="button"
+                              onClick={() => handleDelete(c.id)}
+                              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-error hover:bg-badge-erro/20 rounded touch-manipulation"
                               title="Excluir"
                             >
                               <span className="material-symbols-outlined">delete</span>
@@ -291,53 +417,34 @@ export default function Clientes() {
                         </td>
                       </tr>
                     );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="px-4 sm:px-6 py-8 text-center text-text-muted text-sm">
-                        Nenhum cliente encontrado com o filtro selecionado
-                      </td>
-                    </tr>
-                  )}
+                  })}
                 </tbody>
               </table>
-              </div>
             </div>
           </div>
 
-          {/* Paginação */}
           {totalPaginas > 1 && (
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-surface-light rounded-xl border border-border-light p-4">
-              <div className="text-xs sm:text-sm text-text-muted text-center sm:text-left">
-                Mostrando {inicio + 1} a {Math.min(fim, clientesFiltrados.length)} de {clientesFiltrados.length} clientes
-              </div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-bg-card rounded-xl border border-border p-4">
+              <p className="text-xs sm:text-sm text-text-muted text-center sm:text-left">
+                Mostrando {inicio + 1} a {fim} de {total} clientes
+              </p>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setPaginaAtual((p) => Math.max(1, p - 1))}
                   disabled={paginaAtual === 1}
-                  className="px-4 py-2 border border-border-light rounded-lg text-text-main hover:bg-background-light disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 border border-border rounded-lg text-text-main hover:bg-bg-elevated disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Anterior
                 </button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((pagina) => (
-                    <button
-                      key={pagina}
-                      onClick={() => setPaginaAtual(pagina)}
-                      className={`px-3 py-2 rounded-lg text-sm ${
-                        paginaAtual === pagina
-                          ? 'bg-primary text-text-on-primary'
-                          : 'bg-background-light text-text-main hover:bg-background-light border border-border-light'
-                      }`}
-                    >
-                      {pagina}
-                    </button>
-                  ))}
-                </div>
+                <span className="px-2 text-text-muted text-sm">
+                  Página {paginaAtual} de {totalPaginas}
+                </span>
                 <button
+                  type="button"
                   onClick={() => setPaginaAtual((p) => Math.min(totalPaginas, p + 1))}
                   disabled={paginaAtual === totalPaginas}
-                  className="px-4 py-2 border border-border-light rounded-lg text-text-main hover:bg-background-light disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 border border-border rounded-lg text-text-main hover:bg-bg-elevated disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Próxima
                 </button>
@@ -349,8 +456,14 @@ export default function Clientes() {
 
       {modalOpen && (
         <ClienteModal
-          cliente={clienteEditando}
+          cliente={clienteEditando ? { id: clienteEditando.id, nome: clienteEditando.nome, telefone: clienteEditando.telefone, observacoes: clienteEditando.observacoes } : null}
           onClose={handleCloseModal}
+        />
+      )}
+      {importOpen && (
+        <ClienteImportModal
+          onClose={() => setImportOpen(false)}
+          onSuccess={() => { setImportOpen(false); loadClientes(1); setPaginaAtual(1); }}
         />
       )}
     </div>

@@ -13,6 +13,7 @@ const putBodySchema = z.object({
   }),
   antecedencia_min_dias: z.number().int().min(0).max(60),
   buffer_min: z.number().int().min(0).max(60),
+  limite_maximo_dias: z.number().int().min(1).max(365).optional(),
   servico_padrao_nome: z.string().max(200).optional().nullable(),
   disponibilidade: z.array(
     z.object({
@@ -88,6 +89,7 @@ export const putConfiguracoesAgendamento = async (req: AuthRequest, res: Respons
   const duracao = body.duracao_slot_min;
   const buffer = body.buffer_min;
   const antecedencia = body.antecedencia_min_dias;
+  const limiteMaximoDias = body.limite_maximo_dias ?? 30;
   const servicoPadraoNome = body.servico_padrao_nome != null ? String(body.servico_padrao_nome).trim() || null : undefined;
 
   await prisma.$transaction(async (tx) => {
@@ -100,13 +102,14 @@ export const putConfiguracoesAgendamento = async (req: AuthRequest, res: Respons
         duracao_padrao_minutos: duracao,
         buffer_minutos: buffer,
         antecedencia_minima_dias: antecedencia,
-        limite_maximo_dias: 30,
+        limite_maximo_dias: limiteMaximoDias,
         servico_padrao_nome: servicoPadraoNome ?? null
       },
       update: {
         duracao_padrao_minutos: duracao,
         buffer_minutos: buffer,
         antecedencia_minima_dias: antecedencia,
+        limite_maximo_dias: limiteMaximoDias,
         ...(servicoPadraoNome !== undefined && { servico_padrao_nome: servicoPadraoNome })
       }
     });
