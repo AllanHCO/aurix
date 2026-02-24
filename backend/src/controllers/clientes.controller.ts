@@ -201,7 +201,8 @@ export const obterCliente = async (req: AuthRequest, res: Response) => {
     const diffMs = new Date().getTime() - ultimaVenda.getTime();
     diasInativo = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   }
-  const status = statusFromDias(diasInativo);
+  const { dias_atencao, dias_inativo } = await getRetencaoThresholds(userId);
+  const status = statusFromDias(diasInativo, dias_atencao, dias_inativo);
 
   res.json({
     ...cliente,
@@ -233,10 +234,10 @@ export const criarCliente = async (req: AuthRequest, res: Response) => {
 export const atualizarCliente = async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const body = clienteUpdateSchema.parse(req.body);
-  const data: { nome?: string; telefone?: string; observacoes?: string } = {};
+  const data: { nome?: string; telefone?: string | null; observacoes?: string | null } = {};
   if (body.nome !== undefined) data.nome = body.nome.trim();
-  if (body.telefone !== undefined) data.telefone = body.telefone?.trim() || null;
-  if (body.observacoes !== undefined) data.observacoes = body.observacoes?.trim() || null;
+  if (body.telefone !== undefined) data.telefone = body.telefone?.trim() ?? null;
+  if (body.observacoes !== undefined) data.observacoes = body.observacoes?.trim() ?? null;
 
   const clienteExistente = await prisma.cliente.findUnique({
     where: { id }
