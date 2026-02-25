@@ -99,7 +99,7 @@ export default function VendaModal({ onClose, vendaId, venda }: VendaModalProps)
         cliente_id: venda.cliente_id ?? '',
         desconto_percentual: Math.round(percentual * 100) / 100,
         forma_pagamento: venda.forma_pagamento ?? '',
-        status: venda.status ?? 'PENDENTE'
+        status: (venda.status === 'FECHADA' ? 'PAGO' : venda.status) ?? 'PENDENTE'
       });
       setItens(itensIniciais);
     }

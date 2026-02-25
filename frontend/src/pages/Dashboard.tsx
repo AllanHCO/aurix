@@ -82,7 +82,7 @@ function DesempenhoChart({
 
   const pointsAtual = atual.map((v, i) => `${toX(i)},${toY(v)}`);
   const pointsAnterior = anterior.map((v, i) => `${toX(i)},${toY(v)}`);
-  const maxIdx = atual.reduce((best, v, i) => (v > (atual[best] ?? 0) ? i : best, 0));
+  const maxIdx = atual.reduce((best, v, i) => (v > (atual[best] ?? 0) ? i : best), 0);
   const areaPath =
     pointsAtual.length > 0
       ? `M ${toX(0)},${padT + chartH} L ${pointsAtual.join(' L ')} L ${toX(atual.length - 1)},${padT + chartH} Z`
@@ -209,7 +209,7 @@ export default function Dashboard() {
     );
   }
 
-  const { resultado, retencao, receitaEmRisco, operacional, modulos, grafico, atividadesRecentes, metaFaturamentoMes } = data;
+  const { resultado, retencao, receitaEmRisco, operacional, grafico, atividadesRecentes, metaFaturamentoMes } = data;
   const variacao = resultado.variacaoPercentual;
 
   const metaFaturamento = metaFaturamentoMes != null && metaFaturamentoMes > 0 ? metaFaturamentoMes : null;

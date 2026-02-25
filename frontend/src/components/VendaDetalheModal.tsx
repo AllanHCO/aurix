@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
-import { formatCurrency, formatDate, formatDateTime } from '../utils/format';
+import { formatCurrency, formatDateTime } from '../utils/format';
 
 export interface VendaDetalhe {
   id: string;

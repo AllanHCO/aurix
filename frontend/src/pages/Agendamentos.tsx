@@ -39,13 +39,12 @@ export default function Agendamentos() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const vistaProximos3 = searchParams.get('vista') === 'proximos3';
-  const statusPendente = searchParams.get('status') === 'PENDENTE';
 
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
-  const [proximos, setProximos] = useState<Agendamento[]>([]);
+  const [, setProximos] = useState<Agendamento[]>([]);
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingProximos, setLoadingProximos] = useState(true);
+  const [, setLoadingProximos] = useState(true);
   const [tabView, setTabView] = useState<TabView>('MENSAL');
   const [ano, setAno] = useState(new Date().getFullYear());
   const [mes, setMes] = useState(new Date().getMonth() + 1);

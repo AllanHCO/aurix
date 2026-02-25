@@ -43,7 +43,7 @@ export default function Relatorios() {
   const [dataFinal, setDataFinal] = useState('');
   const [loading, setLoading] = useState(false);
   const [relatorio, setRelatorio] = useState<RelatorioPeriodo | null>(null);
-  const [page, setPage] = useState(1);
+  const [, setPage] = useState(1);
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
 
   const loadRelatorio = async (inicio: string, fim: string, pageNum: number = 1, orderDir: 'asc' | 'desc' = order) => {
