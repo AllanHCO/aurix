@@ -1,0 +1,25 @@
+# Fly.io - Backend Aurix em São Paulo (gru)
+# Use: fly launch (já com este arquivo) ou fly deploy
+# Região: gru = São Paulo, Brasil
+
+app = "aurix-backend"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3001"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

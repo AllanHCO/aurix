@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import compression from 'compression';
 import swaggerUi from 'swagger-ui-express';
 import 'express-async-errors';
@@ -29,17 +28,26 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// CORS: aceita FRONTEND_URL ou lista separada por vírgula (ex.: https://aurix-l3dn.onrender.com,http://localhost:5173)
+// CORS: rotas públicas da agenda (/api/public/agenda) aceitam qualquer origem; demais rotas usam FRONTEND_URL
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map((o) => o.trim()).filter(Boolean)
   : ['http://localhost:5173'];
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    return cb(null, false);
-  },
-  credentials: true
-}));
+
+app.use((req, res, next) => {
+  const isPublicAgenda = req.path.startsWith('/api/public/agenda');
+  const origin = req.headers.origin;
+  const allowOrigin = isPublicAgenda
+    ? (origin || '*')
+    : (!origin || allowedOrigins.includes(origin) ? origin || allowedOrigins[0] : null);
+  if (allowOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowOrigin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Idempotency-Key');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

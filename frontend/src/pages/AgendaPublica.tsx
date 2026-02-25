@@ -67,9 +67,10 @@ export default function AgendaPublica() {
     let cancelled = false;
     setLoading(true);
     setBrandingError(false);
+    const opts = { timeout: 65000 };
     Promise.all([
-      api.get<Branding>(`/public/agenda/${slug}/branding`),
-      api.get<PublicConfig>(`/public/agenda/${slug}/public-config`).catch(() => null)
+      api.get<Branding>(`/public/agenda/${slug}/branding`, opts),
+      api.get<PublicConfig>(`/public/agenda/${slug}/public-config`, opts).catch(() => null)
     ])
       .then(([brandRes, configRes]) => {
         if (cancelled) return;
@@ -91,13 +92,16 @@ export default function AgendaPublica() {
     return () => { cancelled = true; };
   }, [slug]);
 
+  // Timeout alto para aguardar backend acordar (ex.: Render free tier)
+  const PUBLIC_AGENDA_TIMEOUT = 65000;
+
   useEffect(() => {
     if (!slug) return;
     setLoadingDias(true);
     api
       .get<{ ano: number; mes: number; dias: Array<{ data: string; status: 'DISPONIVEL' | 'INDISPONIVEL'; temBloqueios?: boolean; motivo?: string }> }>(
         `/public/agenda/${slug}/mes`,
-        { params: { ano, mes } }
+        { params: { ano, mes }, timeout: PUBLIC_AGENDA_TIMEOUT }
       )
       .then((r) => {
         const lista = r.data.dias || [];
@@ -118,7 +122,7 @@ export default function AgendaPublica() {
     const t = setTimeout(() => {
       const nextMes = mes === 12 ? 1 : mes + 1;
       const nextAno = mes === 12 ? ano + 1 : ano;
-      api.get(`/public/agenda/${slug}/mes`, { params: { ano: nextAno, mes: nextMes } }).catch(() => {});
+      api.get(`/public/agenda/${slug}/mes`, { params: { ano: nextAno, mes: nextMes }, timeout: 65000 }).catch(() => {});
     }, 200);
     return () => clearTimeout(t);
   }, [slug, ano, mes]);
@@ -129,7 +133,7 @@ export default function AgendaPublica() {
       return;
     }
     setLoadingHorarios(true);
-    api.get<{ horarios: Array<{ hora_inicio: string; hora_fim: string }> }>(`/public/agenda/${slug}/horarios`, { params: { data: dataEscolhida } })
+    api.get<{ horarios: Array<{ hora_inicio: string; hora_fim: string }> }>(`/public/agenda/${slug}/horarios`, { params: { data: dataEscolhida }, timeout: PUBLIC_AGENDA_TIMEOUT })
       .then((r) => setHorarios(r.data.horarios || []))
       .catch((err: { response?: { data?: { error?: string }; status?: number } }) => {
         setHorarios([]);
