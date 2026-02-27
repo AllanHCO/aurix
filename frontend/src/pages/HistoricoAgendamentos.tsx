@@ -82,7 +82,7 @@ const LIMIT = 50;
 
 export default function HistoricoAgendamentos() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const qParam = searchParams.get('q') || '';
 
   const [periodoPreset, setPeriodoPreset] = useState<PeriodoPreset>('mes');

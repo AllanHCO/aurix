@@ -187,15 +187,12 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const cacheRef = useRef<Map<Periodo, CacheEntry>>(null);
+  const cacheRef = useRef<Map<Periodo, CacheEntry>>(new Map());
   const abortRef = useRef<AbortController | null>(null);
   const requestedPeriodRef = useRef<Periodo | null>(null);
   const lastPeriodClickRef = useRef<{ periodo: Periodo; time: number }>({ periodo: 'mes', time: 0 });
 
-  const getCache = (): Map<Periodo, CacheEntry> => {
-    if (!cacheRef.current) cacheRef.current = new Map();
-    return cacheRef.current;
-  };
+  const getCache = (): Map<Periodo, CacheEntry> => cacheRef.current;
   const getCached = (p: Periodo): DashboardSummary | null => {
     const entry = getCache().get(p);
     return entry && entry.expiresAt > Date.now() ? entry.data : null;
