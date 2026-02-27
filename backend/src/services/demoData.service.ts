@@ -36,6 +36,13 @@ function addMonths(d: Date, months: number): Date {
   return out;
 }
 
+/** Data aleatória entre início e fim (inclusive). */
+function randomDate(inicio: Date, fim: Date): Date {
+  const start = inicio.getTime();
+  const end = fim.getTime();
+  return new Date(start + Math.random() * (end - start));
+}
+
 const NOMES_CLIENTES = [
   'Adriana', 'Bruno', 'Carla', 'Diego', 'Elena', 'Fernando', 'Gabriela', 'Henrique', 'Isabela', 'João',
   'Larissa', 'Miguel', 'Natália', 'Otávio', 'Paula', 'Ricardo', 'Sandra', 'Thiago', 'Úrsula', 'Vitor',

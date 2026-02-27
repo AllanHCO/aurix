@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -205,7 +206,7 @@ export const listHistorico = async (req: AuthRequest, res: Response) => {
   const inicio = inicioStr && /^\d{4}-\d{2}-\d{2}$/.test(inicioStr) ? new Date(inicioStr + 'T00:00:00') : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const fim = fimStr && /^\d{4}-\d{2}-\d{2}$/.test(fimStr) ? new Date(fimStr + 'T23:59:59') : new Date();
 
-  const where: Parameters<typeof prisma.agendamento.findMany>[0]['where'] = {
+  const where: Prisma.AgendamentoWhereInput = {
     usuario_id: userId,
     data: { gte: inicio, lte: fim }
   };
