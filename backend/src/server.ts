@@ -25,6 +25,12 @@ import devRoutes from './routes/dev.routes';
 
 dotenv.config();
 
+// Render e outros Postgres externos exigem SSL; evita 500 ao acessar /api/vendas etc.
+if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('sslmode=')) {
+  const sep = process.env.DATABASE_URL.includes('?') ? '&' : '?';
+  process.env.DATABASE_URL = process.env.DATABASE_URL + sep + 'sslmode=require';
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
