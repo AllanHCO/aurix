@@ -26,9 +26,9 @@ function randomDate(start: Date, end: Date): Date {
   return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
 }
 
-/** POST /dev/seed-demo?months=3 — apenas em desenvolvimento ou ALLOW_SEED=1. Preenche dados do usuário autenticado. */
+/** POST /dev/seed-demo?months=3 — apenas em desenvolvimento. Em produção nunca executa (proteção para clientes reais). */
 export const seedDemo = async (req: AuthRequest, res: Response) => {
-  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== '1') {
+  if (process.env.NODE_ENV === 'production') {
     throw new AppError('Seed desabilitado em produção.', 404);
   }
   const userId = req.userId!;

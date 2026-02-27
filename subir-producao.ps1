@@ -11,7 +11,7 @@ git add .
 git status
 
 # 3) Fazer o commit
-git commit -m "Deploy: dashboard, tema, performance, docs e ajustes para produção"
+git commit -m ""
 
 # 4) Enviar para o GitHub (Render e Vercel fazem deploy automático ao dar push)
 git push origin main

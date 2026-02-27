@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
-import { formatCurrency } from '../utils/format';
+import { formatCurrencyNoCents } from '../utils/format';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+const CACHE_TTL_MS = 60_000;
+const DEBOUNCE_MS = 500;
 
 type Periodo = 'semana' | 'mes' | 'trimestre';
 
@@ -24,6 +28,9 @@ interface DashboardSummary {
     clientesInativo: number;
     receitaMediaPorCliente: number;
     estimativaReceitaRisco: number;
+    clientesRecuperados?: number;
+    receitaRecuperada?: number;
+    taxaRecuperacao?: number;
   };
   receitaEmRisco?: {
     vendasPendentesTotal: number;
@@ -91,7 +98,7 @@ function DesempenhoChart({
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <span className="text-2xl font-bold tracking-tight text-text-main">{formatCurrency(valorTotal)}</span>
+        <span className="text-2xl font-bold tracking-tight text-text-main">{formatCurrencyNoCents(valorTotal)}</span>
         {variacao != null && (
           <span className={`text-sm font-medium px-3 py-1 rounded-full ${variacao >= 0 ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
             {variacao >= 0 ? '+' : ''}{variacao.toFixed(1)}% vs período anterior
@@ -170,33 +177,115 @@ function DesempenhoChart({
   );
 }
 
+type CacheEntry = { data: DashboardSummary; expiresAt: number };
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [periodo, setPeriodo] = useState<Periodo>('mes');
   const [chartToggle, setChartToggle] = useState<'receita' | 'ticket'>('receita');
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const cacheRef = useRef<Map<Periodo, CacheEntry>>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const requestedPeriodRef = useRef<Periodo | null>(null);
+  const lastPeriodClickRef = useRef<{ periodo: Periodo; time: number }>({ periodo: 'mes', time: 0 });
+
+  const getCache = (): Map<Periodo, CacheEntry> => {
+    if (!cacheRef.current) cacheRef.current = new Map();
+    return cacheRef.current;
+  };
+  const getCached = (p: Periodo): DashboardSummary | null => {
+    const entry = getCache().get(p);
+    return entry && entry.expiresAt > Date.now() ? entry.data : null;
+  };
+  const setCached = (p: Periodo, payload: DashboardSummary) => {
+    getCache().set(p, { data: payload, expiresAt: Date.now() + CACHE_TTL_MS });
+  };
+
+  const loadSummary = (requestedPeriodo: Periodo, opts?: { prefetch?: boolean }) => {
+    if (opts?.prefetch) {
+      if (getCached(requestedPeriodo)) return;
+      api
+        .get<DashboardSummary>('/dashboard/summary', { params: { periodo: requestedPeriodo } })
+        .then((res) => setCached(requestedPeriodo, res.data))
+        .catch(() => {});
+      return;
+    }
+
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    requestedPeriodRef.current = requestedPeriodo;
+
+    const cached = getCached(requestedPeriodo);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+      setRefreshing(true);
+    }
+
+    api
+      .get<DashboardSummary>('/dashboard/summary', { params: { periodo: requestedPeriodo }, signal: ac.signal })
+      .then((res) => {
+        if (requestedPeriodRef.current !== requestedPeriodo) return;
+        setCached(requestedPeriodo, res.data);
+        setData(res.data);
+        setLoading(false);
+        setRefreshing(false);
+        if (requestedPeriodo === 'mes') {
+          loadSummary('semana', { prefetch: true });
+          loadSummary('trimestre', { prefetch: true });
+        }
+      })
+      .catch((err) => {
+        if (requestedPeriodRef.current !== requestedPeriodo) return;
+        if (axios.isCancel(err) || err?.name === 'AbortError') return;
+        toast.error('Erro ao carregar o painel');
+        setLoading(false);
+        setRefreshing(false);
+      });
+  };
 
   useEffect(() => {
-    loadSummary();
+    loadSummary(periodo);
   }, [periodo]);
 
-  const loadSummary = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get<DashboardSummary>('/dashboard/summary', { params: { periodo } });
-      setData(res.data);
-    } catch {
-      toast.error('Erro ao carregar o painel');
-    } finally {
-      setLoading(false);
+  const handlePeriodoClick = (p: Periodo) => {
+    if (p === periodo) {
+      if (Date.now() - lastPeriodClickRef.current.time < DEBOUNCE_MS) return;
     }
+    lastPeriodClickRef.current = { periodo: p, time: Date.now() };
+    setPeriodo(p);
   };
 
   if (loading && !data) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-center py-20">
-        <span className="text-text-muted">Carregando...</span>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-10 space-y-8">
+        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
+          <div>
+            <div className="h-8 w-48 bg-bg-elevated rounded animate-pulse" />
+            <div className="h-4 w-32 bg-bg-elevated rounded animate-pulse mt-2" />
+          </div>
+          <div className="h-10 w-64 bg-bg-elevated rounded-full animate-pulse" />
+        </header>
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="rounded-2xl bg-bg-card border border-border p-6 h-[180px] animate-pulse">
+              <div className="h-12 w-12 rounded-2xl bg-bg-elevated" />
+              <div className="h-4 w-24 mt-4 bg-bg-elevated rounded" />
+              <div className="h-10 w-32 mt-2 bg-bg-elevated rounded" />
+            </div>
+          ))}
+        </section>
+        <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
+          <div className="lg:col-span-7 rounded-2xl bg-bg-secondary border border-border p-6 h-[320px] animate-pulse" />
+          <div className="lg:col-span-3 rounded-2xl bg-bg-card border border-border p-6 h-[280px] animate-pulse" />
+        </div>
       </div>
     );
   }
@@ -249,26 +338,33 @@ export default function Dashboard() {
               <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[var(--color-error)]" />
             )}
           </button>
-          <div className="flex rounded-full border border-border bg-bg-card overflow-hidden shadow-sm">
-            {(['semana', 'mes', 'trimestre'] as const).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPeriodo(p)}
-                className={`px-4 py-2 text-sm font-medium transition-all ${
-                  periodo === p ? 'bg-primary text-[var(--color-text-on-primary)] shadow-sm' : 'text-text-muted hover:bg-bg-elevated hover:text-text-main'
-                }`}
-              >
-                {PERIODO_LABELS[p]}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            {refreshing && data && (
+              <span className="material-symbols-outlined text-lg text-primary animate-spin" aria-hidden>
+                progress_activity
+              </span>
+            )}
+            <div className="flex rounded-full border border-border bg-bg-card overflow-hidden shadow-sm">
+              {(['semana', 'mes', 'trimestre'] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => handlePeriodoClick(p)}
+                  className={`px-4 py-2 text-sm font-medium transition-all ${
+                    periodo === p ? 'bg-primary text-[var(--color-text-on-primary)] shadow-sm' : 'text-text-muted hover:bg-bg-elevated hover:text-text-main'
+                  }`}
+                >
+                  {PERIODO_LABELS[p]}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </header>
 
-      {/* 4 KPIs no topo — padrão SaaS: ícone com fundo, título uppercase, número dominante, badge pill */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-        {/* Faturamento (card principal, mesma borda dos demais) */}
+      {/* KPIs no topo — configuração antiga; valores em moeda sem centavos para caber */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6">
+        {/* Faturamento */}
         <div className="rounded-2xl bg-bg-card border border-border shadow-sm hover:shadow-md transition-shadow p-6 relative flex flex-col">
           <div className="flex justify-between items-start">
             <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center">
@@ -281,16 +377,16 @@ export default function Dashboard() {
             )}
           </div>
           <p className="text-xs uppercase tracking-wide text-text-muted font-semibold mt-4">Faturamento bruto</p>
-          <p className="text-4xl font-bold text-text-main mt-2">{formatCurrency(resultado.faturamento)}</p>
+          <p className="text-4xl font-bold text-text-main mt-2">{formatCurrencyNoCents(resultado.faturamento)}</p>
           <p className="text-xs text-text-muted mt-1">Faturamento do período</p>
           {metaFaturamento != null && metaFaturamento > 0 ? (
             <div className="mt-4">
               <div className="flex justify-between text-xs text-text-muted mb-1.5">
-                <span>Meta do período: {formatCurrency(metaFaturamento)}</span>
+                <span>Meta: {formatCurrencyNoCents(metaFaturamento)}</span>
                 <span className="font-medium text-text-main">{progressoFaturamento}%</span>
               </div>
               <div className="h-2 bg-bg-elevated rounded-full overflow-hidden">
-                <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.min(100, progressoFaturamento)}%` }} />
+                <div className={`h-full rounded-full transition-all ${progressoFaturamento >= 100 ? 'bg-green-500' : 'bg-primary'}`} style={{ width: `${Math.min(100, progressoFaturamento)}%` }} />
               </div>
             </div>
           ) : (
@@ -328,15 +424,32 @@ export default function Dashboard() {
               <span className="material-symbols-outlined text-primary text-2xl">receipt_long</span>
             </div>
             <span className={`px-3 py-1 text-sm font-semibold rounded-full ${ticketAcimaMeta ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
-              Meta {formatCurrency(metaTicket)}
+              Meta {formatCurrencyNoCents(metaTicket)}
             </span>
           </div>
           <p className="text-xs uppercase tracking-wide text-text-muted font-semibold mt-4">Ticket médio</p>
-          <p className="text-4xl font-bold text-text-main mt-2">{formatCurrency(resultado.ticketMedio)}</p>
+          <p className="text-4xl font-bold text-text-main mt-2">{formatCurrencyNoCents(resultado.ticketMedio)}</p>
           <p className="text-xs text-text-muted mt-1">{resultado.qtdVendasPagas} vendas no período</p>
         </div>
 
-        {/* Estoque baixo (Action Needed) */}
+        {/* Clientes recuperados */}
+        <div className="rounded-2xl bg-bg-card border border-border shadow-sm hover:shadow-md transition-shadow p-6 relative flex flex-col">
+          <div className="flex justify-between items-start">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${(retencao.clientesRecuperados ?? 0) > 0 ? 'bg-green-500/15' : 'bg-bg-elevated'}`}>
+              <span className={`material-symbols-outlined text-2xl ${(retencao.clientesRecuperados ?? 0) > 0 ? 'text-green-400' : 'text-text-muted'}`}>person_add</span>
+            </div>
+            {(retencao.clientesRecuperados ?? 0) > 0 && (
+              <span className="px-3 py-1 text-sm font-semibold rounded-full bg-green-500/15 text-green-400">
+                {(retencao.taxaRecuperacao ?? 0)}%
+              </span>
+            )}
+          </div>
+          <p className="text-xs uppercase tracking-wide text-text-muted font-semibold mt-4">Clientes recuperados</p>
+          <p className="text-4xl font-bold text-text-main mt-2">{retencao.clientesRecuperados ?? 0} clientes</p>
+          <p className="text-xs text-text-muted mt-1">{formatCurrencyNoCents(retencao.receitaRecuperada ?? 0)} recuperados</p>
+        </div>
+
+        {/* Estoque baixo */}
         <button
           type="button"
           onClick={() => navigate('/produtos?filtro=estoque_baixo')}
@@ -366,42 +479,70 @@ export default function Dashboard() {
         </button>
       </section>
 
-      {/* Card Receita em risco / Dinheiro perdido */}
+      {/* Card Receita em risco / Ações */}
       <section className="rounded-2xl bg-bg-card border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
         <h2 className="text-lg font-semibold text-text-main mb-4">Receita em risco</h2>
-        {!temReceitaEmRisco ? (
-          <p className="text-text-muted flex items-center gap-2">
+        {!temReceitaEmRisco && operacional.estoqueBaixoCount === 0 ? (
+          <p className="text-text-muted flex items-center gap-2 py-2">
             <span className="text-green-400">✅</span> Nenhuma receita em risco no momento.
           </p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl bg-bg-elevated/50 border border-border p-4">
-              <p className="text-sm font-medium text-text-muted">Vendas pendentes (dinheiro travado)</p>
-              <p className="text-xl font-bold text-text-main mt-1">{formatCurrency(receitaEmRisco?.vendasPendentesTotal ?? 0)}</p>
-              <p className="text-xs text-text-muted mt-0.5">{(receitaEmRisco?.vendasPendentesCount ?? 0)} vendas pendentes</p>
-              <button
-                type="button"
-                onClick={() => navigate('/pendencias')}
-                className="mt-3 text-sm font-medium text-primary hover:underline"
-              >
-                Ver pendências
-              </button>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="rounded-xl bg-bg-elevated/50 border border-border p-4">
+                <p className="text-sm font-medium text-text-muted">Vendas pendentes (dinheiro travado)</p>
+                <p className="text-xl font-bold text-text-main mt-1">{formatCurrencyNoCents(receitaEmRisco?.vendasPendentesTotal ?? 0)}</p>
+                <p className="text-xs text-text-muted mt-0.5">{(receitaEmRisco?.vendasPendentesCount ?? 0)} vendas pendentes</p>
+                {(receitaEmRisco?.vendasPendentesCount ?? 0) > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/pendencias')}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-[var(--color-text-on-primary)] hover:bg-primary-hover transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-lg">pending_actions</span>
+                    Ver pendências
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => navigate('/pendencias')} className="mt-3 text-sm font-medium text-primary hover:underline">
+                    Ver pendências
+                  </button>
+                )}
+              </div>
+              <div className="rounded-xl bg-bg-elevated/50 border border-border p-4">
+                <p className="text-sm font-medium text-text-muted">Clientes que não voltaram</p>
+                <p className="text-lg font-bold text-text-main mt-1">
+                  Você pode perder aproximadamente {formatCurrencyNoCents(receitaEmRisco?.receitaEmRiscoNaoVoltaram ?? 0)} se não reativar.
+                </p>
+                <p className="text-xs text-text-muted mt-0.5">{(receitaEmRisco?.clientesNaoVoltaram ?? 0)} clientes compraram no período anterior e não voltaram</p>
+                {(receitaEmRisco?.clientesNaoVoltaram ?? 0) > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/clientes?tab=retencao')}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-[var(--color-text-on-primary)] hover:bg-primary-hover transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-lg">group</span>
+                    Reativar agora
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => navigate('/clientes?status=inativo')} className="mt-3 text-sm font-medium text-primary hover:underline">
+                    Reativar clientes
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="rounded-xl bg-bg-elevated/50 border border-border p-4">
-              <p className="text-sm font-medium text-text-muted">Clientes que não voltaram</p>
-              <p className="text-lg font-bold text-text-main mt-1">
-                Você pode perder aproximadamente {formatCurrency(receitaEmRisco?.receitaEmRiscoNaoVoltaram ?? 0)} se não reativar.
-              </p>
-              <p className="text-xs text-text-muted mt-0.5">{(receitaEmRisco?.clientesNaoVoltaram ?? 0)} clientes compraram no período anterior e não voltaram</p>
-              <button
-                type="button"
-                onClick={() => navigate('/clientes?status=inativo')}
-                className="mt-3 text-sm font-medium text-primary hover:underline"
-              >
-                Reativar clientes
-              </button>
-            </div>
-          </div>
+            {operacional.estoqueBaixoCount > 0 && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => navigate('/produtos?filtro=estoque_baixo')}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 px-4 py-2.5 text-sm font-medium hover:bg-amber-500/25 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">inventory_2</span>
+                  Repor estoque ({operacional.estoqueBaixoCount} itens)
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
 
@@ -468,7 +609,7 @@ export default function Dashboard() {
                       </p>
                     </div>
                     {a.valor != null && a.valor > 0 && (
-                      <span className="text-sm font-medium text-green-400 shrink-0">+{formatCurrency(a.valor)}</span>
+                      <span className="text-sm font-medium text-green-400 shrink-0">+{formatCurrencyNoCents(a.valor ?? 0)}</span>
                     )}
                   </li>
                 ))
@@ -488,7 +629,7 @@ export default function Dashboard() {
             <h2 className="text-base font-semibold text-text-main mb-2">Oportunidade de receita</h2>
             {retencao.estimativaReceitaRisco > 0 ? (
               <p className="text-sm text-text-main mb-4">
-                Você pode recuperar aproximadamente <strong>{formatCurrency(retencao.estimativaReceitaRisco)}</strong> reativando clientes inativos.
+                Você pode recuperar aproximadamente <strong>{formatCurrencyNoCents(retencao.estimativaReceitaRisco)}</strong> reativando clientes inativos.
               </p>
             ) : (
               <p className="text-sm text-text-muted mb-4">Nenhuma receita em risco no momento.</p>

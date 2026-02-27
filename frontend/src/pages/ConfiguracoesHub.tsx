@@ -27,6 +27,10 @@ interface ConfigResponse {
   meta: { meta_faturamento_mes: number | null };
 }
 
+interface DemoStatus {
+  is_demo: boolean;
+}
+
 export default function ConfiguracoesHub() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,6 +51,11 @@ export default function ConfiguracoesHub() {
   const [metaFaturamentoMes, setMetaFaturamentoMes] = useState<number | ''>('');
 
   const [slugError, setSlugError] = useState<string | null>(null);
+
+  const [demoStatus, setDemoStatus] = useState<DemoStatus | null>(null);
+  const [loadingDemo, setLoadingDemo] = useState(false);
+  const [gerandoDemo, setGerandoDemo] = useState(false);
+  const [resetandoDemo, setResetandoDemo] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -74,9 +83,25 @@ export default function ConfiguracoesHub() {
     }
   }, []);
 
+  const loadDemoStatus = useCallback(async () => {
+    try {
+      setLoadingDemo(true);
+      const res = await api.get<DemoStatus>('/configuracoes/demo/status');
+      setDemoStatus(res.data);
+    } catch {
+      setDemoStatus(null);
+    } finally {
+      setLoadingDemo(false);
+    }
+  }, []);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (import.meta.env.DEV) loadDemoStatus();
+  }, [loadDemoStatus]);
 
   const validateSlug = (value: string): string | null => {
     const v = value.trim().toLowerCase();
@@ -92,6 +117,33 @@ export default function ConfiguracoesHub() {
     if (validateSlug(v)) return null;
     const base = window.location.origin.replace(/\/$/, '');
     return `${base}/agenda/${v}`;
+  };
+
+  const handleGerarDemo = async () => {
+    try {
+      setGerandoDemo(true);
+      await api.post('/configuracoes/demo/gerar');
+      toast.success('Modo demo ativado. Dados gerados.');
+      loadDemoStatus();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Erro ao gerar dados demo');
+    } finally {
+      setGerandoDemo(false);
+    }
+  };
+
+  const handleResetarDemo = async () => {
+    if (!window.confirm('Isso vai apagar todos os dados demo (clientes, produtos, vendas, agendamentos). Continuar?')) return;
+    try {
+      setResetandoDemo(true);
+      await api.post('/configuracoes/demo/resetar');
+      toast.success('Dados demo removidos.');
+      loadDemoStatus();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Erro ao resetar dados demo');
+    } finally {
+      setResetandoDemo(false);
+    }
   };
 
   const handleSave = async () => {
@@ -217,15 +269,15 @@ export default function ConfiguracoesHub() {
         <p className="text-xs text-text-muted mt-2">Atenção deve ser menor que Inativo. Valores entre 1 e 365.</p>
       </section>
 
-      {/* Meta de faturamento (mensal) */}
+      {/* Meta de faturamento */}
       <section className="rounded-2xl border border-border bg-bg-card shadow-sm hover:shadow-md transition-shadow p-6">
         <h2 className="text-lg font-semibold text-text-main flex items-center gap-2">
-          <span className="material-symbols-outlined text-primary">savings</span>
+          <span className="material-symbols-outlined text-primary">flag</span>
           Meta de faturamento
         </h2>
-        <p className="text-sm text-text-muted mt-1 mb-4">Meta mensal em R$ usada no Dashboard para a barra de progresso do faturamento.</p>
+        <p className="text-sm text-text-muted mt-1 mb-4">Meta em R$ usada no Dashboard para a barra de progresso do faturamento.</p>
         <div>
-          <label className="block text-sm font-medium text-text-main mb-1">Meta de faturamento (R$ mensal)</label>
+          <label className="block text-sm font-medium text-text-main mb-1">Meta de faturamento (R$)</label>
           <input
             type="number"
             min={0}
@@ -299,7 +351,52 @@ export default function ConfiguracoesHub() {
         </div>
       </section>
 
-      {/* 4. Agendamentos */}
+      {/* Sistema > Modo Demo — só em desenvolvimento (build de produção não exibe esta seção) */}
+      {import.meta.env.DEV && (
+        <section className="rounded-xl border border-border bg-bg-card shadow-sm p-6">
+          <h2 className="text-lg font-semibold text-text-main flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary">settings</span>
+            Sistema
+          </h2>
+          <p className="text-sm text-text-muted mt-1 mb-4">
+            Modo Demo preenche o sistema com dados realistas (últimos 90 dias) para testes e apresentações. <strong>Não disponível em produção.</strong>
+          </p>
+          {loadingDemo ? (
+            <p className="text-sm text-text-muted">Carregando status...</p>
+          ) : (
+            <div className="space-y-3">
+              {demoStatus?.is_demo && (
+                <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                  <span className="material-symbols-outlined text-lg">check_circle</span>
+                  Modo demo ativo
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleGerarDemo}
+                  disabled={gerandoDemo}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary text-[var(--color-text-on-primary)] px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {gerandoDemo ? 'Gerando...' : (demoStatus?.is_demo ? 'Regenerar dados demo' : 'Ativar Modo Demo / Gerar dados')}
+                  <span className="material-symbols-outlined text-lg">play_circle</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetarDemo}
+                  disabled={resetandoDemo || !demoStatus?.is_demo}
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-main text-text-main px-4 py-2 text-sm font-medium hover:bg-bg-card disabled:opacity-50"
+                >
+                  {resetandoDemo ? 'Resetando...' : 'Resetar dados demo'}
+                  <span className="material-symbols-outlined text-lg">restart_alt</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Agendamentos */}
       <section className="rounded-xl border border-border bg-bg-card shadow-sm p-6">
         <h2 className="text-lg font-semibold text-text-main flex items-center gap-2">
           <span className="material-symbols-outlined text-primary">schedule</span>

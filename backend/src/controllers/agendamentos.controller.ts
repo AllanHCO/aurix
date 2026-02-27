@@ -97,6 +97,17 @@ export const listPendentes = async (req: AuthRequest, res: Response) => {
   res.json(list);
 };
 
+/** GET /agendamentos/:id — detalhe do agendamento (para modal). Valida usuario_id. */
+export const getById = async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const { id } = req.params;
+  const a = await prisma.agendamento.findFirst({
+    where: { id, usuario_id: userId }
+  });
+  if (!a) throw new AppError('Agendamento não encontrado', 404);
+  res.json(a);
+};
+
 export const getResumo = async (req: AuthRequest, res: Response) => {
   const userId = req.userId!;
   const dataStr = req.query.data as string;
@@ -114,12 +125,16 @@ export const getResumo = async (req: AuthRequest, res: Response) => {
   });
   const totalHoje = agendamentos.length;
   const pendentes = agendamentos.filter((a) => a.status === 'PENDENTE').length;
+  const checkinsHoje = agendamentos.filter((a) => a.checkin_at != null).length;
+  const noShowsHoje = agendamentos.filter((a) => a.no_show).length;
   const totalSlots = await getTotalSlotsNoDia(userId, dataStr);
   const taxaOcupacao = totalSlots > 0 ? Math.round((totalHoje / totalSlots) * 100) : null;
 
   res.json({
     totalHoje,
     pendentes,
+    checkinsHoje,
+    noShowsHoje,
     taxaOcupacao: taxaOcupacao != null ? taxaOcupacao : undefined
   });
 };
@@ -164,6 +179,104 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
   const updated = await prisma.agendamento.update({
     where: { id },
     data: { status }
+  });
+  const { invalidateAgendaMesCache } = await import('../services/availability.service');
+  invalidateAgendaMesCache(a.usuario_id);
+  invalidatePrefix(`dashboard:summary:${userId}:`);
+  res.json(updated);
+};
+
+/** GET /agendamentos/historico?inicio=&fim=&status=&q=&page=&limit= — listagem filtrada e paginada */
+const historicoStatusValues = ['all', 'checkin', 'pendente', 'no_show', 'cancelado'] as const;
+export const listHistorico = async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const inicioStr = (req.query.inicio as string)?.trim();
+  const fimStr = (req.query.fim as string)?.trim();
+  const statusFilter = (req.query.status as string)?.trim() || 'all';
+  const q = (req.query.q as string)?.trim() || '';
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+  const skip = (page - 1) * limit;
+
+  if (!historicoStatusValues.includes(statusFilter as (typeof historicoStatusValues)[number])) {
+    throw new AppError('status deve ser: all, checkin, pendente, no_show ou cancelado.', 400);
+  }
+
+  const inicio = inicioStr && /^\d{4}-\d{2}-\d{2}$/.test(inicioStr) ? new Date(inicioStr + 'T00:00:00') : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const fim = fimStr && /^\d{4}-\d{2}-\d{2}$/.test(fimStr) ? new Date(fimStr + 'T23:59:59') : new Date();
+
+  const where: Parameters<typeof prisma.agendamento.findMany>[0]['where'] = {
+    usuario_id: userId,
+    data: { gte: inicio, lte: fim }
+  };
+
+  if (statusFilter === 'checkin') {
+    where.checkin_at = { not: null };
+  } else if (statusFilter === 'pendente') {
+    where.status = { in: ['PENDENTE', 'CONFIRMADO'] };
+    where.checkin_at = null;
+    where.no_show = false;
+  } else if (statusFilter === 'no_show') {
+    where.no_show = true;
+  } else if (statusFilter === 'cancelado') {
+    where.status = 'CANCELADO';
+  }
+
+  if (q.length >= 2) {
+    const qNorm = q.replace(/\D/g, '');
+    const orConditions: Array<{ nome_cliente?: { contains: string; mode: 'insensitive' }; telefone_cliente?: { contains: string } }> = [
+      { nome_cliente: { contains: q, mode: 'insensitive' } }
+    ];
+    if (qNorm.length >= 4) orConditions.push({ telefone_cliente: { contains: qNorm } });
+    where.OR = orConditions;
+  }
+
+  const [list, total] = await Promise.all([
+    prisma.agendamento.findMany({
+      where,
+      orderBy: [{ data: 'desc' }, { hora_inicio: 'desc' }],
+      skip,
+      take: limit
+    }),
+    prisma.agendamento.count({ where })
+  ]);
+
+  res.json({ list, total, page, limit });
+};
+
+/** PATCH /agendamentos/:id/checkin — registra comparecimento */
+export const checkin = async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const { id } = req.params;
+  const a = await prisma.agendamento.findFirst({
+    where: { id, usuario_id: userId }
+  });
+  if (!a) throw new AppError('Agendamento não encontrado', 404);
+  if (a.status === 'CANCELADO') throw new AppError('Agendamento cancelado não pode receber check-in.', 400);
+
+  const updated = await prisma.agendamento.update({
+    where: { id },
+    data: { checkin_at: new Date(), no_show: false }
+  });
+  const { invalidateAgendaMesCache } = await import('../services/availability.service');
+  invalidateAgendaMesCache(a.usuario_id);
+  invalidatePrefix(`dashboard:summary:${userId}:`);
+  res.json(updated);
+};
+
+/** PATCH /agendamentos/:id/no-show — marca não comparecimento */
+export const noShow = async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const { id } = req.params;
+  const a = await prisma.agendamento.findFirst({
+    where: { id, usuario_id: userId }
+  });
+  if (!a) throw new AppError('Agendamento não encontrado', 404);
+  if (a.status === 'CANCELADO') throw new AppError('Agendamento cancelado.', 400);
+
+  const updated = await prisma.agendamento.update({
+    where: { id },
+    data: { no_show: true, checkin_at: null }
   });
   const { invalidateAgendaMesCache } = await import('../services/availability.service');
   invalidateAgendaMesCache(a.usuario_id);

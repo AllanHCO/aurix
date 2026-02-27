@@ -23,7 +23,15 @@ interface PublicConfig {
 }
 
 const BRAND_PRIMARY_FALLBACK = '#2563eb';
-const OBSERVACAO_MAX = 300;
+const OBSERVACAO_MAX = 500;
+
+/** Sanitiza texto: trim e remove tags/scripts. */
+function sanitizeObservacao(s: string): string {
+  return s
+    .trim()
+    .replace(/<[^>]*>/g, '')
+    .slice(0, OBSERVACAO_MAX);
+}
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -68,18 +76,25 @@ export default function AgendaPublica() {
     setLoading(true);
     setBrandingError(false);
     const opts = { timeout: 65000 };
+    const urlBranding = `/public/agenda/${slug}/branding`;
+    const urlConfig = `/public/agenda/${slug}/public-config`;
     Promise.all([
-      api.get<Branding>(`/public/agenda/${slug}/branding`, opts),
-      api.get<PublicConfig>(`/public/agenda/${slug}/public-config`, opts).catch(() => null)
+      api.get<Branding>(urlBranding, opts),
+      api.get<PublicConfig>(urlConfig, opts).catch((e) => {
+        console.warn('[AgendaPublica] public-config falhou (usando defaults):', urlConfig, e.response?.status, e.response?.data?.error || e.message);
+        return null;
+      })
     ])
       .then(([brandRes, configRes]) => {
         if (cancelled) return;
         setBranding(brandRes.data);
         setPublicConfig(configRes?.data ?? null);
         document.title = `Agendamento - ${brandRes.data.nomeOrganizacao}`;
+        if (process.env.NODE_ENV === 'development') console.log('[AgendaPublica] branding + config OK para slug:', slug);
       })
-      .catch(() => {
+      .catch((err: { response?: { status: number; data?: { error?: string } }; message?: string }) => {
         if (!cancelled) {
+          console.error('[AgendaPublica] Falha ao carregar agenda:', urlBranding, 'status:', err.response?.status, 'erro:', err.response?.data?.error || err.message);
           setBranding(null);
           setPublicConfig(null);
           setBrandingError(true);
@@ -174,7 +189,7 @@ export default function AgendaPublica() {
           hora_inicio: horaEscolhida,
           nome_cliente: nomeTrim,
           telefone_cliente: telDigits,
-          observacao: observacao.trim() || undefined
+          observacao: observacao ? sanitizeObservacao(observacao) || undefined : undefined
         },
         { headers: { 'Idempotency-Key': idempotencyKey } }
       );
@@ -248,8 +263,14 @@ export default function AgendaPublica() {
   }
   if (brandingError || !branding) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg-main p-4">
-        <p className="text-text-main text-center">Link inválido ou agenda não encontrada.</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-bg-main p-6">
+        <p className="text-text-main text-center text-lg mb-2">Link de agendamento inválido ou desativado.</p>
+        <p className="text-text-muted text-center text-sm mb-6 max-w-sm">
+          Verifique o endereço ou entre em contato com o estabelecimento para obter o link correto.
+        </p>
+        {typeof window !== 'undefined' && window.location.origin.includes('localhost') && slug && (
+          <p className="text-text-muted text-xs mb-4">Slug acessado: &quot;{slug}&quot;</p>
+        )}
       </div>
     );
   }

@@ -2,9 +2,29 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
-import { formatDate } from '../utils/format';
+import { formatDate, formatCurrency } from '../utils/format';
 import ClienteModal from '../components/ClienteModal';
 import ClienteImportModal from '../components/ClienteImportModal';
+
+type TabClientes = 'lista' | 'retencao';
+type PeriodoRetencao = 'semana' | 'mes' | 'trimestre';
+
+interface ClienteEmRisco {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  ultimaCompra: string;
+  diasSemComprar: number;
+  receitaMedia: number;
+}
+
+interface ClienteRecuperado {
+  id: string;
+  nome: string;
+  dataNovaCompra: string;
+  valorVenda: number;
+  diasFicouSemComprar: number;
+}
 
 export type ClienteStatusAuto = 'ativo' | 'atencao' | 'inativo';
 
@@ -52,6 +72,11 @@ export default function Clientes() {
     msg_whatsapp_inativo: string;
     msg_whatsapp_pos_venda: string | null;
   } | null>(null);
+  const [tab, setTab] = useState<TabClientes>(() => (searchParams.get('tab') === 'retencao' ? 'retencao' : 'lista'));
+  const [periodoRetencao, setPeriodoRetencao] = useState<PeriodoRetencao>('mes');
+  const [clientesEmRisco, setClientesEmRisco] = useState<ClienteEmRisco[]>([]);
+  const [clientesRecuperados, setClientesRecuperados] = useState<ClienteRecuperado[]>([]);
+  const [loadingRetencao, setLoadingRetencao] = useState(false);
 
   useEffect(() => {
     api.get<{
@@ -132,7 +157,30 @@ export default function Clientes() {
     else if (searchParams.get('reativar') === '1') setFiltro('TODOS');
     else if (searchParams.get('novos_no_mes') === '1') setFiltro('novos_no_mes');
     else if (searchParams.get('retornaram_no_mes') === '1') setFiltro('retornaram_no_mes');
+    if (searchParams.get('tab') === 'retencao') setTab('retencao');
+    else if (searchParams.get('tab') === 'lista') setTab('lista');
   }, [searchParams]);
+
+  const loadRetencao = useCallback(async () => {
+    setLoadingRetencao(true);
+    try {
+      const res = await api.get<{ periodo: PeriodoRetencao; clientesEmRisco: ClienteEmRisco[]; clientesRecuperados: ClienteRecuperado[] }>('/clientes/retencao', {
+        params: { periodo: periodoRetencao }
+      });
+      setClientesEmRisco(res.data.clientesEmRisco ?? []);
+      setClientesRecuperados(res.data.clientesRecuperados ?? []);
+    } catch {
+      toast.error('Erro ao carregar dados de retenção');
+      setClientesEmRisco([]);
+      setClientesRecuperados([]);
+    } finally {
+      setLoadingRetencao(false);
+    }
+  }, [periodoRetencao]);
+
+  useEffect(() => {
+    if (tab === 'retencao') loadRetencao();
+  }, [tab, loadRetencao]);
 
   useEffect(() => {
     loadClientes(paginaAtual);
@@ -234,6 +282,16 @@ export default function Clientes() {
     );
   }
 
+  const setTabAndUrl = (t: TabClientes) => {
+    setTab(t);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (t === 'lista') next.delete('tab');
+      else next.set('tab', t);
+      return next;
+    });
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -263,6 +321,101 @@ export default function Clientes() {
         </div>
       </div>
 
+      {/* Abas Lista | Retenção */}
+      <div className="flex rounded-full border border-border bg-bg-card p-1 w-fit">
+        <button
+          type="button"
+          onClick={() => setTabAndUrl('lista')}
+          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${tab === 'lista' ? 'bg-primary text-[var(--color-text-on-primary)]' : 'text-text-muted hover:text-text-main'}`}
+        >
+          Lista
+        </button>
+        <button
+          type="button"
+          onClick={() => setTabAndUrl('retencao')}
+          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${tab === 'retencao' ? 'bg-primary text-[var(--color-text-on-primary)]' : 'text-text-muted hover:text-text-main'}`}
+        >
+          Retenção
+        </button>
+      </div>
+
+      {tab === 'retencao' ? (
+        <>
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-sm text-text-muted">Período:</span>
+            {(['semana', 'mes', 'trimestre'] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPeriodoRetencao(p)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium ${periodoRetencao === p ? 'bg-primary text-[var(--color-text-on-primary)]' : 'bg-bg-card border border-border text-text-main hover:bg-bg-elevated'}`}
+              >
+                {p === 'semana' ? 'Semana' : p === 'mes' ? 'Mês' : 'Trimestre'}
+              </button>
+            ))}
+          </div>
+          {loadingRetencao ? (
+            <div className="py-12 text-center text-text-muted">Carregando retenção...</div>
+          ) : (
+            <div className="space-y-8">
+              <section className="rounded-xl border border-border bg-bg-card p-6">
+                <h2 className="text-lg font-semibold text-text-main mb-4">Clientes em risco</h2>
+                <p className="text-sm text-text-muted mb-4">Compraram no período anterior e não compraram no atual.</p>
+                {clientesEmRisco.length === 0 ? (
+                  <p className="text-text-muted">Nenhum cliente em risco neste período.</p>
+                ) : (
+                  <ul className="space-y-3">
+                    {clientesEmRisco.map((c) => {
+                      const tel = c.telefone?.replace(/\D/g, '');
+                      const telNum = tel && tel.length >= 10 ? (tel.startsWith('0') ? tel.slice(1) : tel) : null;
+                      return (
+                        <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-border last:border-0">
+                          <div>
+                            <p className="font-medium text-text-main">{c.nome}</p>
+                            <p className="text-sm text-text-muted">Última compra: {formatDate(c.ultimaCompra)} · {c.diasSemComprar} dias sem comprar · Média {formatCurrency(c.receitaMedia)}</p>
+                          </div>
+                          {telNum && (
+                            <a
+                              href={`https://wa.me/55${telNum}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-lg bg-green-600 text-white px-3 py-2 text-sm font-medium hover:bg-green-700"
+                            >
+                              <span className="material-symbols-outlined text-lg">chat</span>
+                              WhatsApp
+                            </a>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+              <section className="rounded-xl border border-border bg-bg-card p-6">
+                <h2 className="text-lg font-semibold text-text-main mb-4">Clientes recuperados</h2>
+                <p className="text-sm text-text-muted mb-4">Não compraram no período anterior e voltaram a comprar no atual.</p>
+                {clientesRecuperados.length === 0 ? (
+                  <p className="text-text-muted">Nenhum cliente recuperado neste período.</p>
+                ) : (
+                  <ul className="space-y-3">
+                    {clientesRecuperados.map((c) => (
+                      <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-border last:border-0">
+                        <div>
+                          <p className="font-medium text-text-main">{c.nome}</p>
+                          <p className="text-sm text-text-muted">
+                            Nova compra: {formatDate(c.dataNovaCompra)} · {formatCurrency(c.valorVenda)} · Ficou {c.diasFicouSemComprar} dias sem comprar
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
       {/* Busca */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 relative">
@@ -451,6 +604,8 @@ export default function Clientes() {
               </div>
             </div>
           )}
+        </>
+      )}
         </>
       )}
 

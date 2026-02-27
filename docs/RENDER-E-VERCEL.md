@@ -126,3 +126,17 @@ Plataforma focada em **frontend** e **funções serverless**: sites estáticos (
 - **Vercel**: Focada em colocar **frontend** no ar com build automático, CDN e deploy a cada push; ideal para React/Vite/Next.
 
 Os dois podem trabalhar juntos: **backend no Render, frontend na Vercel**, com o frontend apontando para a URL da API no Render (`VITE_API_URL`).
+
+---
+
+## Link público de agendamento (/agenda/:slug)
+
+A rota **/agenda/:slug** (ex: `/agenda/minhaempresa`) é **pública** (sem login). Para funcionar:
+
+1. **Frontend (SPA):** Se o frontend for servido como Static Site no **Render**, configure um **rewrite** para que todas as rotas que não forem arquivo estático sirvam `index.html`:
+   - No painel do Render → Static Site → **Redirects/Rewrites**: adicione uma regra do tipo **Rewrite**: `/*` → `/index.html` (ou conforme a opção disponível no painel).
+   - Assim, ao acessar `https://seusite.onrender.com/agenda/minhaempresa` o servidor entrega o `index.html` e o React Router exibe a página de agendamento.
+
+2. **Vercel:** O projeto já tem `frontend/vercel.json` com `"rewrites": [{"source": "/(.*)", "destination": "/index.html"}]`, então `/agenda/:slug` já cai no SPA.
+
+3. **Backend:** As rotas públicas são prefixadas com `/api/public/agenda` e não exigem autenticação. CORS está liberado para a origem do frontend (e para rotas públicas aceita qualquer origem).

@@ -184,14 +184,28 @@ export async function getMesDisponibilidade(
     })
   ]);
 
-  if (!config) {
-    const empty: MesDisponibilidadeResponse = { ano, mes, dias: [] };
-    return empty;
-  }
-
-  const { minDataStr, maxDataStr } = getMinMaxDataStr(config.antecedencia_minima_dias, config.limite_maximo_dias);
-  const duracao = config.duracao_padrao_minutos;
-  const buffer = config.buffer_minutos;
+  // Fallback quando não há configuração: usa defaults para permitir agendamento (seg–sex 08:00–18:00)
+  const defaultConfig = {
+    antecedencia_minima_dias: 0,
+    limite_maximo_dias: 30,
+    duracao_padrao_minutos: 30,
+    buffer_minutos: 0,
+    hora_inicio_funcionamento: '08:00',
+    hora_fim_funcionamento: '18:00'
+  };
+  const cfg = (config ?? defaultConfig) as typeof config & typeof defaultConfig;
+  const dispListFallback: { dia_semana: number; ativo: boolean; hora_inicio: string; hora_fim: string }[] =
+    dispList.length > 0 ? dispList : [1, 2, 3, 4, 5].map((dia_semana) => ({
+      dia_semana,
+      ativo: true,
+      hora_inicio: cfg.hora_inicio_funcionamento ?? '08:00',
+      hora_fim: cfg.hora_fim_funcionamento ?? '18:00'
+    }));
+  const antecedencia = config?.antecedencia_minima_dias ?? 0;
+  const limite = config?.limite_maximo_dias ?? 30;
+  const { minDataStr, maxDataStr } = getMinMaxDataStr(antecedencia, limite);
+  const duracao = cfg.duracao_padrao_minutos ?? 30;
+  const buffer = cfg.buffer_minutos ?? 0;
 
   const dias: MesDisponibilidadeResponse['dias'] = [];
   const agendamentosPorData = new Map<string, number>();
@@ -223,7 +237,13 @@ export async function getMesDisponibilidade(
       continue;
     }
 
-    const janela = getJanelaDiaFromData(dispList, config, diaSemana);
+    // Sem config: só seg–sex (1–5) disponíveis
+    if (!config && (diaSemana === 0 || diaSemana === 6)) {
+      dias.push({ data: dataStr, status: 'INDISPONIVEL' });
+      d.setDate(d.getDate() + 1);
+      continue;
+    }
+    const janela = getJanelaDiaFromData(dispListFallback, cfg, diaSemana);
     if (!janela) {
       dias.push({ data: dataStr, status: 'INDISPONIVEL' });
       d.setDate(d.getDate() + 1);
@@ -324,6 +344,9 @@ export async function getDiasDisponiveis(
   return dias;
 }
 
+const DEFAULT_HORA_INICIO = '08:00';
+const DEFAULT_HORA_FIM = '18:00';
+
 async function getJanelaDia(usuarioId: string, diaSemana: number): Promise<{ inicioMin: number; fimMin: number } | null> {
   const disp = await prisma.disponibilidadeSemanal.findUnique({
     where: { usuario_id_dia_semana: { usuario_id: usuarioId, dia_semana: diaSemana } }
@@ -336,9 +359,12 @@ async function getJanelaDia(usuarioId: string, diaSemana: number): Promise<{ ini
   const config = await prisma.configuracaoAgenda.findUnique({
     where: { usuario_id: usuarioId }
   });
-  if (!config) return null;
-  const inicioMin = parseTime(config.hora_inicio_funcionamento);
-  const fimMin = parseTime(config.hora_fim_funcionamento);
+  const horaInicio = config?.hora_inicio_funcionamento ?? DEFAULT_HORA_INICIO;
+  const horaFim = config?.hora_fim_funcionamento ?? DEFAULT_HORA_FIM;
+  // Seg–sex quando não há config; com config usa para qualquer dia
+  if (!config && (diaSemana === 0 || diaSemana === 6)) return null;
+  const inicioMin = parseTime(horaInicio);
+  const fimMin = parseTime(horaFim);
   if (isNaN(inicioMin) || isNaN(fimMin) || inicioMin >= fimMin) return null;
   return { inicioMin, fimMin };
 }
@@ -350,9 +376,9 @@ export async function getHorariosDisponiveis(
   const config = await prisma.configuracaoAgenda.findUnique({
     where: { usuario_id: usuarioId }
   });
-  if (!config) return [];
-
-  const { minDataStr, maxDataStr } = getMinMaxDataStr(config.antecedencia_minima_dias, config.limite_maximo_dias);
+  const antecedencia = config?.antecedencia_minima_dias ?? 0;
+  const limite = config?.limite_maximo_dias ?? 30;
+  const { minDataStr, maxDataStr } = getMinMaxDataStr(antecedencia, limite);
   if (data < minDataStr || data > maxDataStr) return [];
 
   const dataDate = new Date(data + 'T12:00:00');
@@ -362,8 +388,8 @@ export async function getHorariosDisponiveis(
 
   const { inicioMin, fimMin } = janela;
 
-  const duracao = config.duracao_padrao_minutos;
-  const buffer = config.buffer_minutos;
+  const duracao = config?.duracao_padrao_minutos ?? 30;
+  const buffer = config?.buffer_minutos ?? 0;
   const rawSlots = generateRawSlots(inicioMin, fimMin, duracao, buffer);
 
   const bloqueiosRec = await prisma.bloqueio.findMany({

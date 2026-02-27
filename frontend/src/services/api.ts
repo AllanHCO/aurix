@@ -10,6 +10,15 @@ export const api = axios.create({
   }
 });
 
+// Garantir que o token seja enviado em toda requisição (evita perder após refresh/navegação)
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -21,7 +30,9 @@ api.interceptors.response.use(
     }
     if (error.response?.status === 401) {
       const isLoginPage = window.location.pathname === '/login';
-      if (!isLoginPage) {
+      const isPublicAgenda = window.location.pathname.startsWith('/agenda/');
+      if (!isLoginPage && !isPublicAgenda) {
+        console.error('[api] 401 em:', error.config?.url, error.response?.data);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = '/login';

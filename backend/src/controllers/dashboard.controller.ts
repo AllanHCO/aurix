@@ -156,8 +156,14 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
   });
 };
 
-/** GET /dashboard/summary — painel estratégico: financeiro, retenção, operacional. Query: periodo=semana|mes|trimestre (default: mes). */
+const CACHE_TTL_MS = 60_000; // 60s
+const LIMIT_PRODUTOS_ESTOQUE_BAIXO = 3;
+const LIMIT_PROXIMOS_AGENDAMENTOS = 3;
+const LIMIT_ATIVIDADES_RECENTES = 8;
+
+/** GET /dashboard/summary — painel estratégico. Otimizado: cache 60s, queries em paralelo, payload limitado. */
 export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
+  const totalStart = Date.now();
   const userId = req.userId!;
   const periodo = (req.query.periodo as PeriodoSummary) || 'mes';
   const periodoSafe: PeriodoSummary = ['semana', 'mes', 'trimestre'].includes(periodo) ? periodo : 'mes';
@@ -169,52 +175,51 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
   }
 
   const { inicio, fim, inicioAnt, fimAnt } = getRangesPeriodo(periodoSafe);
+  const hoje = new Date();
 
-  const settings = await prisma.companySettings.findUnique({
-    where: { usuario_id: userId },
-    select: { meta_faturamento_mes: true }
-  }).catch(() => null);
-  const metaFaturamentoMes = settings?.meta_faturamento_mes != null ? Number(settings.meta_faturamento_mes) : null;
-
-  const [configAgenda, totalProdutos, totalVendasCount] = await Promise.all([
+  // Batch 1: config + módulos (não dependem do período)
+  const t1 = Date.now();
+  const [settings, configAgenda, totalProdutos, totalVendasCount, retencaoThresholds] = await Promise.all([
+    prisma.companySettings.findUnique({ where: { usuario_id: userId }, select: { meta_faturamento_mes: true } }).catch(() => null),
     prisma.configuracaoAgenda.findUnique({ where: { usuario_id: userId } }),
     prisma.produto.count(),
-    prisma.venda.count({ where: { usuario_id: userId } })
+    prisma.venda.count({ where: { usuario_id: userId } }),
+    getRetencaoThresholds(userId)
   ]);
+  const metaFaturamentoMes = settings?.meta_faturamento_mes != null ? Number(settings.meta_faturamento_mes) : null;
   const modulos = {
     agendamento: !!configAgenda,
     produtos: totalProdutos > 0,
     vendas: totalVendasCount > 0
   };
-
-  const { dias_atencao, dias_inativo } = await getRetencaoThresholds(userId);
-  const hoje = new Date();
-  let clientesAtencao = 0;
-  let clientesInativo = 0;
-  // Última venda PAGA por cliente (somente clientes deste usuário)
-  const ultimaVendaPorCliente = await prisma.venda.groupBy({
-    by: ['cliente_id'],
-    where: { usuario_id: userId, status: 'PAGO' },
-    _max: { createdAt: true }
-  });
-  for (const row of ultimaVendaPorCliente) {
-    const ultima = row._max.createdAt;
-    if (!ultima) continue;
-    const diffMs = hoje.getTime() - ultima.getTime();
-    const dias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (dias < dias_atencao) continue;
-    if (dias < dias_inativo) clientesAtencao++;
-    else clientesInativo++;
+  const { dias_atencao, dias_inativo } = retencaoThresholds;
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[dashboard/summary] batch1 (config): ${Date.now() - t1}ms`);
   }
 
+  // Batch 2: todas as métricas em paralelo (retenção + resultado + operacional + gráfico)
+  const t2 = Date.now();
   const [
+    ultimaVendaPorCliente,
     faturamentoAgg,
     faturamentoAntResult,
     clientesUnicosPeriodoAgg,
     estoqueBaixoRows,
     produtosEstoqueBaixo,
-    proximosAgendamentos
+    vendasPendentesAgg,
+    vendasPendentesCount,
+    clientesPeriodoAnteriorAgg,
+    vendasAtual,
+    vendasAnterior,
+    ultimasVendas,
+    proximosAgendamentos,
+    agendamentosRecentes
   ] = await Promise.all([
+    prisma.venda.groupBy({
+      by: ['cliente_id'],
+      where: { usuario_id: userId, status: 'PAGO' },
+      _max: { createdAt: true }
+    }),
     prisma.venda.aggregate({
       where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicio, lte: fim } },
       _sum: { total: true },
@@ -232,8 +237,33 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
       SELECT COUNT(*)::bigint AS count FROM produtos WHERE estoque_atual <= estoque_minimo
     `,
     prisma.$queryRaw<Array<{ id: string; nome: string; estoque_atual: number; estoque_minimo: number }>>`
-      SELECT id, nome, estoque_atual, estoque_minimo FROM produtos WHERE estoque_atual <= estoque_minimo LIMIT 10
+      SELECT id, nome, estoque_atual, estoque_minimo FROM produtos WHERE estoque_atual <= estoque_minimo LIMIT ${LIMIT_PRODUTOS_ESTOQUE_BAIXO}
     `,
+    prisma.venda.aggregate({
+      where: { usuario_id: userId, status: 'PENDENTE', createdAt: { gte: inicio, lte: fim } },
+      _sum: { total: true }
+    }),
+    prisma.venda.count({
+      where: { usuario_id: userId, status: 'PENDENTE', createdAt: { gte: inicio, lte: fim } }
+    }),
+    prisma.venda.groupBy({
+      by: ['cliente_id'],
+      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicioAnt, lte: fimAnt } }
+    }),
+    prisma.venda.findMany({
+      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicio, lte: fim } },
+      select: { total: true, createdAt: true }
+    }),
+    prisma.venda.findMany({
+      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicioAnt, lte: fimAnt } },
+      select: { total: true, createdAt: true }
+    }),
+    prisma.venda.findMany({
+      where: { usuario_id: userId },
+      orderBy: { createdAt: 'desc' },
+      take: LIMIT_ATIVIDADES_RECENTES,
+      select: { id: true, total: true, createdAt: true, cliente: { select: { nome: true } } }
+    }),
     modulos.agendamento
       ? prisma.agendamento.findMany({
           where: {
@@ -242,11 +272,34 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
             status: { in: ['PENDENTE', 'CONFIRMADO'] }
           },
           orderBy: [{ data: 'asc' }, { hora_inicio: 'asc' }],
-          take: 5,
+          take: LIMIT_PROXIMOS_AGENDAMENTOS,
           select: { id: true, nome_cliente: true, data: true, hora_inicio: true, status: true }
+        })
+      : Promise.resolve([]),
+    modulos.agendamento
+      ? prisma.agendamento.findMany({
+          where: { usuario_id: userId, data: { gte: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()) } },
+          orderBy: [{ data: 'asc' }, { hora_inicio: 'asc' }],
+          take: 5,
+          select: { id: true, nome_cliente: true, data: true, hora_inicio: true }
         })
       : Promise.resolve([])
   ]);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[dashboard/summary] batch2 (métricas): ${Date.now() - t2}ms`);
+  }
+
+  let clientesAtencao = 0;
+  let clientesInativo = 0;
+  for (const row of ultimaVendaPorCliente) {
+    const ultima = row._max.createdAt;
+    if (!ultima) continue;
+    const diffMs = hoje.getTime() - ultima.getTime();
+    const dias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (dias < dias_atencao) continue;
+    if (dias < dias_inativo) clientesAtencao++;
+    else clientesInativo++;
+  }
 
   const faturamento = Number(faturamentoAgg._sum.total ?? 0);
   const faturamentoAnterior = Number(faturamentoAntResult._sum.total ?? 0);
@@ -263,20 +316,6 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
   const receitaMediaPorCliente = clientesQueCompraramNoPeriodo > 0 ? faturamento / clientesQueCompraramNoPeriodo : 0;
   const estimativaReceitaRisco = Math.round(receitaMediaPorCliente * clientesInativo);
 
-  // Vendas pendentes no período (dinheiro travado)
-  const [vendasPendentesAgg, vendasPendentesCount, clientesPeriodoAnteriorAgg] = await Promise.all([
-    prisma.venda.aggregate({
-      where: { usuario_id: userId, status: 'PENDENTE', createdAt: { gte: inicio, lte: fim } },
-      _sum: { total: true }
-    }),
-    prisma.venda.count({
-      where: { usuario_id: userId, status: 'PENDENTE', createdAt: { gte: inicio, lte: fim } }
-    }),
-    prisma.venda.groupBy({
-      by: ['cliente_id'],
-      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicioAnt, lte: fimAnt } }
-    })
-  ]);
   const vendasPendentesTotal = Number(vendasPendentesAgg._sum.total ?? 0);
   const clientesQueCompraramNoAnterior = new Set(
     clientesPeriodoAnteriorAgg.map((v) => v.cliente_id),
@@ -287,25 +326,38 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
   const clientesNaoVoltaramIds = [...clientesQueCompraramNoAnterior].filter((id) => !clientesQueCompraramNoAtual.has(id));
   const receitaEmRiscoNaoVoltaram = Math.round(receitaMediaPorCliente * clientesNaoVoltaramIds.length);
 
+  // Clientes recuperados: NÃO compraram no período anterior e compraram (PAGO) no atual
+  const clientesRecuperadosIds = [...clientesQueCompraramNoAtual].filter((id) => !clientesQueCompraramNoAnterior.has(id));
+  const clientesEmRiscoNoPeriodoAnterior = clientesNaoVoltaramIds.length;
+  let receitaRecuperada = 0;
+  if (clientesRecuperadosIds.length > 0) {
+    const t3 = Date.now();
+    const aggRecuperada = await prisma.venda.aggregate({
+      where: {
+        usuario_id: userId,
+        status: 'PAGO',
+        createdAt: { gte: inicio, lte: fim },
+        cliente_id: { in: clientesRecuperadosIds }
+      },
+      _sum: { total: true }
+    });
+    receitaRecuperada = Number(aggRecuperada._sum.total ?? 0);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[dashboard/summary] batch3 (aggRecuperada): ${Date.now() - t3}ms`);
+    }
+  }
+  const taxaRecuperacao =
+    clientesEmRiscoNoPeriodoAnterior > 0
+      ? Math.round((clientesRecuperadosIds.length / clientesEmRiscoNoPeriodoAnterior) * 100)
+      : (clientesRecuperadosIds.length > 0 ? 100 : 0);
+
   const estoqueBaixoCount = Number(estoqueBaixoRows[0]?.count ?? 0);
   const produtosEstoqueBaixoList = ((produtosEstoqueBaixo || []) as Array<{
     id: string;
     nome: string;
     estoque_atual: number;
     estoque_minimo: number;
-  }>).slice(0, 5);
-
-  // Séries do gráfico: agregar vendas por bucket (dia da semana / semana do mês / mês do trimestre)
-  const [vendasAtual, vendasAnterior] = await Promise.all([
-    prisma.venda.findMany({
-      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicio, lte: fim } },
-      select: { total: true, createdAt: true }
-    }),
-    prisma.venda.findMany({
-      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicioAnt, lte: fimAnt } },
-      select: { total: true, createdAt: true }
-    })
-  ]);
+  }>).slice(0, LIMIT_PRODUTOS_ESTOQUE_BAIXO);
 
   const bucketize = (vendas: { total: unknown; createdAt: Date }[], period: PeriodoSummary, rangeStart: Date) => {
     const n = period === 'semana' ? 7 : period === 'mes' ? 5 : 3;
@@ -346,41 +398,27 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
     ticketMedioAnterior: bAnterior.ticket
   };
 
-  // Atividades recentes: últimas vendas + próximos agendamentos, ordenados por data
-  const ultimasVendas = await prisma.venda.findMany({
-    where: { usuario_id: userId },
-    orderBy: { createdAt: 'desc' },
-    take: 8,
-    select: { id: true, total: true, createdAt: true, cliente: { select: { nome: true } } }
-  });
+  // Atividades recentes (já vêm do batch2: ultimasVendas + agendamentosRecentes)
   const atividadesRecentes: Array<{ tipo: string; id: string; nome: string; horario: string; valor?: number }> = [];
   for (const v of ultimasVendas) {
     atividadesRecentes.push({
       tipo: 'venda',
       id: v.id,
-      nome: v.cliente?.nome ?? 'Cliente',
+      nome: (v.cliente as { nome?: string } | null)?.nome ?? 'Cliente',
       horario: v.createdAt.toISOString(),
       valor: Number(v.total ?? 0)
     });
   }
-  if (modulos.agendamento) {
-    const agendamentosRecentes = await prisma.agendamento.findMany({
-      where: { usuario_id: userId, data: { gte: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()) } },
-      orderBy: [{ data: 'asc' }, { hora_inicio: 'asc' }],
-      take: 5,
-      select: { id: true, nome_cliente: true, data: true, hora_inicio: true }
+  for (const a of agendamentosRecentes) {
+    atividadesRecentes.push({
+      tipo: 'agendamento',
+      id: a.id,
+      nome: a.nome_cliente,
+      horario: new Date(a.data.getFullYear(), a.data.getMonth(), a.data.getDate()).toISOString().slice(0, 10) + 'T' + (a.hora_inicio ?? '00:00') + ':00'
     });
-    for (const a of agendamentosRecentes) {
-      atividadesRecentes.push({
-        tipo: 'agendamento',
-        id: a.id,
-        nome: a.nome_cliente,
-        horario: new Date(a.data.getFullYear(), a.data.getMonth(), a.data.getDate()).toISOString().slice(0, 10) + 'T' + a.hora_inicio + ':00'
-      });
-    }
   }
   atividadesRecentes.sort((a, b) => new Date(b.horario).getTime() - new Date(a.horario).getTime());
-  const atividadesRecentesSlice = atividadesRecentes.slice(0, 8);
+  const atividadesRecentesSlice = atividadesRecentes.slice(0, LIMIT_ATIVIDADES_RECENTES);
 
   const payload = {
     periodo: periodoSafe,
@@ -397,7 +435,10 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
       clientesAtencao,
       clientesInativo,
       receitaMediaPorCliente,
-      estimativaReceitaRisco
+      estimativaReceitaRisco,
+      clientesRecuperados: clientesRecuperadosIds.length,
+      receitaRecuperada,
+      taxaRecuperacao
     },
     receitaEmRisco: {
       vendasPendentesTotal,
@@ -426,8 +467,9 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
     atividadesRecentes: atividadesRecentesSlice
   };
 
-  // Cache curto (45s) por usuário + período
-  setCache(cacheKey, payload, 45_000);
-
+  setCache(cacheKey, payload, CACHE_TTL_MS);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[dashboard/summary] total: ${Date.now() - totalStart}ms`);
+  }
   res.json(payload);
 };

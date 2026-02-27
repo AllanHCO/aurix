@@ -42,15 +42,18 @@ export async function createAgendamentoPublic(
   },
   idempotencyKey: string | null
 ) {
-  const nome = String(body.nome_cliente ?? '').trim();
+  const nome = String(body.nome_cliente ?? '').trim().slice(0, 200);
   const telefone = normalizePhone(String(body.telefone_cliente ?? ''));
-  const observacao = body.observacao != null ? String(body.observacao).trim().slice(0, 300) || null : null;
+  const observacaoRaw = body.observacao != null ? String(body.observacao).trim() : '';
+  const observacao = observacaoRaw
+    ? observacaoRaw.replace(/<[^>]*>/g, '').slice(0, 500).trim() || null
+    : null;
   const dataStr = body.data;
   const horaInicio = body.hora_inicio;
 
   if (!nome || nome.length < 2) throw new AppError('Nome é obrigatório (mín. 2 caracteres).', 400);
   if (!telefone || telefone.length < 10) throw new AppError('Telefone é obrigatório (mín. 10 dígitos).', 400);
-  if (body.observacao != null && String(body.observacao).trim().length > 300) throw new AppError('Observação deve ter no máximo 300 caracteres.', 400);
+  if (observacaoRaw.length > 500) throw new AppError('Observação deve ter no máximo 500 caracteres.', 400);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dataStr)) throw new AppError('Data inválida. Use YYYY-MM-DD.', 400);
   if (!TIME_REGEX.test(horaInicio)) throw new AppError('Horário inválido. Use HH:mm.', 400);
 

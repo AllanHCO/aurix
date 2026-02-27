@@ -10,6 +10,7 @@ import Clientes from './pages/Clientes';
 import Vendas from './pages/Vendas';
 import Relatorios from './pages/Relatorios';
 import Agendamentos from './pages/Agendamentos';
+import HistoricoAgendamentos from './pages/HistoricoAgendamentos';
 import Pendencias from './pages/Pendencias';
 import AgendaConfig from './pages/AgendaConfig';
 import Bloqueios from './pages/Bloqueios';
@@ -58,6 +59,7 @@ function AppRoutes() {
         <Route path="vendas" element={<Vendas />} />
         <Route path="pendencias" element={<Pendencias />} />
         <Route path="agendamentos" element={<Agendamentos />} />
+        <Route path="agendamentos/historico" element={<HistoricoAgendamentos />} />
         <Route path="agendamentos/config" element={<AgendaConfig />} />
         <Route path="agendamentos/bloqueios" element={<Bloqueios />} />
         <Route path="configuracoes" element={<ConfiguracoesHub />} />

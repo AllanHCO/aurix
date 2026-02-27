@@ -185,12 +185,12 @@ function sanitizeSlug(slug: string): string | null {
 }
 
 export const getBranding = async (req: Request, res: Response) => {
-  const slugRaw = req.params.empresaSlug;
-  const empresaSlug = sanitizeSlug(slugRaw);
-  if (!empresaSlug) throw new AppError('Agenda não encontrada.', 404);
+  const slugRaw = (req.params.empresaSlug || '').trim();
+  if (!slugRaw) throw new AppError('Agenda não encontrada.', 404);
+  const slugNorm = slugRaw.toLowerCase();
 
   const user = await prisma.usuario.findFirst({
-    where: { agenda_slug: empresaSlug },
+    where: { agenda_slug: { equals: slugNorm, mode: 'insensitive' } },
     select: {
       id: true,
       nome: true,
@@ -201,18 +201,24 @@ export const getBranding = async (req: Request, res: Response) => {
       status_operacao: true
     }
   });
-  if (!user) throw new AppError('Agenda não encontrada.', 404);
-
+  if (!user) {
+    if (process.env.NODE_ENV !== 'production') console.log('[agenda-public] getBranding: slug não encontrado:', slugNorm);
+    throw new AppError('Agenda não encontrada.', 404);
+  }
+  // Config opcional: permite exibir a página mesmo sem agenda configurada (usa defaults no front)
   const config = await prisma.configuracaoAgenda.findUnique({
     where: { usuario_id: user.id }
   });
-  if (!config) throw new AppError('Agenda não encontrada.', 404);
+  if (!config && process.env.NODE_ENV !== 'production') {
+    console.log('[agenda-public] getBranding: usuário sem configuracao_agenda, retornando branding mesmo assim. usuario_id=', user.id);
+  }
 
   const nomeOrganizacao = user.nome_organizacao || user.nome || 'Agendamento';
   const corPrimariaHex = user.cor_primaria_hex && /^#[0-9A-Fa-f]{6}$/.test(user.cor_primaria_hex)
     ? user.cor_primaria_hex
     : undefined;
 
+  console.log('[agenda-public] getBranding OK:', slugNorm, '-> usuario_id', user.id);
   res.json({
     empresaId: user.id,
     nomeOrganizacao,
@@ -232,7 +238,10 @@ export const getPublicConfig = async (req: Request, res: Response) => {
     where: { agenda_slug: { equals: slugNorm, mode: 'insensitive' } },
     select: { id: true, nome: true, nome_organizacao: true, nome_unidade: true }
   });
-  if (!user) throw new AppError('Agenda não encontrada.', 404);
+  if (!user) {
+    if (process.env.NODE_ENV !== 'production') console.log('[agenda-public] getPublicConfig: slug não encontrado:', slugNorm);
+    throw new AppError('Agenda não encontrada.', 404);
+  }
 
   const config = await prisma.configuracaoAgenda.findUnique({
     where: { usuario_id: user.id }
@@ -258,9 +267,10 @@ export const getPublicConfig = async (req: Request, res: Response) => {
 };
 
 export const getAgendaInfo = async (req: Request, res: Response) => {
-  const { empresaSlug } = req.params;
+  const slugNorm = (req.params.empresaSlug || '').trim().toLowerCase();
+  if (!slugNorm) throw new AppError('Agenda não encontrada.', 404);
   const user = await prisma.usuario.findFirst({
-    where: { agenda_slug: empresaSlug },
+    where: { agenda_slug: { equals: slugNorm, mode: 'insensitive' } },
     select: { id: true, nome: true, nome_organizacao: true, agenda_slug: true }
   });
   if (!user) throw new AppError('Agenda não encontrada.', 404);

@@ -374,3 +374,171 @@ export const importarClientes = async (req: AuthRequest, res: Response) => {
 
   res.status(201).json({ created, total: itens.length, errors });
 };
+
+export type PeriodoRetencao = 'semana' | 'mes' | 'trimestre';
+
+function getRangesPeriodoRetencao(periodo: PeriodoRetencao): { inicio: Date; fim: Date; inicioAnt: Date; fimAnt: Date } {
+  const now = new Date();
+  const fim = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  let inicio: Date;
+  let inicioAnt: Date;
+  let fimAnt: Date;
+  if (periodo === 'semana') {
+    const dia = now.getDay();
+    const diff = dia === 0 ? 6 : dia - 1;
+    inicio = new Date(now);
+    inicio.setDate(now.getDate() - diff);
+    inicio.setHours(0, 0, 0, 0);
+    fimAnt = new Date(inicio);
+    fimAnt.setDate(fimAnt.getDate() - 1);
+    fimAnt.setHours(23, 59, 59, 999);
+    inicioAnt = new Date(fimAnt);
+    inicioAnt.setDate(inicioAnt.getDate() - 6);
+    inicioAnt.setHours(0, 0, 0, 0);
+  } else if (periodo === 'trimestre') {
+    const mes = now.getMonth();
+    const trimestreInicio = mes - (mes % 3);
+    inicio = new Date(now.getFullYear(), trimestreInicio, 1, 0, 0, 0, 0);
+    fim.setFullYear(now.getFullYear());
+    fim.setMonth(trimestreInicio + 3, 0);
+    fim.setHours(23, 59, 59, 999);
+    fimAnt = new Date(now.getFullYear(), trimestreInicio, 0, 23, 59, 59, 999);
+    inicioAnt = new Date(now.getFullYear(), trimestreInicio - 3, 1, 0, 0, 0, 0);
+  } else {
+    inicio = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    fimAnt = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    inicioAnt = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+  }
+  return { inicio, fim, inicioAnt, fimAnt };
+}
+
+/** GET /clientes/retencao — lista clientes em risco e recuperados no período. Query: periodo=semana|mes|trimestre (default: mes). */
+export const getRetencao = async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const periodo = (req.query.periodo as PeriodoRetencao) || 'mes';
+  const periodoSafe: PeriodoRetencao = ['semana', 'mes', 'trimestre'].includes(periodo) ? periodo : 'mes';
+  const { inicio, fim, inicioAnt, fimAnt } = getRangesPeriodoRetencao(periodoSafe);
+
+  const [clientesPeriodoAnteriorAgg, clientesPeriodoAtualAgg, vendasAnteriorComTotal, vendasAtualComCliente] = await Promise.all([
+    prisma.venda.groupBy({
+      by: ['cliente_id'],
+      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicioAnt, lte: fimAnt } }
+    }),
+    prisma.venda.groupBy({
+      by: ['cliente_id'],
+      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicio, lte: fim } }
+    }),
+    prisma.venda.findMany({
+      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicioAnt, lte: fimAnt } },
+      select: { cliente_id: true, total: true, createdAt: true }
+    }),
+    prisma.venda.findMany({
+      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicio, lte: fim } },
+      select: { cliente_id: true, total: true, createdAt: true }
+    })
+  ]);
+
+  const setAnterior = new Set(clientesPeriodoAnteriorAgg.map((r) => r.cliente_id));
+  const setAtual = new Set(clientesPeriodoAtualAgg.map((r) => r.cliente_id));
+  const emRiscoIds = [...setAnterior].filter((id) => !setAtual.has(id));
+  const recuperadosIds = [...setAtual].filter((id) => !setAnterior.has(id));
+
+  const clientesIds = [...new Set([...emRiscoIds, ...recuperadosIds])];
+  if (clientesIds.length === 0) {
+    return res.json({ periodo: periodoSafe, clientesEmRisco: [], clientesRecuperados: [] });
+  }
+
+  const clientes = await prisma.cliente.findMany({
+    where: { id: { in: clientesIds } },
+    select: { id: true, nome: true, telefone: true }
+  });
+  const clientesMap = new Map(clientes.map((c) => [c.id, c]));
+
+  const ultimaVendaPorClienteAnterior = new Map<string, { data: Date; total: number }>();
+  for (const v of vendasAnteriorComTotal) {
+    const cur = ultimaVendaPorClienteAnterior.get(v.cliente_id);
+    if (!cur || v.createdAt > cur.data) {
+      ultimaVendaPorClienteAnterior.set(v.cliente_id, { data: v.createdAt, total: Number(v.total ?? 0) });
+    }
+  }
+  const receitaPorClienteAnterior = new Map<string, number>();
+  for (const v of vendasAnteriorComTotal) {
+    receitaPorClienteAnterior.set(v.cliente_id, (receitaPorClienteAnterior.get(v.cliente_id) ?? 0) + Number(v.total ?? 0));
+  }
+  const countVendasPorClienteAnterior = new Map<string, number>();
+  for (const v of vendasAnteriorComTotal) {
+    countVendasPorClienteAnterior.set(v.cliente_id, (countVendasPorClienteAnterior.get(v.cliente_id) ?? 0) + 1);
+  }
+
+  const clientesEmRisco: Array<{
+    id: string;
+    nome: string;
+    telefone: string | null;
+    ultimaCompra: string;
+    diasSemComprar: number;
+    receitaMedia: number;
+  }> = [];
+  const hoje = new Date();
+  for (const id of emRiscoIds) {
+    const c = clientesMap.get(id);
+    if (!c) continue;
+    const ultima = ultimaVendaPorClienteAnterior.get(id);
+    if (!ultima) continue;
+    const diasSemComprar = Math.floor((hoje.getTime() - ultima.data.getTime()) / (1000 * 60 * 60 * 24));
+    const totalReceita = receitaPorClienteAnterior.get(id) ?? 0;
+    const qtdVendas = countVendasPorClienteAnterior.get(id) ?? 1;
+    clientesEmRisco.push({
+      id: c.id,
+      nome: c.nome,
+      telefone: c.telefone,
+      ultimaCompra: ultima.data.toISOString().slice(0, 10),
+      diasSemComprar,
+      receitaMedia: Math.round((totalReceita / qtdVendas) * 100) / 100
+    });
+  }
+  clientesEmRisco.sort((a, b) => b.diasSemComprar - a.diasSemComprar);
+
+  const primeiraVendaRecuperadoPorCliente = new Map<string, { data: Date; total: number }>();
+  for (const v of vendasAtualComCliente) {
+    if (!recuperadosIds.includes(v.cliente_id)) continue;
+    const cur = primeiraVendaRecuperadoPorCliente.get(v.cliente_id);
+    if (!cur || v.createdAt < cur.data) {
+      primeiraVendaRecuperadoPorCliente.set(v.cliente_id, { data: v.createdAt, total: Number(v.total ?? 0) });
+    }
+  }
+  const ultimaVendaAnteriorPorRecuperado = new Map<string, Date>();
+  for (const v of vendasAnteriorComTotal) {
+    if (!recuperadosIds.includes(v.cliente_id)) continue;
+    const cur = ultimaVendaAnteriorPorRecuperado.get(v.cliente_id);
+    if (!cur || v.createdAt > cur) {
+      ultimaVendaAnteriorPorRecuperado.set(v.cliente_id, v.createdAt);
+    }
+  }
+  const clientesRecuperados: Array<{
+    id: string;
+    nome: string;
+    dataNovaCompra: string;
+    valorVenda: number;
+    diasFicouSemComprar: number;
+  }> = [];
+  for (const id of recuperadosIds) {
+    const c = clientesMap.get(id);
+    if (!c) continue;
+    const nova = primeiraVendaRecuperadoPorCliente.get(id);
+    if (!nova) continue;
+    const ultimaAnt = ultimaVendaAnteriorPorRecuperado.get(id);
+    const diasFicouSemComprar = ultimaAnt
+      ? Math.floor((nova.data.getTime() - ultimaAnt.getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+    clientesRecuperados.push({
+      id: c.id,
+      nome: c.nome,
+      dataNovaCompra: nova.data.toISOString().slice(0, 10),
+      valorVenda: nova.total,
+      diasFicouSemComprar
+    });
+  }
+  clientesRecuperados.sort((a, b) => b.valorVenda - a.valorVenda);
+
+  res.json({ periodo: periodoSafe, clientesEmRisco, clientesRecuperados });
+};

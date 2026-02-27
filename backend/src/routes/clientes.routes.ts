@@ -8,12 +8,14 @@ import {
   atualizarCliente,
   excluirCliente,
   obterHistoricoCompras,
-  importarClientes
+  importarClientes,
+  getRetencao
 } from '../controllers/clientes.controller';
 
 const router = Router();
 router.use(authenticate);
 router.use(checkPlanBlock);
+router.get('/retencao', getRetencao);
 router.get('/', listarClientes);
 router.post('/import', importarClientes);
 router.get('/:id', obterCliente);
