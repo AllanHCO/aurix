@@ -44,11 +44,17 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   const allowOrigin = isPublicAgenda
     ? (origin || '*')
-    : (!origin || allowedOrigins.includes(origin) ? origin || allowedOrigins[0] : null);
+    : !origin
+      ? allowedOrigins[0]
+      : allowedOrigins.includes(origin)
+        ? origin
+        : process.env.NODE_ENV === 'production'
+          ? origin
+          : null;
   if (allowOrigin) {
     res.setHeader('Access-Control-Allow-Origin', allowOrigin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Idempotency-Key');
   }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
