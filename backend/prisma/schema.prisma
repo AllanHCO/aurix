@@ -24,14 +24,49 @@ model Usuario {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  vendas                  Venda[]
-  agendamentos            Agendamento[]
-  bloqueios                Bloqueio[]
-  configuracao_agenda     ConfiguracaoAgenda?
-  disponibilidade_semanal DisponibilidadeSemanal[]
-  company_settings        CompanySettings?
+  vendas                    Venda[]
+  agendamentos              Agendamento[]
+  bloqueios                 Bloqueio[]
+  configuracao_agenda       ConfiguracaoAgenda?
+  disponibilidade_semanal   DisponibilidadeSemanal[]
+  company_settings          CompanySettings?
+  financial_categories      FinancialCategory[]
+  financial_transactions    FinancialTransaction[]
+  supplier_categories       SupplierCategory[]
+  suppliers                 Supplier[]
+  product_purchase_histories ProductPurchaseHistory[]
+  inventory_movements       InventoryMovement[]
+  business_areas            BusinessArea[]
+  categorias                Categoria[]
+  clientes                  Cliente[]
+  produtos                  Produto[]
 
   @@map("usuarios")
+}
+
+// Áreas de negócio (ex.: Mecânica, Funilaria) — mesma empresa, visão separada e consolidada
+model BusinessArea {
+  id          String   @id @default(uuid())
+  usuario_id  String
+  name        String   @db.VarChar(120)
+  color       String?  @db.VarChar(7)   // hex opcional para gráficos/badges
+  is_active   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  usuario   Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  vendas    Venda[]
+  transactions FinancialTransaction[]
+  agendamentos Agendamento[]
+  produtos  Produto[]
+  purchase_histories ProductPurchaseHistory[]
+  clientes  Cliente[]
+  suppliers Supplier[]
+
+  @@unique([usuario_id, name])
+  @@index([usuario_id])
+  @@index([usuario_id, is_active])
+  @@map("business_areas")
 }
 
 enum PlanoTipo {
@@ -55,6 +90,7 @@ model CompanySettings {
   blocked_reason                String?   @db.VarChar(500)
   meta_faturamento_mes          Decimal?  @db.Decimal(12, 2)
   is_demo                       Boolean   @default(false)
+  personalizacao_json           Json?     // Personalização do sistema (modo, nomes dos módulos, toggles)
   updatedAt                     DateTime  @updatedAt
 
   usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
@@ -74,34 +110,76 @@ model DemoEntity {
 }
 
 model Categoria {
-  id        String   @id @default(uuid())
-  nome      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  usuario_id  String
+  nome        String
+  tipo        String   @default("produto") @db.VarChar(20) // "produto" | "servico"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  usuario  Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
   produtos Produto[]
 
+  @@unique([usuario_id, nome, tipo])
+  @@index([usuario_id])
+  @@index([tipo])
   @@map("categorias")
 }
 
+enum ItemType {
+  product
+  service
+}
+
+enum PricingType {
+  fixed
+  manual
+  percentage
+}
+
+enum PercentageBase {
+  over_parts_total    // percentual sobre total de peças
+  over_sale_total     // percentual sobre valor total da venda/OS
+  over_previous_subtotal // percentual sobre subtotal anterior
+}
+
 model Produto {
-  id              String   @id @default(uuid())
-  nome            String
-  preco           Decimal  @db.Decimal(10, 2)
-  custo           Decimal  @db.Decimal(10, 2)
-  estoque_atual   Int      @default(0)
-  estoque_minimo  Int      @default(0)
-  categoria_id    String
-  linha           String?  // agrupamento opcional (ex: linha de produto)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String          @id @default(uuid())
+  usuario_id         String
+  item_type          ItemType        @default(product)
+  nome               String
+  preco              Decimal         @db.Decimal(10, 2)  // preço padrão (produto) ou fixo/sugerido (serviço)
+  custo              Decimal         @db.Decimal(10, 2)  // custo opcional para serviço
+  estoque_atual      Int             @default(0)
+  estoque_minimo     Int             @default(0)
+  categoria_id       String
+  supplier_id        String?         // fornecedor principal (apenas produto)
+  business_area_id   String?
+  linha              String?         // agrupamento (produto)
+  // Campos específicos de serviço
+  pricing_type       PricingType?    // fixed | manual | percentage
+  percentage_value   Decimal?        @db.Decimal(5, 2)   // ex: 20 para 20%
+  percentage_base    PercentageBase? // base do cálculo quando percentual
+  observacao         String?        @db.Text
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
-  categoria  Categoria   @relation(fields: [categoria_id], references: [id])
-  itensVenda ItemVenda[]
+  usuario      Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  categoria    Categoria    @relation(fields: [categoria_id], references: [id])
+  supplier     Supplier?    @relation(fields: [supplier_id], references: [id], onDelete: SetNull)
+  business_area BusinessArea? @relation(fields: [business_area_id], references: [id], onDelete: SetNull)
+  itensVenda    ItemVenda[]
+  purchase_histories ProductPurchaseHistory[]
+  inventory_movements InventoryMovement[]
+  itensServicoOrdem ItemServicoOrdem[]
 
-  @@unique([nome, categoria_id])
+  @@unique([usuario_id, nome, categoria_id, item_type])
+  @@index([usuario_id])
   @@index([categoria_id])
+  @@index([item_type])
   @@index([estoque_atual])
+  @@index([supplier_id])
+  @@index([business_area_id])
   @@map("produtos")
 }
 
@@ -112,39 +190,125 @@ enum ClienteStatus {
 }
 
 model Cliente {
-  id        String        @id @default(uuid())
-  nome      String
-  telefone  String?
-  observacoes String?     @db.Text
-  status    ClienteStatus @default(ativo)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id                String         @id @default(uuid())
+  usuario_id        String
+  nome              String
+  cpf               String?        @db.VarChar(14)  // 000.000.000-00
+  telefone          String?
+  observacoes       String?        @db.Text
+  time_futebol      String?        @db.VarChar(120)  // opcional, ex: Corinthians
+  status            ClienteStatus  @default(ativo)
+  forcar_inativo    Boolean?       // legado no banco; não usado no app
+  business_area_id  String?        // área de negócio (filtro global)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
-  vendas Venda[]
+  usuario      Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  business_area BusinessArea? @relation(fields: [business_area_id], references: [id], onDelete: SetNull)
+  vendas        Venda[]
+  extraItems    ClientExtraItem[]
 
+  @@index([usuario_id])
+  @@index([business_area_id])
   @@map("clientes")
 }
 
+enum ClientExtraItemType {
+  veiculo
+  equipamento
+  outro
+}
+
+model ClientExtraItem {
+  id            String              @id @default(uuid())
+  client_id     String
+  type          ClientExtraItemType
+  title         String              @db.VarChar(200)
+  data_json     Json                // campos específicos por tipo
+  show_on_quote Boolean             @default(true)
+  show_on_sale  Boolean             @default(true)
+  internal_only Boolean             @default(false)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  client Cliente @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  vendas Venda[]
+
+  @@index([client_id])
+  @@map("client_extra_items")
+}
+
+enum VendaTipo {
+  sale          // venda direta
+  quote         // orçamento (não fatura, não baixa estoque; pode ser convertido em venda)
+  service_order // ordem de serviço (registro do atendimento; pode ser convertida em venda)
+}
+
+enum OsStatus {
+  ABERTA             // aberta
+  EM_EXECUCAO         // em execução
+  CONCLUIDA           // concluída
+  CANCELADA           // cancelada
+  CONVERTIDA_EM_VENDA // convertida em venda
+}
+
 model Venda {
-  id              String      @id @default(uuid())
-  cliente_id      String
-  usuario_id      String
-  total           Decimal     @db.Decimal(10, 2)
-  desconto        Decimal     @default(0) @db.Decimal(10, 2)
-  forma_pagamento String
-  status          VendaStatus @default(PENDENTE)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                   String      @id @default(uuid())
+  sale_code            String?     @unique
+  os_code              String?     @unique  // número da OS (tipo = service_order)
+  tipo                 VendaTipo   @default(sale)
+  cliente_id           String
+  usuario_id           String
+  business_area_id     String?     // área de negócio (Mecânica, Funilaria etc.)
+  agendamento_id       String?     @unique
+  client_extra_item_id String?     // item do cliente vinculado (veículo, equipamento etc.)
+  total                Decimal     @db.Decimal(10, 2)
+  desconto             Decimal     @default(0) @db.Decimal(10, 2)
+  forma_pagamento      String?     // obrigatório só para sale; null para quote
+  status               VendaStatus @default(PENDENTE)
+  os_status            OsStatus?
+  problema_relatado    String?     @db.Text
+  observacoes_tecnicas String?     @db.Text
+  texto_garantia       String?     @db.Text
+  os_agradecimento     String?     @db.Text  // mensagem de agradecimento no PDF da OS
+  aceite_por           String?     @db.VarChar(200)
+  data_aceite          DateTime?   @db.Timestamptz(6)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
-  cliente Cliente   @relation(fields: [cliente_id], references: [id])
-  usuario Usuario   @relation(fields: [usuario_id], references: [id])
-  itens   ItemVenda[]
+  cliente          Cliente           @relation(fields: [cliente_id], references: [id])
+  usuario          Usuario          @relation(fields: [usuario_id], references: [id])
+  business_area    BusinessArea?    @relation(fields: [business_area_id], references: [id], onDelete: SetNull)
+  agendamento      Agendamento?     @relation(fields: [agendamento_id], references: [id], onDelete: SetNull)
+  client_extra_item ClientExtraItem? @relation(fields: [client_extra_item_id], references: [id], onDelete: SetNull)
+  itens            ItemVenda[]
+  servicos         ItemServicoOrdem[]
+  anexos          VendaAnexo[]
 
+  @@index([tipo, status])
+  @@index([os_status])
   @@index([status, createdAt])
   @@index([usuario_id, status, cliente_id])
+  @@index([usuario_id, tipo, status])
   @@index([usuario_id, status, createdAt])
   @@index([usuario_id, createdAt])
+  @@index([usuario_id, business_area_id])
   @@map("vendas")
+}
+
+model VendaAnexo {
+  id             String   @id @default(uuid())
+  venda_id       String
+  nome_original  String   @db.VarChar(255)
+  path           String   @db.VarChar(500)  // path relativo no storage (ex: vendas/:vendaId/:uuid.ext)
+  mime_type      String?  @db.VarChar(100)
+  tamanho        Int?     // bytes
+  createdAt      DateTime @default(now())
+
+  venda Venda @relation(fields: [venda_id], references: [id], onDelete: Cascade)
+
+  @@index([venda_id])
+  @@map("venda_anexos")
 }
 
 model ItemVenda {
@@ -164,10 +328,30 @@ model ItemVenda {
   @@map("itens_venda")
 }
 
+// Serviços executados na Ordem de Serviço (pode vir de serviço cadastrado ou manual)
+model ItemServicoOrdem {
+  id             String   @id @default(uuid())
+  venda_id       String
+  produto_id     String?  // quando preenchido, é serviço cadastrado (permite recalcular percentual)
+  descricao      String   @db.VarChar(500)
+  quantidade     Int      @default(1)
+  valor_unitario Decimal  @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+
+  venda   Venda    @relation(fields: [venda_id], references: [id], onDelete: Cascade)
+  produto Produto? @relation(fields: [produto_id], references: [id], onDelete: SetNull)
+
+  @@index([venda_id])
+  @@index([produto_id])
+  @@map("itens_servico_ordem")
+}
+
 enum VendaStatus {
   PAGO
   PENDENTE
   FECHADA
+  ORCAMENTO   // orçamento ativo (tipo = quote)
+  CANCELADO   // orçamento cancelado (tipo = quote)
 }
 
 // ---- Agendamentos (V1) ----
@@ -211,6 +395,7 @@ enum AgendamentoStatus {
 model Agendamento {
   id               String            @id @default(uuid())
   usuario_id       String
+  business_area_id String?           // área de negócio (opcional)
   nome_cliente     String
   telefone_cliente String
   observacao       String?           @db.Text
@@ -222,10 +407,13 @@ model Agendamento {
   no_show          Boolean          @default(false) // não compareceu
   createdAt        DateTime         @default(now())
 
-  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  usuario      Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  business_area BusinessArea? @relation(fields: [business_area_id], references: [id], onDelete: SetNull)
+  vendas       Venda[]
 
   @@index([usuario_id, data])
   @@index([usuario_id, data, hora_inicio, status])
+  @@index([usuario_id, business_area_id])
   @@map("agendamentos")
 }
 
@@ -250,4 +438,179 @@ model Bloqueio {
   @@index([usuario_id])
   @@index([usuario_id, tipo])
   @@map("bloqueios")
+}
+
+// ---- Financeiro ----
+
+enum FinancialCategoryType {
+  income
+  expense
+}
+
+model FinancialCategory {
+  id         String                @id @default(uuid())
+  usuario_id String
+  name       String                @db.VarChar(120)
+  type       FinancialCategoryType
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  usuario      Usuario               @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  transactions FinancialTransaction[]
+
+  @@unique([usuario_id, type, name])
+  @@index([usuario_id])
+  @@index([usuario_id, type])
+  @@map("financial_categories")
+}
+
+enum FinancialTransactionSource {
+  sale
+  manual
+  adjustment
+  service_order
+}
+
+enum FinancialTransactionStatus {
+  confirmed
+  pending
+  cancelled
+}
+
+model FinancialTransaction {
+  id               String                      @id @default(uuid())
+  usuario_id       String
+  business_area_id String?                     // área de negócio (opcional)
+  type             FinancialCategoryType       // income | expense
+  category_id      String
+  supplier_id      String?                     // opcional, para integração com fornecedores
+  source_type      FinancialTransactionSource  @default(manual)
+  source_id        String?                     // ex: venda_id quando source_type = sale
+  description      String                     @db.VarChar(500)
+  value            Decimal                    @db.Decimal(12, 2)
+  status           FinancialTransactionStatus  @default(confirmed)
+  date             DateTime                   @db.Date
+  notes            String?                    @db.Text
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  usuario      Usuario           @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  business_area BusinessArea?    @relation(fields: [business_area_id], references: [id], onDelete: SetNull)
+  category     FinancialCategory @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  supplier     Supplier?         @relation(fields: [supplier_id], references: [id], onDelete: SetNull)
+  purchase_history_items ProductPurchaseHistory[]
+
+  @@index([usuario_id])
+  @@index([usuario_id, date])
+  @@index([usuario_id, type])
+  @@index([usuario_id, status])
+  @@index([usuario_id, business_area_id])
+  @@index([category_id])
+  @@index([supplier_id])
+  @@index([source_type, source_id])
+  @@map("financial_transactions")
+}
+
+// ---- Fornecedores ----
+
+model SupplierCategory {
+  id         String   @id @default(uuid())
+  usuario_id String
+  name       String   @db.VarChar(120)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  usuario   Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  suppliers Supplier[]
+
+  @@unique([usuario_id, name])
+  @@index([usuario_id])
+  @@map("supplier_categories")
+}
+
+model Supplier {
+  id                 String   @id @default(uuid())
+  usuario_id         String
+  name               String   @db.VarChar(200)
+  phone              String?  @db.VarChar(20)
+  whatsapp           String?  @db.VarChar(20)
+  email              String?  @db.VarChar(255)
+  cpf_cnpj           String?  @db.VarChar(18)
+  category_id        String?
+  business_area_id   String?  // área de negócio (opcional; null = compartilhado)
+  city               String?  @db.VarChar(120)
+  address            String?  @db.Text
+  notes              String?  @db.Text
+  is_active          Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  usuario      Usuario                @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  category     SupplierCategory?      @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  business_area BusinessArea?         @relation(fields: [business_area_id], references: [id], onDelete: SetNull)
+  produtos     Produto[]
+  transactions FinancialTransaction[]
+  purchase_histories ProductPurchaseHistory[]
+  inventory_movements InventoryMovement[]
+
+  @@index([usuario_id])
+  @@index([usuario_id, category_id])
+  @@index([usuario_id, is_active])
+  @@index([business_area_id])
+  @@map("suppliers")
+}
+
+// Histórico de compras de produto (uma linha por item comprado)
+model ProductPurchaseHistory {
+  id                    String   @id @default(uuid())
+  usuario_id            String
+  product_id            String
+  supplier_id           String?
+  business_area_id      String?   // área de negócio da compra
+  financial_transaction_id String? // vínculo com a saída financeira (para Explicação/notes)
+  quantity              Int      // quantidade comprada
+  unit_cost             Decimal  @db.Decimal(10, 2)
+  total_cost            Decimal  @db.Decimal(12, 2)
+  created_at            DateTime @default(now())
+
+  usuario   Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  product   Produto   @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  supplier  Supplier? @relation(fields: [supplier_id], references: [id], onDelete: SetNull)
+  business_area BusinessArea? @relation(fields: [business_area_id], references: [id], onDelete: SetNull)
+  financial_transaction FinancialTransaction? @relation(fields: [financial_transaction_id], references: [id], onDelete: SetNull)
+
+  @@index([usuario_id])
+  @@index([product_id])
+  @@index([supplier_id])
+  @@index([business_area_id])
+  @@index([created_at])
+  @@map("product_purchase_history")
+}
+
+enum InventoryMovementType {
+  purchase   // entrada por compra
+  sale       // saída por venda
+  adjustment // ajuste manual
+}
+
+// Movimentações de estoque (entradas e saídas)
+model InventoryMovement {
+  id          String               @id @default(uuid())
+  usuario_id  String
+  product_id  String
+  type        InventoryMovementType
+  quantity    Int                  // positivo = entrada, negativo = saída
+  supplier_id String?
+  unit_cost   Decimal?             @db.Decimal(10, 2)
+  created_at  DateTime             @default(now())
+
+  usuario  Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  product  Produto  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  supplier Supplier? @relation(fields: [supplier_id], references: [id], onDelete: SetNull)
+
+  @@index([usuario_id])
+  @@index([product_id])
+  @@index([supplier_id])
+  @@index([created_at])
+  @@map("inventory_movements")
 }

@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
 import { getHorariosDisponiveis } from '../services/availability.service';
 import { getRetencaoThresholds } from '../services/companySettings.service';
@@ -28,7 +28,7 @@ function inicioFimMesAnterior(): { inicio: Date; fim: Date } {
   return { inicio, fim };
 }
 
-export type PeriodoSummary = 'semana' | 'mes' | 'trimestre';
+export type PeriodoSummary = 'semana' | 'mes' | 'trimestre' | 'ultimos_7_dias' | 'ultimos_30_dias' | 'ultimos_90_dias';
 
 type PeriodoDashboard = 'este_mes' | 'ultimos_3_meses';
 
@@ -53,7 +53,19 @@ function getRangesPeriodo(periodo: PeriodoSummary): { inicio: Date; fim: Date; i
   let inicioAnt: Date;
   let fimAnt: Date;
 
-  if (periodo === 'semana') {
+  if (periodo === 'ultimos_7_dias') {
+    inicio = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0);
+    fimAnt = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 23, 59, 59, 999);
+    inicioAnt = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13, 0, 0, 0, 0);
+  } else if (periodo === 'ultimos_30_dias') {
+    inicio = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29, 0, 0, 0, 0);
+    fimAnt = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 23, 59, 59, 999);
+    inicioAnt = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 59, 0, 0, 0, 0);
+  } else if (periodo === 'ultimos_90_dias') {
+    inicio = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 89, 0, 0, 0, 0);
+    fimAnt = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90, 23, 59, 59, 999);
+    inicioAnt = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 179, 0, 0, 0, 0);
+  } else if (periodo === 'semana') {
     const dia = now.getDay();
     const diff = dia === 0 ? 6 : dia - 1;
     inicio = new Date(now);
@@ -84,6 +96,33 @@ function getRangesPeriodo(periodo: PeriodoSummary): { inicio: Date; fim: Date; i
   return { inicio, fim, inicioAnt, fimAnt };
 }
 
+/** Período anterior com a mesma duração, terminando no dia anterior ao início do período atual. */
+function periodoAnteriorMesmoTamanho(inicio: Date, fim: Date): { inicio: Date; fim: Date } {
+  const dias = Math.round((fim.getTime() - inicio.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  const fimAnt = new Date(inicio);
+  fimAnt.setDate(fimAnt.getDate() - 1);
+  fimAnt.setHours(23, 59, 59, 999);
+  const inicioAnt = new Date(fimAnt);
+  inicioAnt.setDate(inicioAnt.getDate() - dias + 1);
+  inicioAnt.setHours(0, 0, 0, 0);
+  return { inicio: inicioAnt, fim: fimAnt };
+}
+
+/** Valida e parseia dataInicial/dataFinal; retorna null se inválido ou ausente.
+ * A data final é tratada como inclusiva: adiciona-se 1 dia e usa-se como limite superior exclusivo (lt),
+ * para que o dia selecionado seja totalmente incluído mesmo com fuso horário. */
+function parsePeriodoCustom(dataInicial: unknown, dataFinal: unknown): { inicio: Date; fim: Date } | null {
+  if (!dataInicial || !dataFinal || typeof dataInicial !== 'string' || typeof dataFinal !== 'string') return null;
+  const inicio = new Date((dataInicial as string).trim());
+  const fim = new Date((dataFinal as string).trim());
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fim.getTime())) return null;
+  inicio.setHours(0, 0, 0, 0);
+  fim.setDate(fim.getDate() + 1);
+  fim.setHours(0, 0, 0, 0);
+  if (fim <= inicio) return null;
+  return { inicio, fim };
+}
+
 export const getDashboard = async (req: AuthRequest, res: Response) => {
   const userId = req.userId!;
   const periodo = ((req.query.periodo as PeriodoDashboard) || 'este_mes') as PeriodoDashboard;
@@ -92,10 +131,11 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
 
   const { inicio, fim } = getPeriodoRange(periodoSafe);
 
-  // Faturamento do período: SUM(total) onde status = PAGO e data no período (fonte: tabela vendas)
+  // Faturamento do período: apenas vendas (tipo=sale) com status PAGO; orçamentos não entram
   const faturamentoResult = await prisma.venda.aggregate({
     where: {
       usuario_id: userId,
+      tipo: 'sale',
       status: 'PAGO',
       createdAt: { gte: inicio, lte: fim }
     },
@@ -103,10 +143,11 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
   });
   const faturamento = Number(faturamentoResult._sum.total ?? 0);
 
-  // Total de vendas no período (count)
+  // Total de vendas no período (count) — apenas tipo sale; orçamentos não contam
   const totalVendas = await prisma.venda.count({
     where: {
       usuario_id: userId,
+      tipo: 'sale',
       createdAt: { gte: inicio, lte: fim }
     }
   });
@@ -161,20 +202,70 @@ const LIMIT_PRODUTOS_ESTOQUE_BAIXO = 3;
 const LIMIT_PROXIMOS_AGENDAMENTOS = 3;
 const LIMIT_ATIVIDADES_RECENTES = 8;
 
-/** GET /dashboard/summary — painel estratégico. Otimizado: cache 60s, queries em paralelo, payload limitado. */
+export type PeriodoSummaryOuCustom = PeriodoSummary | 'custom';
+
+/** GET /dashboard/summary — painel estratégico. Aceita periodo (fixo) ou dataInicial+dataFinal (período livre). Opcional: business_area_id para filtrar por área. */
 export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
   const totalStart = Date.now();
   const userId = req.userId!;
-  const periodo = (req.query.periodo as PeriodoSummary) || 'mes';
-  const periodoSafe: PeriodoSummary = ['semana', 'mes', 'trimestre'].includes(periodo) ? periodo : 'mes';
+  const businessAreaId = typeof req.query.business_area_id === 'string' && req.query.business_area_id.trim()
+    ? req.query.business_area_id.trim()
+    : null;
+  const areaWhere = businessAreaId ? { business_area_id: businessAreaId } : {};
+  const produtoWhere = businessAreaId ? { business_area_id: businessAreaId } : {};
 
-  const cacheKey = `dashboard:summary:${userId}:${periodoSafe}`;
+  const periodo = (req.query.periodo as PeriodoSummary) || 'ultimos_30_dias';
+  const periodosValidos: PeriodoSummary[] = ['semana', 'mes', 'trimestre', 'ultimos_7_dias', 'ultimos_30_dias', 'ultimos_90_dias'];
+
+  let inicio: Date;
+  let fim: Date;
+  let inicioAnt: Date;
+  let fimAnt: Date;
+  let periodoSafe: PeriodoSummaryOuCustom;
+  let cacheKey: string;
+  const dataInicialQ = req.query.dataInicial;
+  const dataFinalQ = req.query.dataFinal;
+
+  if (typeof dataInicialQ === 'string' && typeof dataFinalQ === 'string' && dataInicialQ.trim() && dataFinalQ.trim()) {
+    const parsed = parsePeriodoCustom(dataInicialQ, dataFinalQ);
+    if (parsed) {
+      inicio = parsed.inicio;
+      fim = parsed.fim;
+      const ant = periodoAnteriorMesmoTamanho(inicio, fim);
+      inicioAnt = ant.inicio;
+      fimAnt = ant.fim;
+      periodoSafe = 'custom';
+      cacheKey = `dashboard:summary:${userId}:${dataInicialQ}_${dataFinalQ}${businessAreaId ? `:${businessAreaId}` : ''}`;
+    } else {
+      periodoSafe = periodosValidos.includes(periodo) ? periodo : 'ultimos_30_dias';
+      const ranges = getRangesPeriodo(periodoSafe as PeriodoSummary);
+      inicio = ranges.inicio;
+      fim = ranges.fim;
+      inicioAnt = ranges.inicioAnt;
+      fimAnt = ranges.fimAnt;
+      cacheKey = `dashboard:summary:${userId}:${periodoSafe}${businessAreaId ? `:${businessAreaId}` : ''}`;
+    }
+  } else {
+    periodoSafe = periodosValidos.includes(periodo) ? periodo : 'ultimos_30_dias';
+    const ranges = getRangesPeriodo(periodoSafe as PeriodoSummary);
+    inicio = ranges.inicio;
+    fim = ranges.fim;
+    inicioAnt = ranges.inicioAnt;
+    fimAnt = ranges.fimAnt;
+    cacheKey = `dashboard:summary:${userId}:${periodoSafe}${businessAreaId ? `:${businessAreaId}` : ''}`;
+  }
+
   const cached = getCache<any>(cacheKey);
   if (cached) {
     return res.json(cached);
   }
 
-  const { inicio, fim, inicioAnt, fimAnt } = getRangesPeriodo(periodoSafe);
+  /** Período custom usa data final +1 dia como limite exclusivo (lt); presets usam lte. */
+  const createdAtRange =
+    periodoSafe === 'custom'
+      ? ({ gte: inicio, lt: fim } as { gte: Date; lt: Date })
+      : ({ gte: inicio, lte: fim } as { gte: Date; lte: Date });
+
   const hoje = new Date();
 
   // Batch 1: config + módulos (não dependem do período)
@@ -182,8 +273,8 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
   const [settings, configAgenda, totalProdutos, totalVendasCount, retencaoThresholds] = await Promise.all([
     prisma.companySettings.findUnique({ where: { usuario_id: userId }, select: { meta_faturamento_mes: true } }).catch(() => null),
     prisma.configuracaoAgenda.findUnique({ where: { usuario_id: userId } }),
-    prisma.produto.count(),
-    prisma.venda.count({ where: { usuario_id: userId } }),
+    prisma.produto.count({ where: produtoWhere }),
+    prisma.venda.count({ where: { usuario_id: userId, tipo: 'sale', ...areaWhere } }),
     getRetencaoThresholds(userId)
   ]);
   const metaFaturamentoMes = settings?.meta_faturamento_mes != null ? Number(settings.meta_faturamento_mes) : null;
@@ -217,49 +308,49 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
   ] = await Promise.all([
     prisma.venda.groupBy({
       by: ['cliente_id'],
-      where: { usuario_id: userId, status: 'PAGO' },
+      where: { usuario_id: userId, tipo: 'sale', status: 'PAGO', ...areaWhere },
       _max: { createdAt: true }
     }),
     prisma.venda.aggregate({
-      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicio, lte: fim } },
+      where: { usuario_id: userId, tipo: 'sale', status: 'PAGO', createdAt: createdAtRange, ...areaWhere },
       _sum: { total: true },
       _count: { _all: true }
     }),
     prisma.venda.aggregate({
-      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicioAnt, lte: fimAnt } },
+      where: { usuario_id: userId, tipo: 'sale', status: 'PAGO', createdAt: { gte: inicioAnt, lte: fimAnt }, ...areaWhere },
       _sum: { total: true }
     }),
     prisma.venda.groupBy({
       by: ['cliente_id'],
-      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicio, lte: fim } }
+      where: { usuario_id: userId, tipo: 'sale', status: 'PAGO', createdAt: createdAtRange, ...areaWhere }
     }),
-    prisma.$queryRaw<Array<{ count: bigint }>>`
-      SELECT COUNT(*)::bigint AS count FROM produtos WHERE estoque_atual <= estoque_minimo
-    `,
-    prisma.$queryRaw<Array<{ id: string; nome: string; estoque_atual: number; estoque_minimo: number }>>`
-      SELECT id, nome, estoque_atual, estoque_minimo FROM produtos WHERE estoque_atual <= estoque_minimo LIMIT ${LIMIT_PRODUTOS_ESTOQUE_BAIXO}
-    `,
+    prisma.$queryRaw<Array<{ count: bigint }>>(
+      Prisma.sql`SELECT COUNT(*)::bigint AS count FROM produtos WHERE estoque_atual <= estoque_minimo ${businessAreaId ? Prisma.sql`AND business_area_id = ${businessAreaId}` : Prisma.empty}`
+    ),
+    prisma.$queryRaw<Array<{ id: string; nome: string; estoque_atual: number; estoque_minimo: number }>>(
+      Prisma.sql`SELECT id, nome, estoque_atual, estoque_minimo FROM produtos WHERE estoque_atual <= estoque_minimo ${businessAreaId ? Prisma.sql`AND business_area_id = ${businessAreaId}` : Prisma.empty} LIMIT ${LIMIT_PRODUTOS_ESTOQUE_BAIXO}`
+    ),
     prisma.venda.aggregate({
-      where: { usuario_id: userId, status: 'PENDENTE', createdAt: { gte: inicio, lte: fim } },
+      where: { usuario_id: userId, tipo: 'sale', status: 'PENDENTE', createdAt: createdAtRange, ...areaWhere },
       _sum: { total: true }
     }),
     prisma.venda.count({
-      where: { usuario_id: userId, status: 'PENDENTE', createdAt: { gte: inicio, lte: fim } }
+      where: { usuario_id: userId, tipo: 'sale', status: 'PENDENTE', createdAt: createdAtRange, ...areaWhere }
     }),
     prisma.venda.groupBy({
       by: ['cliente_id'],
-      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicioAnt, lte: fimAnt } }
+      where: { usuario_id: userId, tipo: 'sale', status: 'PAGO', createdAt: { gte: inicioAnt, lte: fimAnt }, ...areaWhere }
     }),
     prisma.venda.findMany({
-      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicio, lte: fim } },
+      where: { usuario_id: userId, tipo: 'sale', status: 'PAGO', createdAt: createdAtRange, ...areaWhere },
       select: { total: true, createdAt: true }
     }),
     prisma.venda.findMany({
-      where: { usuario_id: userId, status: 'PAGO', createdAt: { gte: inicioAnt, lte: fimAnt } },
+      where: { usuario_id: userId, tipo: 'sale', status: 'PAGO', createdAt: { gte: inicioAnt, lte: fimAnt }, ...areaWhere },
       select: { total: true, createdAt: true }
     }),
     prisma.venda.findMany({
-      where: { usuario_id: userId },
+      where: { usuario_id: userId, ...areaWhere },
       orderBy: { createdAt: 'desc' },
       take: LIMIT_ATIVIDADES_RECENTES,
       select: { id: true, total: true, createdAt: true, cliente: { select: { nome: true } } }
@@ -269,7 +360,8 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
           where: {
             usuario_id: userId,
             data: { gte: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()) },
-            status: { in: ['PENDENTE', 'CONFIRMADO'] }
+            status: { in: ['PENDENTE', 'CONFIRMADO'] },
+            ...areaWhere
           },
           orderBy: [{ data: 'asc' }, { hora_inicio: 'asc' }],
           take: LIMIT_PROXIMOS_AGENDAMENTOS,
@@ -278,7 +370,7 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
       : Promise.resolve([]),
     modulos.agendamento
       ? prisma.agendamento.findMany({
-          where: { usuario_id: userId, data: { gte: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()) } },
+          where: { usuario_id: userId, data: { gte: new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()) }, ...areaWhere },
           orderBy: [{ data: 'asc' }, { hora_inicio: 'asc' }],
           take: 5,
           select: { id: true, nome_cliente: true, data: true, hora_inicio: true }
@@ -336,8 +428,9 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
       where: {
         usuario_id: userId,
         status: 'PAGO',
-        createdAt: { gte: inicio, lte: fim },
-        cliente_id: { in: clientesRecuperadosIds }
+        createdAt: createdAtRange,
+        cliente_id: { in: clientesRecuperadosIds },
+        ...areaWhere
       },
       _sum: { total: true }
     });
@@ -359,15 +452,61 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
     estoque_minimo: number;
   }>).slice(0, LIMIT_PRODUTOS_ESTOQUE_BAIXO);
 
-  const bucketize = (vendas: { total: unknown; createdAt: Date }[], period: PeriodoSummary, rangeStart: Date) => {
-    const n = period === 'semana' ? 7 : period === 'mes' ? 5 : 3;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const rangeEndForBucket = periodoSafe === 'custom' ? fim : null;
+  const rangeEndAntForBucket = periodoSafe === 'custom' ? fimAnt : null;
+
+  const bucketize = (
+    vendas: { total: unknown; createdAt: Date }[],
+    period: PeriodoSummaryOuCustom,
+    rangeStart: Date,
+    rangeEnd: Date | null = null
+  ) => {
+    let n: number;
+    const rangeSpanMs = rangeEnd ? rangeEnd.getTime() - rangeStart.getTime() : 0;
+    const rangeDays = rangeEnd
+      ? period === 'custom'
+        ? Math.round(rangeSpanMs / dayMs)
+        : Math.round(rangeSpanMs / dayMs) + 1
+      : 0;
+
+    if (period === 'custom' && rangeEnd) {
+      if (rangeDays <= 7) n = 7;
+      else if (rangeDays <= 35) n = 5;
+      else if (rangeDays <= 90) n = 12;
+      else n = 12;
+    } else if (period === 'ultimos_7_dias') n = 7;
+    else if (period === 'ultimos_30_dias') n = 5;
+    else if (period === 'ultimos_90_dias') n = 12;
+    else if (period === 'semana') n = 7;
+    else if (period === 'mes') n = 5;
+    else n = 3;
+
     const sums = new Array(n).fill(0);
     const counts = new Array(n).fill(0);
+    const bucketMs = period === 'custom' && rangeEnd && rangeDays > 0 ? (rangeSpanMs + 1) / n : 0;
+
     for (const v of vendas) {
       const d = v.createdAt;
       const val = Number(v.total ?? 0);
       let idx: number;
-      if (period === 'semana') {
+      if (period === 'custom' && rangeEnd) {
+        idx = Math.floor((d.getTime() - rangeStart.getTime()) / (bucketMs || 1));
+        if (idx < 0) idx = 0;
+        if (idx > n - 1) idx = n - 1;
+      } else if (period === 'ultimos_7_dias') {
+        idx = Math.floor((d.getTime() - rangeStart.getTime()) / dayMs);
+        if (idx < 0) idx = 0;
+        if (idx > 6) idx = 6;
+      } else if (period === 'ultimos_30_dias') {
+        idx = Math.floor((d.getTime() - rangeStart.getTime()) / (7 * dayMs));
+        if (idx < 0) idx = 0;
+        if (idx > 4) idx = 4;
+      } else if (period === 'ultimos_90_dias') {
+        idx = Math.floor((d.getTime() - rangeStart.getTime()) / (7 * dayMs));
+        if (idx < 0) idx = 0;
+        if (idx > 11) idx = 11;
+      } else if (period === 'semana') {
         idx = d.getDay() === 0 ? 6 : d.getDay() - 1;
       } else if (period === 'mes') {
         idx = Math.min(4, Math.floor((d.getDate() - 1) / 7));
@@ -382,14 +521,38 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
     const ticket = sums.map((s, i) => (counts[i] > 0 ? s / counts[i] : 0));
     return { sums, ticket };
   };
-  const bAtual = bucketize(vendasAtual, periodoSafe, inicio);
-  const bAnterior = bucketize(vendasAnterior, periodoSafe, inicioAnt);
-  const chartLabels =
-    periodoSafe === 'semana'
-      ? ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-      : periodoSafe === 'mes'
-        ? ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5']
-        : ['Mês 1', 'Mês 2', 'Mês 3'];
+  const bAtual = bucketize(vendasAtual, periodoSafe, inicio, rangeEndForBucket);
+  const bAnterior = bucketize(vendasAnterior, periodoSafe, inicioAnt, rangeEndAntForBucket);
+
+  const buildChartLabels = (): string[] => {
+    if (periodoSafe === 'custom') {
+      const dias = Math.round((fim.getTime() - inicio.getTime()) / dayMs);
+      let n: number;
+      if (dias <= 7) n = 7;
+      else if (dias <= 35) n = 5;
+      else if (dias <= 90) n = 12;
+      else n = 12;
+      return Array.from({ length: n }, (_, i) => {
+        const d = new Date(inicio);
+        const step = dias <= 7 ? 1 : dias <= 35 ? Math.ceil(dias / 5) : Math.ceil(dias / 12);
+        d.setDate(d.getDate() + i * step);
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+      });
+    }
+    if (periodoSafe === 'ultimos_7_dias') {
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(inicio);
+        d.setDate(d.getDate() + i);
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+      });
+    }
+    if (periodoSafe === 'ultimos_30_dias') return ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5'];
+    if (periodoSafe === 'ultimos_90_dias') return Array.from({ length: 12 }, (_, i) => `Sem ${i + 1}`);
+    if (periodoSafe === 'semana') return ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+    if (periodoSafe === 'mes') return ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5'];
+    return ['Mês 1', 'Mês 2', 'Mês 3'];
+  };
+  const chartLabels = buildChartLabels();
   const grafico = {
     labels: chartLabels,
     receitaAtual: bAtual.sums,
@@ -420,8 +583,41 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
   atividadesRecentes.sort((a, b) => new Date(b.horario).getTime() - new Date(a.horario).getTime());
   const atividadesRecentesSlice = atividadesRecentes.slice(0, LIMIT_ATIVIDADES_RECENTES);
 
+  // Resultado por área (só quando visão consolidada, para card de comparação)
+  let resultadoPorArea: Array<{ areaId: string; areaName: string; color: string | null; faturamento: number }> = [];
+  if (!businessAreaId) {
+    const porArea = await prisma.venda.groupBy({
+      by: ['business_area_id'],
+      where: {
+        usuario_id: userId,
+        tipo: 'sale',
+        status: 'PAGO',
+        createdAt: createdAtRange
+      },
+      _sum: { total: true }
+    });
+    const areaIds = porArea.map((r) => r.business_area_id).filter((id): id is string => id != null);
+    if (areaIds.length > 0) {
+      const areas = await prisma.businessArea.findMany({
+        where: { id: { in: areaIds } },
+        select: { id: true, name: true, color: true }
+      });
+      const areaMap = new Map(areas.map((a) => [a.id, a]));
+      resultadoPorArea = porArea
+        .filter((r) => r.business_area_id != null)
+        .map((r) => ({
+          areaId: r.business_area_id!,
+          areaName: areaMap.get(r.business_area_id!)?.name ?? 'Sem área',
+          color: areaMap.get(r.business_area_id!)?.color ?? null,
+          faturamento: Number(r._sum.total ?? 0)
+        }))
+        .sort((a, b) => b.faturamento - a.faturamento);
+    }
+  }
+
   const payload = {
     periodo: periodoSafe,
+    ...(periodoSafe === 'custom' && { dataInicio: dataInicialQ!.trim(), dataFim: dataFinalQ!.trim() }),
     modulos,
     metaFaturamentoMes,
     resultado: {
@@ -464,7 +660,8 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
       }))
     },
     grafico: grafico,
-    atividadesRecentes: atividadesRecentesSlice
+    atividadesRecentes: atividadesRecentesSlice,
+    ...(resultadoPorArea.length > 0 && { resultadoPorArea })
   };
 
   setCache(cacheKey, payload, CACHE_TTL_MS);
@@ -472,4 +669,67 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
     console.log(`[dashboard/summary] total: ${Date.now() - totalStart}ms`);
   }
   res.json(payload);
+};
+
+const SEARCH_LIMIT = 5;
+
+/** GET /dashboard/search?q= — busca global: clientes, pedidos/vendas, agendamentos (nome, telefone, código). */
+export const getDashboardSearch = async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const q = ((req.query.q as string) ?? '').trim();
+  if (q.length < 2) {
+    return res.json({ clientes: [], vendas: [], agendamentos: [] });
+  }
+  const term = q.slice(0, 100);
+  const contains = { contains: term, mode: 'insensitive' as const };
+
+  const [clientes, vendas, agendamentos] = await Promise.all([
+    prisma.cliente.findMany({
+      where: {
+        usuario_id: userId,
+        OR: [{ nome: contains }, { telefone: { contains: term } }]
+      },
+      take: SEARCH_LIMIT,
+      select: { id: true, nome: true, telefone: true }
+    }),
+    prisma.venda.findMany({
+      where: {
+        usuario_id: userId,
+        OR: [
+          { sale_code: contains },
+          { os_code: contains },
+          { cliente: { nome: contains } },
+          { cliente: { telefone: { contains: term } } }
+        ]
+      },
+      take: SEARCH_LIMIT,
+      select: { id: true, sale_code: true, os_code: true, tipo: true, total: true, createdAt: true, cliente: { select: { nome: true } } }
+    }),
+    prisma.agendamento.findMany({
+      where: {
+        usuario_id: userId,
+        OR: [{ nome_cliente: contains }, { telefone_cliente: { contains: term } }]
+      },
+      take: SEARCH_LIMIT,
+      select: { id: true, nome_cliente: true, data: true, hora_inicio: true, status: true }
+    })
+  ]);
+
+  res.json({
+    clientes: clientes.map((c) => ({ id: c.id, tipo: 'cliente' as const, label: c.nome, sublabel: c.telefone ?? undefined, rota: `/clientes/${c.id}` })),
+    vendas: vendas.map((v) => ({
+      id: v.id,
+      tipo: 'venda' as const,
+      label: (v.sale_code ?? v.os_code) || (v.cliente?.nome ?? 'Venda'),
+      sublabel: v.cliente?.nome,
+      rota: v.tipo === 'quote' ? `/orcamentos/${v.id}` : `/vendas/${v.id}`
+    })),
+    agendamentos: agendamentos.map((a) => ({
+      id: a.id,
+      tipo: 'agendamento' as const,
+      label: a.nome_cliente,
+      sublabel: a.data ? `${a.data.toISOString().slice(0, 10)} ${a.hora_inicio ?? ''}` : undefined,
+      rota: `/agenda`
+    }))
+  });
 };

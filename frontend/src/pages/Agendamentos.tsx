@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
+import { usePersonalizacao } from '../contexts/PersonalizacaoContext';
+import ModalPortal from '../components/ModalPortal';
 
 interface Agendamento {
   id: string;
@@ -56,6 +58,7 @@ function phoneForWhatsApp(digits: string): string {
 
 export default function Agendamentos() {
   const navigate = useNavigate();
+  const { getModuleLabel } = usePersonalizacao();
   const [searchParams] = useSearchParams();
   const vistaProximos3 = searchParams.get('vista') === 'proximos3';
 
@@ -245,7 +248,7 @@ export default function Agendamentos() {
       {/* A) Header — ordem: Agenda | Tabs | (flex) | Histórico | Novo Agendamento | ⚙️ | 🚫 */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:flex-nowrap">
         <div className="flex items-center gap-3 shrink-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-text-main">Agenda</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-text-main">{getModuleLabel('agendamentos')}</h1>
           <div className="flex rounded-lg border border-border bg-bg-elevated p-0.5">
             {(['MENSAL', 'SEMANAL', 'DIÁRIO'] as const).map((tab) => (
               <button
@@ -616,17 +619,24 @@ function ModalDetalheCliente({ agendamento, onClose, formatPhone, phoneForWhatsA
     navigate(`/agendamentos/historico?q=${encodeURIComponent(q)}`);
   };
 
+  const isCancelado = agendamento.status === 'CANCELADO';
+  const handleFazerVenda = () => {
+    onClose();
+    navigate(`/vendas/novo?agendamentoId=${encodeURIComponent(agendamento.id)}`);
+  };
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'var(--color-overlay)' }}
-      onClick={onClose}
-    >
+    <ModalPortal>
       <div
-        className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-sm w-full p-5"
-        onClick={(e) => e.stopPropagation()}
+        className="aurix-modal-overlay fixed inset-0 flex items-center justify-center p-4"
+        style={{ backgroundColor: 'var(--color-overlay)' }}
+        onClick={onClose}
       >
-        <h3 className="text-lg font-semibold text-text-main mb-3">Dados do agendamento</h3>
+        <div
+          className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-sm w-full p-5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 className="text-lg font-semibold text-text-main mb-3">Dados do agendamento</h3>
         <p className="text-sm text-text-muted mb-1">Data e horário</p>
         <p className="text-text-main font-medium mb-3">{dataHoraStr}</p>
         <p className="text-sm text-text-muted mb-1">Nome</p>
@@ -664,15 +674,36 @@ function ModalDetalheCliente({ agendamento, onClose, formatPhone, phoneForWhatsA
             Ver histórico deste cliente
           </button>
         </div>
+        <div className="mt-4 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={handleFazerVenda}
+            disabled={isCancelado}
+            className="w-full text-sm font-semibold px-4 py-3 rounded-lg bg-primary text-text-on-primary hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Fazer venda
+          </button>
+          {isCancelado && (
+            <p className="text-xs text-text-muted">Agendamento cancelado não permite nova venda.</p>
+          )}
+          <button
+            type="button"
+            onClick={() => { onClose(); navigate('/vendas'); }}
+            className="w-full text-sm font-medium text-primary hover:underline"
+          >
+            Ir para Vendas
+          </button>
+        </div>
         <button
           type="button"
           onClick={onClose}
-          className="mt-4 w-full text-sm text-text-muted hover:text-text-main"
+          className="mt-3 w-full text-sm text-text-muted hover:text-text-main"
         >
           Fechar
         </button>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }
 
@@ -746,12 +777,13 @@ function ModalNovoAgendamento({ diaInicial, onClose, onSuccess, submitting, setS
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--color-overlay)' }} onClick={onClose}>
-      <div
-        className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-semibold text-text-main mb-4">Novo Agendamento</h3>
+    <ModalPortal>
+      <div className="aurix-modal-overlay fixed inset-0 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--color-overlay)' }} onClick={onClose}>
+        <div
+          className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 className="text-lg font-semibold text-text-main mb-4">Novo Agendamento</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-text-muted mb-1">Data</label>
@@ -833,7 +865,8 @@ function ModalNovoAgendamento({ diaInicial, onClose, onSuccess, submitting, setS
             </button>
           </div>
         </form>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

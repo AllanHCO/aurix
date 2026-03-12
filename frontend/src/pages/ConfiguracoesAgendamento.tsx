@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
+import ToggleSwitch from '../components/ToggleSwitch';
+import ModalPortal from '../components/ModalPortal';
 
 interface DisponibilidadeItem {
   dia_semana: number;
@@ -306,21 +308,11 @@ export default function ConfiguracoesAgendamento() {
                 key={d.dia_semana}
                 className="flex flex-wrap items-center gap-3 p-3 rounded-lg border border-border hover:bg-bg-elevated/50 transition-colors"
               >
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={d.ativo}
-                  onClick={() => updateDisponibilidade(d.dia_semana, { ativo: !d.ativo })}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${
-                    d.ativo ? 'bg-success' : 'bg-border-light'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-bg-card shadow transition-transform ${
-                      d.ativo ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
+                <ToggleSwitch
+                  inline={false}
+                  checked={d.ativo}
+                  onChange={(ativo) => updateDisponibilidade(d.dia_semana, { ativo })}
+                />
                 <span className="w-24 text-sm font-medium text-text-main">{DIAS_LABELS[d.dia_semana]}</span>
                 {d.ativo ? (
                   <>
@@ -542,12 +534,13 @@ function ModalNovoBloqueio({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--color-overlay)' }} onClick={onClose}>
-      <div
-        className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-md w-full p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-semibold text-text-main mb-4">Novo Intervalo</h3>
+    <ModalPortal>
+      <div className="aurix-modal-overlay fixed inset-0 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--color-overlay)' }} onClick={onClose}>
+        <div
+          className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-md w-full p-6"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 className="text-lg font-semibold text-text-main mb-4">Novo Intervalo</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-text-muted mb-1">Tipo</label>
@@ -633,7 +626,8 @@ function ModalNovoBloqueio({
             </button>
           </div>
         </form>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

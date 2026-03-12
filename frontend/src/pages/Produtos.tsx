@@ -1,96 +1,90 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { usePersonalizacao } from '../contexts/PersonalizacaoContext';
 import CadastroProdutos from '../components/CadastroProdutos';
 import CategoriasTab from '../components/CategoriasTab';
+import HistoricoComprasTab from '../components/HistoricoComprasTab';
 
-type AbaProdutos = 'produtos' | 'categorias';
+type AbaProdutos = 'produtos' | 'categorias' | 'historico-compras';
 type FiltroProduto = 'todos' | 'mais_vendidos' | 'menos_vendidos' | 'estoque_baixo';
 type PeriodoProduto = 'este_mes' | 'ultimos_3_meses';
 
-const opcoes: { value: AbaProdutos; label: string; icon: string }[] = [
-  { value: 'produtos', label: 'Cadastro de Produtos', icon: 'inventory_2' },
-  { value: 'categorias', label: 'Categorias', icon: 'folder' }
-];
-
 export default function Produtos() {
-  const [searchParams] = useSearchParams();
+  const { getModuleLabel, getModuleConfig } = usePersonalizacao();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const abaUrl = searchParams.get('aba') as AbaProdutos | null;
+  const produtoIdUrl = searchParams.get('produto_id');
   const filtroUrl = searchParams.get('filtro') as FiltroProduto | null;
   const periodoUrl = searchParams.get('periodo') as PeriodoProduto | null;
   const initialFiltro = filtroUrl && ['todos', 'mais_vendidos', 'menos_vendidos', 'estoque_baixo'].includes(filtroUrl) ? filtroUrl : undefined;
   const initialPeriodo = periodoUrl && ['este_mes', 'ultimos_3_meses'].includes(periodoUrl) ? periodoUrl : undefined;
 
-  const [aba, setAba] = useState<AbaProdutos>('produtos');
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [aba, setAba] = useState<AbaProdutos>(abaUrl && ['produtos', 'categorias', 'historico-compras'].includes(abaUrl) ? abaUrl : 'produtos');
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    if (abaUrl && abaUrl !== aba && ['produtos', 'categorias', 'historico-compras'].includes(abaUrl)) setAba(abaUrl);
+  }, [abaUrl]);
 
-  const opcaoAtiva = opcoes.find((o) => o.value === aba) ?? opcoes[0];
-
-  const selectOpcao = (value: AbaProdutos) => {
-    setAba(value);
-    setDropdownOpen(false);
+  const setAbaAndUrl = (novaAba: AbaProdutos, produtoId?: string) => {
+    setAba(novaAba);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('aba', novaAba);
+      if (produtoId) next.set('produto_id', produtoId);
+      else next.delete('produto_id');
+      return next;
+    });
   };
 
   return (
     <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-1 sm:mb-2">Produtos</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-1 sm:mb-2">{getModuleLabel('produtos')}</h1>
         <p className="text-sm sm:text-base text-text-muted">Cadastro de produtos e categorias</p>
       </div>
 
-      {/* Dropdown fixo no topo */}
-      <div className="sticky top-0 z-20 bg-bg-main pb-2 -mx-2 px-2 sm:mx-0 sm:px-0" ref={dropdownRef}>
-        <div className="border border-border rounded-lg bg-bg-card overflow-hidden">
+      {/* Abas Lista | Categorias | Histórico de compras */}
+      <div className="border-b border-border">
+        <nav className="flex gap-6 sm:gap-8" aria-label="Abas do módulo Produtos">
           <button
             type="button"
-            onClick={() => setDropdownOpen((v) => !v)}
-            className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left text-text-main font-medium hover:bg-bg-main-light transition-colors min-h-[48px] touch-manipulation"
-            aria-expanded={dropdownOpen}
-            aria-haspopup="listbox"
-            aria-label="Selecionar seção"
+            onClick={() => setAbaAndUrl('produtos')}
+            className={`pb-3 pt-1 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              aba === 'produtos'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-muted hover:text-text-main hover:border-border'
+            }`}
           >
-            <span className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-lg text-primary">{opcaoAtiva.icon}</span>
-              {opcaoAtiva.label}
-            </span>
-            <span className={`material-symbols-outlined text-text-muted transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}>
-              expand_more
-            </span>
+            Lista
           </button>
-          {dropdownOpen && (
-            <ul className="border-t border-border" role="listbox">
-              {opcoes.map((op) => (
-                <li key={op.value} role="option" aria-selected={aba === op.value}>
-                  <button
-                    type="button"
-                    onClick={() => selectOpcao(op.value)}
-                    className={`w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-medium min-h-[44px] touch-manipulation transition-colors ${
-                      aba === op.value
-                        ? 'bg-primary/15 text-primary'
-                        : 'text-text-main hover:bg-bg-main-light'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-lg">{op.icon}</span>
-                    {op.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+          <button
+            type="button"
+            onClick={() => setAbaAndUrl('categorias')}
+            className={`pb-3 pt-1 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              aba === 'categorias'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-muted hover:text-text-main hover:border-border'
+            }`}
+          >
+            Categorias
+          </button>
+          <button
+            type="button"
+            onClick={() => setAbaAndUrl('historico-compras')}
+            className={`pb-3 pt-1 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              aba === 'historico-compras'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-muted hover:text-text-main hover:border-border'
+            }`}
+          >
+            Histórico de compras
+          </button>
+        </nav>
       </div>
 
-      {aba === 'produtos' && <CadastroProdutos initialFiltro={initialFiltro} initialPeriodo={initialPeriodo} />}
+      {aba === 'produtos' && <CadastroProdutos initialFiltro={initialFiltro} initialPeriodo={initialPeriodo} stockEnabled={getModuleConfig('produtos').controlar_estoque} onOpenHistoricoCompras={(productId) => setAbaAndUrl('historico-compras', productId)} />}
       {aba === 'categorias' && <CategoriasTab />}
+      {aba === 'historico-compras' && <HistoricoComprasTab initialProductId={produtoIdUrl || null} />}
     </div>
   );
 }

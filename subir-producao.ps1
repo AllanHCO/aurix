@@ -13,8 +13,8 @@ git status
 # 3) Fazer o commit
 git commit -m ""
 
-# 4) Enviar para o GitHub (Render e Vercel fazem deploy automático ao dar push)
+# 4) Enviar para o GitHub (Fly.io e Vercel fazem deploy automático ao dar push)
 git push origin main
 
 Write-Host ""
-Write-Host "Pronto. Se o remote estiver certo, o Render e o Vercel vao fazer o deploy automatico." -ForegroundColor Green
+Write-Host "Pronto. Se o remote estiver certo, o Fly.io (backend) e a Vercel (frontend) vao fazer o deploy automatico." -ForegroundColor Green

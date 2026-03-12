@@ -34,11 +34,14 @@ export const errorHandler = (
     });
   }
 
-  console.error('Unexpected error:', err);
-  console.error('Error stack:', err.stack);
+  const msg = err.message || '';
+  console.error('[500]', msg);
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('Stack:', err.stack);
+    if ((err as any).meta) console.error('Prisma meta:', (err as any).meta);
+  }
 
   // Dica para erros de conexão com banco (comum no Render + Supabase)
-  const msg = err.message || '';
   const isDbError =
     err.name === 'PrismaClientInitializationError' ||
     /can't reach database|can not reach|connection|ECONNREFUSED|ETIMEDOUT/i.test(msg);
@@ -46,10 +49,11 @@ export const errorHandler = (
     ? 'DATABASE_URL no Render: adicione ?sslmode=require no final da URL (ex.: .../postgres?sslmode=require). Teste: GET /health/db'
     : undefined;
 
+  const isDev = process.env.NODE_ENV !== 'production';
   return res.status(500).json({
-    error: 'Internal server error',
+    error: isDev && msg ? msg : 'Internal server error',
     statusCode: 500,
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined,
-    hint
+    ...(isDev && msg && { message: msg }),
+    ...(hint && { hint })
   });
 };

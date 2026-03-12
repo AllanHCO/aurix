@@ -26,10 +26,10 @@ function randomDate(start: Date, end: Date): Date {
   return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
 }
 
-/** POST /dev/seed-demo?months=3 — apenas em desenvolvimento. Em produção nunca executa (proteção para clientes reais). */
+/** POST /dev/seed-demo?months=3 — apenas em development/staging. Em produção NUNCA executa. */
 export const seedDemo = async (req: AuthRequest, res: Response) => {
-  if (process.env.NODE_ENV === 'production') {
-    throw new AppError('Seed desabilitado em produção.', 404);
+  if (process.env.APP_ENV === 'production' || process.env.NODE_ENV === 'production') {
+    throw new AppError('Seed/demo desabilitado em produção.', 403);
   }
   const userId = req.userId!;
   const months = Math.min(3, Math.max(1, parseInt(String(req.query.months), 10) || 3));

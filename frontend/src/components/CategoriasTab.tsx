@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
+import ModalPortal from './ModalPortal';
 
 interface Categoria {
   id: string;
@@ -167,8 +168,9 @@ export default function CategoriasTab() {
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ backgroundColor: 'var(--color-overlay)' }}>
-          <div className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-md w-full p-6">
+        <ModalPortal>
+          <div className="aurix-modal-overlay fixed inset-0 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--color-overlay)' }}>
+            <div className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-bold text-text-main mb-4">
               {categoriaEditando ? 'Editar categoria' : 'Nova categoria'}
             </h3>
@@ -204,6 +206,7 @@ export default function CategoriasTab() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

@@ -33,6 +33,7 @@ export default function AgendaConfig() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [slug, setSlug] = useState('');
+  const [slugEditing, setSlugEditing] = useState(false);
   const [slugSaving, setSlugSaving] = useState(false);
   const [config, setConfig] = useState(defaultConfig);
   const [branding, setBranding] = useState<BrandingState>(defaultBranding);
@@ -102,17 +103,29 @@ export default function AgendaConfig() {
     }
   };
 
+  const normalizeSlug = (value: string): string | null => {
+    const raw = (value || '').trim().toLowerCase();
+    if (!raw) return null;
+    const noAccents = raw.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+    let s = noAccents.replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    s = s.replace(/-+/g, '-').replace(/^-|-$/g, '');
+    if (s.length < 3 || s.length > 50) return null;
+    return s;
+  };
+
   const handleSlugSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const s = slug.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    if (!slugEditing) return;
+    const s = normalizeSlug(slug);
     if (!s) {
-      toast.error('Informe um slug');
+      toast.error('Slug inválido. Use apenas letras minúsculas, números e hífens (3 a 50 caracteres).');
       return;
     }
     setSlugSaving(true);
     try {
       await api.put('/agenda/slug', { slug: s });
       setSlug(s);
+      setSlugEditing(false);
       toast.success('Slug da agenda atualizado');
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { error?: string } } };
@@ -120,6 +133,25 @@ export default function AgendaConfig() {
     } finally {
       setSlugSaving(false);
     }
+  };
+
+  const handleStartEditSlug = () => {
+    setSlugEditing(true);
+  };
+
+  const handleCancelEditSlug = () => {
+    setSlugEditing(false);
+  };
+
+  const handleGenerateSlug = () => {
+    const base = branding.nome_organizacao || slug || 'agenda';
+    const s = normalizeSlug(base);
+    if (!s) {
+      toast.error('Não foi possível gerar um slug automático. Ajuste o nome da organização.');
+      return;
+    }
+    setSlug(s);
+    setSlugEditing(true);
   };
 
   if (loading) {
@@ -195,17 +227,52 @@ export default function AgendaConfig() {
 
       <form onSubmit={handleSlugSubmit} className="bg-surface-light rounded-xl border border-border-light p-6 space-y-4">
         <h2 className="text-lg font-semibold text-text-main">Link público</h2>
-        <p className="text-sm text-text-muted">Slug para a URL: /agenda/seu-slug</p>
+        <p className="text-sm text-text-muted">Slug para a URL: /agenda/seu-slug (apenas letras minúsculas, números e hífens)</p>
         <input
           type="text"
           value={slug}
           onChange={(e) => setSlug(e.target.value)}
+          readOnly={!slugEditing}
           placeholder="ex: minha-empresa"
-          className="w-full px-4 py-2 border border-border-light rounded-lg bg-input-bg text-text-main"
+          className={`w-full px-4 py-2 border border-border-light rounded-lg text-text-main ${
+            slugEditing ? 'bg-input-bg' : 'bg-input-bg/60 cursor-not-allowed'
+          }`}
         />
-        <button type="submit" disabled={slugSaving} className="bg-primary hover:bg-primary-hover text-text-on-primary font-medium px-4 py-2 rounded-lg">
-          {slugSaving ? 'Salvando...' : 'Salvar slug'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {!slugEditing ? (
+            <button
+              type="button"
+              onClick={handleStartEditSlug}
+              className="bg-primary hover:bg-primary-hover text-text-on-primary font-medium px-4 py-2 rounded-lg"
+            >
+              Editar
+            </button>
+          ) : (
+            <>
+              <button
+                type="submit"
+                disabled={slugSaving}
+                className="bg-primary hover:bg-primary-hover text-text-on-primary font-medium px-4 py-2 rounded-lg disabled:opacity-50"
+              >
+                {slugSaving ? 'Salvando...' : 'Salvar slug'}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelEditSlug}
+                className="border border-border-light bg-input-bg text-text-main font-medium px-4 py-2 rounded-lg"
+              >
+                Cancelar
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={handleGenerateSlug}
+            className="border border-border-light bg-input-bg text-text-main font-medium px-4 py-2 rounded-lg"
+          >
+            Gerar sugestão automática
+          </button>
+        </div>
       </form>
 
       <form onSubmit={handleSubmit} className="bg-surface-light rounded-xl border border-border-light p-6 space-y-4">

@@ -20,6 +20,7 @@
   /* Semânticas */
   --color-success: #22C55E;
   --color-error: #EF4444;
+  --color-warning: #F59E0B;
   /* Compatibilidade */
   --color-bg: var(--color-bg-main);
   --color-bg-secondary: var(--color-bg-sidebar);
@@ -57,6 +58,7 @@ html.dark {
   --color-overlay: rgba(0, 0, 0, 0.6);
   --color-success: #22C55E;
   --color-error: #EF4444;
+  --color-warning: #F59E0B;
   --color-bg: var(--color-bg-main);
   --color-bg-secondary: var(--color-bg-sidebar);
   --color-surface: var(--color-bg-card);
@@ -180,4 +182,67 @@ button:focus-visible,
 a:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+/* Gráfico Financeiro: evita fundo branco no hover (Recharts) */
+.financeiro-chart-wrap,
+.financeiro-chart-wrap .recharts-responsive-container,
+.financeiro-chart-wrap .recharts-wrapper,
+.financeiro-chart-wrap .recharts-surface {
+  background: var(--color-bg-card) !important;
+}
+/* Tooltip do Recharts pode ser renderizado fora do container */
+.recharts-tooltip-wrapper,
+.recharts-default-tooltip,
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--color-bg-card) !important;
+  border: 1px solid var(--color-border) !important;
+}
+
+/* ========== Tabelas: coluna Ações fixa à direita ========== */
+.table-actions-col,
+.table-actions-col th,
+.table-actions-col td {
+  position: sticky;
+  right: 0;
+  background: var(--color-bg-card);
+  box-shadow: -6px 0 10px rgba(0, 0, 0, 0.04);
+  z-index: 1;
+}
+thead tr th.table-actions-col {
+  z-index: 2;
+  background: var(--color-bg-elevated);
+}
+/* Linha em hover: manter fundo da coluna ações */
+tbody tr:hover td.table-actions-col {
+  background: var(--color-bg-elevated);
+}
+
+/* Cabeçalho fixo ao rolar (opcional) */
+.table-sticky-head thead tr th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-bg-elevated);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+.table-sticky-head thead tr th.table-actions-col {
+  z-index: 3;
+}
+.table-sticky-head {
+  max-height: 70vh;
+  overflow: auto;
+}
+.table-sticky-head table {
+  position: relative;
+}
+
+/* Modais/drawers: sempre por cima de tudo (usado com ModalPortal) */
+.aurix-modal-portal {
+  z-index: 2147483647 !important;
+}
+.aurix-modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1 !important;
 }

@@ -66,7 +66,7 @@ async function generateUniqueSlug(userId: string, nome: string): Promise<string>
     if (!taken) return candidate;
     n += 1;
     candidate = `${base}-${n}`;
-    if (candidate.length > 60) candidate = `agenda-${n}`;
+    if (candidate.length > 50) candidate = `agenda-${n}`;
   }
 }
 

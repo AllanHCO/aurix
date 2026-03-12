@@ -1,10 +1,12 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
+import ExcelJS from 'exceljs';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
 import { getRetencaoThresholds } from '../services/companySettings.service';
 import { invalidatePrefix } from '../services/cache.service';
+import { getCurrentOrganizationId, organizationFilter, assertRecordOwnership } from '../lib/tenant';
 
 const prisma = new PrismaClient();
 
@@ -19,8 +21,11 @@ function statusFromDias(diasInativo: number | null, diasAtencao: number, diasIna
 
 const clienteSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
+  cpf: z.string().max(14).optional(),
   telefone: z.string().optional(),
-  observacoes: z.string().optional()
+  observacoes: z.string().optional(),
+  time_futebol: z.string().max(120).optional(),
+  business_area_id: z.string().uuid().nullable().optional()
 });
 
 const clienteCreateSchema = clienteSchema;
@@ -30,8 +35,10 @@ const clienteUpdateSchema = clienteSchema.partial();
 interface ClienteListagem {
   id: string;
   nome: string;
+  cpf: string | null;
   telefone: string | null;
   observacoes: string | null;
+  time_futebol: string | null;
   status: ClienteStatusAuto;
   createdAt: Date;
   updatedAt: Date;
@@ -46,7 +53,7 @@ function inicioFimMesAtual(): { inicio: Date; fim: Date } {
   return { inicio, fim };
 }
 
-const SORT_VALIDOS = ['dias_inativo_desc', 'nome_asc', 'nome_desc'] as const;
+const SORT_VALIDOS = ['dias_inativo_desc', 'created_at_desc', 'nome_asc', 'nome_desc'] as const;
 const STATUS_VALIDOS = ['ativo', 'atencao', 'inativo'] as const;
 
 /**
@@ -67,6 +74,8 @@ export const listarClientes = async (req: AuthRequest, res: Response) => {
     const sort = SORT_VALIDOS.includes(req.query.sort as any) ? (req.query.sort as typeof SORT_VALIDOS[number]) : 'dias_inativo_desc';
     const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit), 10) || 20));
+    const businessAreaId = (req.query.business_area_id ?? req.query.areaId) as string | undefined;
+    const areaFilter = businessAreaId?.trim() ? businessAreaId.trim() : null;
 
     const { inicio: inicioMes, fim: fimMes } = inicioFimMesAtual();
     const hoje = new Date();
@@ -82,7 +91,10 @@ export const listarClientes = async (req: AuthRequest, res: Response) => {
       if (row._max.createdAt) mapUltima.set(row.cliente_id, row._max.createdAt);
     }
 
-    const whereCliente: { nome?: { contains: string; mode: 'insensitive' }; OR?: Array<{ nome?: { contains: string; mode: 'insensitive' }; telefone?: { contains: string; mode: 'insensitive' } }> } = {};
+    const whereCliente: { usuario_id: string; business_area_id?: string | null; nome?: { contains: string; mode: 'insensitive' }; OR?: Array<{ nome?: { contains: string; mode: 'insensitive' }; telefone?: { contains: string; mode: 'insensitive' } }> } = {
+      usuario_id: userId
+    };
+    if (areaFilter) whereCliente.business_area_id = areaFilter;
     if (search) {
       whereCliente.OR = [
         { nome: { contains: search, mode: 'insensitive' } },
@@ -91,8 +103,25 @@ export const listarClientes = async (req: AuthRequest, res: Response) => {
     }
 
     const clientes = await prisma.cliente.findMany({
-      where: Object.keys(whereCliente).length ? whereCliente : undefined,
-      orderBy: sort === 'nome_asc' ? { nome: 'asc' } : sort === 'nome_desc' ? { nome: 'desc' } : { createdAt: 'desc' }
+      where: whereCliente,
+      select: {
+        id: true,
+        nome: true,
+        cpf: true,
+        telefone: true,
+        observacoes: true,
+        business_area_id: true,
+        createdAt: true,
+        updatedAt: true
+      },
+      orderBy:
+        sort === 'nome_asc'
+          ? { nome: 'asc' }
+          : sort === 'nome_desc'
+            ? { nome: 'desc' }
+            : sort === 'created_at_desc'
+              ? { createdAt: 'desc' }
+              : { createdAt: 'desc' }
     });
 
     let lista: ClienteListagem[] = clientes.map((c) => {
@@ -106,8 +135,10 @@ export const listarClientes = async (req: AuthRequest, res: Response) => {
       return {
         id: c.id,
         nome: c.nome,
+        cpf: c.cpf ?? null,
         telefone: c.telefone,
         observacoes: c.observacoes,
+        time_futebol: (c as { time_futebol?: string | null }).time_futebol ?? null,
         status,
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
@@ -155,6 +186,8 @@ export const listarClientes = async (req: AuthRequest, res: Response) => {
         const db = b.diasInativo ?? -1;
         return db - da;
       });
+    } else if (sort === 'created_at_desc') {
+      lista.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } else if (sort === 'nome_asc') {
       lista.sort((a, b) => a.nome.localeCompare(b.nome));
     } else if (sort === 'nome_desc') {
@@ -177,11 +210,18 @@ export const listarClientes = async (req: AuthRequest, res: Response) => {
 
 export const obterCliente = async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const userId = req.userId!;
+  const userId = getCurrentOrganizationId(req);
 
-  const cliente = await prisma.cliente.findUnique({
-    where: { id },
-    include: {
+  const cliente = await prisma.cliente.findFirst({
+    where: { id, ...organizationFilter(userId) },
+    select: {
+      id: true,
+      nome: true,
+      cpf: true,
+      telefone: true,
+      observacoes: true,
+      createdAt: true,
+      updatedAt: true,
       vendas: {
         where: { usuario_id: userId, status: 'PAGO' },
         select: { total: true, createdAt: true },
@@ -206,6 +246,7 @@ export const obterCliente = async (req: AuthRequest, res: Response) => {
 
   res.json({
     ...cliente,
+    time_futebol: null,
     vendas: undefined,
     ultimaCompra: ultimaVenda ? ultimaVenda.toISOString() : null,
     diasInativo,
@@ -216,15 +257,36 @@ export const obterCliente = async (req: AuthRequest, res: Response) => {
 
 export const criarCliente = async (req: AuthRequest, res: Response) => {
   const parsed = clienteCreateSchema.parse(req.body);
-  const data = {
+  const cpfDigits = parsed.cpf?.replace(/\D/g, '');
+  const cpfFormatted = cpfDigits?.length === 11
+    ? `${cpfDigits.slice(0, 3)}.${cpfDigits.slice(3, 6)}.${cpfDigits.slice(6, 9)}-${cpfDigits.slice(9)}`
+    : undefined;
+  const userId = req.userId!;
+  let business_area_id: string | null = null;
+  if (parsed.business_area_id != null && parsed.business_area_id.trim() !== '') {
+    const area = await prisma.businessArea.findFirst({
+      where: { id: parsed.business_area_id.trim(), usuario_id: userId, is_active: true }
+    });
+    if (area) business_area_id = area.id;
+  }
+  const data: { usuario_id: string; nome: string; cpf?: string; telefone?: string; observacoes?: string; time_futebol?: string; business_area_id?: string | null } = {
+    usuario_id: userId,
     nome: parsed.nome.trim(),
+    cpf: cpfFormatted,
     telefone: parsed.telefone?.trim() || undefined,
-    observacoes: parsed.observacoes?.trim() || undefined
+    observacoes: parsed.observacoes?.trim() || undefined,
+    time_futebol: parsed.time_futebol?.trim() || undefined,
+    business_area_id
   };
-
-  const cliente = await prisma.cliente.create({
-    data
-  });
+  let cliente;
+  try {
+    cliente = await prisma.cliente.create({ data });
+  } catch (e: any) {
+    if (e?.message?.includes('time_futebol')) {
+      const { time_futebol: _, ...dataSemTime } = data;
+      cliente = await prisma.cliente.create({ data: dataSemTime });
+    } else throw e;
+  }
 
   res.status(201).json(cliente);
 
@@ -233,24 +295,44 @@ export const criarCliente = async (req: AuthRequest, res: Response) => {
 
 export const atualizarCliente = async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
+  const userId = req.userId!;
   const body = clienteUpdateSchema.parse(req.body);
-  const data: { nome?: string; telefone?: string | null; observacoes?: string | null } = {};
+  const data: { nome?: string; cpf?: string | null; telefone?: string | null; observacoes?: string | null; time_futebol?: string | null; business_area_id?: string | null } = {};
   if (body.nome !== undefined) data.nome = body.nome.trim();
+  if (body.cpf !== undefined) {
+    const cpfNorm = body.cpf?.replace(/\D/g, '');
+    data.cpf = cpfNorm?.length === 11 ? `${cpfNorm.slice(0, 3)}.${cpfNorm.slice(3, 6)}.${cpfNorm.slice(6, 9)}-${cpfNorm.slice(9)}` : (body.cpf?.trim() || null);
+  }
   if (body.telefone !== undefined) data.telefone = body.telefone?.trim() ?? null;
   if (body.observacoes !== undefined) data.observacoes = body.observacoes?.trim() ?? null;
-
-  const clienteExistente = await prisma.cliente.findUnique({
-    where: { id }
-  });
-
-  if (!clienteExistente) {
-    throw new AppError('Cliente não encontrado', 404);
+  if (body.time_futebol !== undefined) data.time_futebol = body.time_futebol?.trim() ?? null;
+  if (body.business_area_id !== undefined) {
+    if (body.business_area_id == null || body.business_area_id.trim() === '') {
+      data.business_area_id = null;
+    } else {
+      const area = await prisma.businessArea.findFirst({
+        where: { id: body.business_area_id.trim(), usuario_id: userId, is_active: true }
+      });
+      data.business_area_id = area?.id ?? null;
+    }
   }
 
-  const cliente = await prisma.cliente.update({
-    where: { id },
-    data
+  const clienteExistente = await prisma.cliente.findFirst({
+    where: { id, ...organizationFilter(userId) },
+    select: { id: true, usuario_id: true }
   });
+
+  assertRecordOwnership(clienteExistente, userId, (c) => c?.usuario_id ?? undefined, 'Cliente');
+
+  let cliente;
+  try {
+    cliente = await prisma.cliente.update({ where: { id }, data });
+  } catch (e: any) {
+    if (e?.message?.includes('time_futebol') && data.time_futebol !== undefined) {
+      const { time_futebol: _, ...dataSemTime } = data;
+      cliente = await prisma.cliente.update({ where: { id }, data: dataSemTime });
+    } else throw e;
+  }
 
   res.json(cliente);
 
@@ -258,18 +340,18 @@ export const atualizarCliente = async (req: AuthRequest, res: Response) => {
 };
 
 export const excluirCliente = async (req: AuthRequest, res: Response) => {
+  const userId = getCurrentOrganizationId(req);
   const { id } = req.params;
 
-  const cliente = await prisma.cliente.findUnique({
-    where: { id }
+  const cliente = await prisma.cliente.findFirst({
+    where: { id, ...organizationFilter(userId) },
+    select: { id: true, usuario_id: true }
   });
 
-  if (!cliente) {
-    throw new AppError('Cliente não encontrado', 404);
-  }
+  assertRecordOwnership(cliente, userId, (c) => c?.usuario_id ?? undefined, 'Cliente');
 
   const venda = await prisma.venda.findFirst({
-    where: { cliente_id: id }
+    where: { cliente_id: id, usuario_id: userId }
   });
 
   if (venda) {
@@ -288,7 +370,8 @@ export const obterHistoricoCompras = async (req: AuthRequest, res: Response) => 
   const userId = req.userId!;
 
   const cliente = await prisma.cliente.findUnique({
-    where: { id }
+    where: { id },
+    select: { id: true }
   });
 
   if (!cliente) {
@@ -323,18 +406,65 @@ export const obterHistoricoCompras = async (req: AuthRequest, res: Response) => 
 const importItemSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório').transform((s) => s.trim()),
   telefone: z.string().optional().transform((s) => (s && s.trim()) || undefined),
-  observacoes: z.string().optional().transform((s) => (s && s.trim()) || undefined)
+  cpf: z.string().optional().transform((s) => (s && s.trim()) || undefined),
+  observacoes: z.string().optional().transform((s) => (s && s.trim()) || undefined),
+  time_futebol: z.string().optional().transform((s) => (s && s.trim()) || undefined),
+  dados_adicionais_tipo: z.enum(['veiculo', 'equipamento', 'outro']).optional(),
+  dados_adicionais_titulo: z.string().optional().transform((s) => (s && s.trim()) || undefined),
+  dados_adicionais_descricao: z.string().optional().transform((s) => (s && s.trim()) || undefined),
+  dados_adicionais_mostrar_orcamento: z.union([z.boolean(), z.string()]).optional().transform((v) => v === false || v === 'false' || v === '0' ? false : true),
+  dados_adicionais_mostrar_venda: z.union([z.boolean(), z.string()]).optional().transform((v) => v === false || v === 'false' || v === '0' ? false : true),
+  dados_adicionais_apenas_interno: z.union([z.boolean(), z.string()]).optional().transform((v) => v === true || v === 'true' || v === '1' || v === 'sim')
 });
 
 const importSchema = z.object({
   clientes: z.array(importItemSchema).min(1).max(500)
 });
 
+const COLUNAS_MODELO = [
+  'nome',
+  'telefone',
+  'cpf',
+  'observacoes',
+  'time_futebol',
+  'dados_adicionais_tipo',
+  'dados_adicionais_titulo',
+  'dados_adicionais_descricao',
+  'dados_adicionais_mostrar_orcamento',
+  'dados_adicionais_mostrar_venda',
+  'dados_adicionais_apenas_interno'
+];
+
+/** GET /clientes/import/modelo — download do arquivo .xlsx modelo para importação. */
+export const getModeloImportacao = async (_req: AuthRequest, res: Response) => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Clientes', { headerFooter: { firstHeader: 'Modelo de importação de clientes' } });
+  sheet.columns = COLUNAS_MODELO.map((c) => ({ header: c, key: c, width: 18 }));
+  sheet.addRow({
+    nome: 'Exemplo Cliente',
+    telefone: '(11) 99999-9999',
+    cpf: '123.456.789-00',
+    observacoes: 'Cliente exemplo',
+    time_futebol: 'Corinthians',
+    dados_adicionais_tipo: 'outro',
+    dados_adicionais_titulo: 'Observação',
+    dados_adicionais_descricao: 'Texto livre',
+    dados_adicionais_mostrar_orcamento: 'sim',
+    dados_adicionais_mostrar_venda: 'sim',
+    dados_adicionais_apenas_interno: 'não'
+  });
+  const buffer = await workbook.xlsx.writeBuffer();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="modelo_importacao_clientes.xlsx"');
+  res.send(Buffer.from(buffer));
+};
+
 /**
  * POST /clientes/import — importação em lote (CSV/JSON).
  * Valida nome obrigatório, telefone normalizado. Retorna created e erros.
  */
 export const importarClientes = async (req: AuthRequest, res: Response) => {
+  const usuarioId = getCurrentOrganizationId(req);
   const parsed = importSchema.safeParse(req.body);
   if (!parsed.success) {
     throw new AppError('Dados inválidos. Envie { clientes: [ { nome, telefone?, observacoes? } ] } (máx. 500).', 400);
@@ -359,13 +489,38 @@ export const importarClientes = async (req: AuthRequest, res: Response) => {
     if (telefoneNorm) telefonesVistos.add(telefoneNorm);
 
     try {
-      await prisma.cliente.create({
+      const cpfDigits = row.cpf?.replace(/\D/g, '');
+      const cpfFormatted = cpfDigits?.length === 11
+        ? `${cpfDigits.slice(0, 3)}.${cpfDigits.slice(3, 6)}.${cpfDigits.slice(6, 9)}-${cpfDigits.slice(9)}`
+        : undefined;
+      const clienteCriado = await prisma.cliente.create({
         data: {
+          usuario_id: usuarioId,
           nome,
+          cpf: cpfFormatted,
           telefone: row.telefone?.trim() || undefined,
-          observacoes: row.observacoes?.trim() || undefined
+          observacoes: row.observacoes?.trim() || undefined,
+          time_futebol: row.time_futebol?.trim() || undefined
         }
       });
+      if (row.dados_adicionais_titulo && row.dados_adicionais_tipo) {
+        const tipo = row.dados_adicionais_tipo as 'veiculo' | 'equipamento' | 'outro';
+        const dataJson: Record<string, unknown> =
+          tipo === 'outro'
+            ? { titulo: row.dados_adicionais_titulo, descricao: row.dados_adicionais_descricao ?? '' }
+            : { descricao: row.dados_adicionais_descricao ?? '' };
+        await prisma.clientExtraItem.create({
+          data: {
+            client_id: clienteCriado.id,
+            type: tipo,
+            title: row.dados_adicionais_titulo,
+            data_json: dataJson,
+            show_on_quote: row.dados_adicionais_mostrar_orcamento ?? true,
+            show_on_sale: row.dados_adicionais_mostrar_venda ?? true,
+            internal_only: row.dados_adicionais_apenas_interno ?? false
+          }
+        });
+      }
       created++;
     } catch (e: any) {
       errors.push(`Linha ${i + 1} (${nome}): ${e.message || 'erro ao criar'}`);
@@ -449,7 +604,7 @@ export const getRetencao = async (req: AuthRequest, res: Response) => {
   }
 
   const clientes = await prisma.cliente.findMany({
-    where: { id: { in: clientesIds } },
+    where: { id: { in: clientesIds }, usuario_id: userId },
     select: { id: true, nome: true, telefone: true }
   });
   const clientesMap = new Map(clientes.map((c) => [c.id, c]));

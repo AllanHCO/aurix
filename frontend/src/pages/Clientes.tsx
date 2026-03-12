@@ -2,9 +2,11 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
+import { usePersonalizacao } from '../contexts/PersonalizacaoContext';
 import { formatDate, formatCurrency } from '../utils/format';
 import ClienteModal from '../components/ClienteModal';
 import ClienteImportModal from '../components/ClienteImportModal';
+import TableActionsMenu from '../components/TableActionsMenu';
 
 type TabClientes = 'lista' | 'retencao';
 type PeriodoRetencao = 'semana' | 'mes' | 'trimestre';
@@ -41,6 +43,8 @@ interface Cliente {
   nome: string;
   telefone: string | null;
   observacoes: string | null;
+  time_futebol?: string | null;
+  business_area_id?: string | null;
   status: ClienteStatusAuto;
   ultimaCompra: string | null;
   diasInativo: number | null;
@@ -49,6 +53,9 @@ interface Cliente {
 const LIMITE_POR_PAGINA = 20;
 
 export default function Clientes() {
+  const { getModuleLabel, getModuleConfig } = usePersonalizacao();
+  const marketingConfig = getModuleConfig('marketing');
+  const showRetencaoTab = marketingConfig.mostrar_clientes_inativos || marketingConfig.mostrar_recuperacao_clientes;
   const [searchParams, setSearchParams] = useSearchParams();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [total, setTotal] = useState(0);
@@ -91,7 +98,7 @@ export default function Clientes() {
   const buildParams = useCallback(
     (pagina: number) => {
       const params: Record<string, string | number> = {
-        sort: 'dias_inativo_desc',
+        sort: filtro === 'TODOS' ? 'created_at_desc' : 'dias_inativo_desc',
         page: pagina,
         limit: LIMITE_POR_PAGINA
       };
@@ -185,6 +192,17 @@ export default function Clientes() {
   useEffect(() => {
     loadClientes(paginaAtual);
   }, [paginaAtual, filtro, buscaDebounce, searchParams.get('reativar')]);
+
+  useEffect(() => {
+    if (!showRetencaoTab && tab === 'retencao') {
+      setTab('lista');
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('tab');
+        return next;
+      });
+    }
+  }, [showRetencaoTab, tab, setSearchParams]);
 
   const handleFiltro = (f: FiltroRapido) => {
     setFiltro(f);
@@ -296,7 +314,7 @@ export default function Clientes() {
     <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-1 sm:mb-2">Clientes</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-1 sm:mb-2">{getModuleLabel('clientes')}</h1>
           <p className="text-sm sm:text-base text-text-muted">
             Centro de retenção — reative quem está parado e não perca vendas
           </p>
@@ -321,25 +339,37 @@ export default function Clientes() {
         </div>
       </div>
 
-      {/* Abas Lista | Retenção */}
-      <div className="flex rounded-full border border-border bg-bg-card p-1 w-fit">
-        <button
-          type="button"
-          onClick={() => setTabAndUrl('lista')}
-          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${tab === 'lista' ? 'bg-primary text-[var(--color-text-on-primary)]' : 'text-text-muted hover:text-text-main'}`}
-        >
-          Lista
-        </button>
-        <button
-          type="button"
-          onClick={() => setTabAndUrl('retencao')}
-          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${tab === 'retencao' ? 'bg-primary text-[var(--color-text-on-primary)]' : 'text-text-muted hover:text-text-main'}`}
-        >
-          Retenção
-        </button>
+      {/* Abas Lista | Retenção — navegação em abas, não toggle */}
+      <div className="border-b border-border">
+        <nav className="flex gap-6 sm:gap-8" aria-label="Abas do módulo Clientes">
+          <button
+            type="button"
+            onClick={() => setTabAndUrl('lista')}
+            className={`pb-3 pt-1 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              tab === 'lista'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-muted hover:text-text-main hover:border-border'
+            }`}
+          >
+            Lista
+          </button>
+          {showRetencaoTab && (
+            <button
+              type="button"
+              onClick={() => setTabAndUrl('retencao')}
+              className={`pb-3 pt-1 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                tab === 'retencao'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-text-muted hover:text-text-main hover:border-border'
+              }`}
+            >
+              Retenção
+            </button>
+          )}
+        </nav>
       </div>
 
-      {tab === 'retencao' ? (
+      {tab === 'retencao' && showRetencaoTab ? (
         <>
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-sm text-text-muted">Período:</span>
@@ -500,6 +530,9 @@ export default function Clientes() {
                       Status
                     </th>
                     <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted">
+                      WhatsApp
+                    </th>
+                    <th className="table-actions-col px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted w-[80px]">
                       Ações
                     </th>
                   </tr>
@@ -531,42 +564,33 @@ export default function Clientes() {
                             {statusInfo.label}
                           </span>
                         </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4">
-                          <div className="flex items-center justify-center gap-1 sm:gap-2">
-                            {temTelefone ? (
-                              <button
-                                type="button"
-                                onClick={() => abrirWhatsApp(c)}
-                                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-success hover:bg-success/10 rounded touch-manipulation"
-                                title="Abrir WhatsApp"
-                              >
-                                <span className="material-symbols-outlined">chat</span>
-                              </button>
-                            ) : (
-                              <span
-                                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-muted cursor-not-allowed rounded"
-                                title="Telefone não cadastrado"
-                              >
-                                <span className="material-symbols-outlined">chat</span>
-                              </span>
-                            )}
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+                          {temTelefone ? (
                             <button
                               type="button"
-                              onClick={() => handleEdit(c)}
-                              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-primary hover:bg-primary/10 rounded touch-manipulation"
-                              title="Editar"
+                              onClick={() => abrirWhatsApp(c)}
+                              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-[var(--color-success)] hover:bg-green-500/10 rounded touch-manipulation"
+                              title="Abrir WhatsApp"
                             >
-                              <span className="material-symbols-outlined">edit</span>
+                              <span className="material-symbols-outlined">chat</span>
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(c.id)}
-                              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-error hover:bg-badge-erro/20 rounded touch-manipulation"
-                              title="Excluir"
+                          ) : (
+                            <span
+                              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-[var(--color-text-muted)] cursor-not-allowed rounded"
+                              title="Telefone não cadastrado"
                             >
-                              <span className="material-symbols-outlined">delete</span>
-                            </button>
-                          </div>
+                              <span className="material-symbols-outlined">chat</span>
+                            </span>
+                          )}
+                        </td>
+                        <td className="table-actions-col px-3 sm:px-6 py-3 sm:py-4">
+                          <TableActionsMenu
+                            items={[
+                              { label: 'Editar', icon: 'edit', onClick: () => handleEdit(c) },
+                              { label: 'Excluir', icon: 'delete', onClick: () => handleDelete(c.id), danger: true }
+                            ]}
+                            className="justify-center"
+                          />
                         </td>
                       </tr>
                     );

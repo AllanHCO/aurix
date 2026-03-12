@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
+import { usePersonalizacao } from '../contexts/PersonalizacaoContext';
+import { useBusinessAreas } from '../contexts/BusinessAreaContext';
 import toast from 'react-hot-toast';
 import { formatCurrency, formatDate } from '../utils/format';
 
@@ -38,7 +40,10 @@ interface RelatorioPeriodo {
 const LIMIT = 20;
 
 export default function Relatorios() {
+  const { getModuleLabel, getModuleConfig } = usePersonalizacao();
+  const { areas, selectedAreaId } = useBusinessAreas();
   const [searchParams] = useSearchParams();
+  const [reportAreaId, setReportAreaId] = useState<string | null>(selectedAreaId);
   const [dataInicial, setDataInicial] = useState('');
   const [dataFinal, setDataFinal] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,12 +51,16 @@ export default function Relatorios() {
   const [, setPage] = useState(1);
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
 
+  useEffect(() => {
+    setReportAreaId((prev) => (prev === selectedAreaId ? prev : selectedAreaId));
+  }, [selectedAreaId]);
+
   const loadRelatorio = async (inicio: string, fim: string, pageNum: number = 1, orderDir: 'asc' | 'desc' = order) => {
     setLoading(true);
     try {
-      const { data } = await api.get<RelatorioPeriodo>('/relatorios/periodo', {
-        params: { dataInicial: inicio, dataFinal: fim, page: pageNum, limit: LIMIT, order: orderDir }
-      });
+      const params: Record<string, string | number> = { dataInicial: inicio, dataFinal: fim, page: pageNum, limit: LIMIT, order: orderDir };
+      params.business_area_id = reportAreaId ?? '';
+      const { data } = await api.get<RelatorioPeriodo>('/relatorios/periodo', { params });
       setRelatorio(data);
       setPage(pageNum);
     } catch (err: any) {
@@ -92,8 +101,9 @@ export default function Relatorios() {
       return;
     }
     try {
+      const params: Record<string, string> = { dataInicial, dataFinal, business_area_id: reportAreaId ?? '' };
       const response = await api.get('/relatorios/exportar', {
-        params: { dataInicial, dataFinal },
+        params,
         responseType: 'blob'
       });
       const disposition = response.headers['content-disposition'];
@@ -134,12 +144,25 @@ export default function Relatorios() {
   return (
     <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-1 sm:mb-2">Relatórios</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-1 sm:mb-2">{getModuleLabel('relatorios')}</h1>
         <p className="text-sm sm:text-base text-text-muted">Gere relatórios de vendas por período e compare com o mês anterior</p>
       </div>
 
       <div className="bg-bg-card rounded-xl border border-border shadow-sm p-4 sm:p-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-text-main mb-1">Área</label>
+            <select
+              value={reportAreaId ?? ''}
+              onChange={(e) => setReportAreaId(e.target.value || null)}
+              className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-input-bg text-text-main"
+            >
+              <option value="">Todas</option>
+              {areas.filter((a) => a.is_active).map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-text-main mb-1">Data inicial</label>
             <input
@@ -166,6 +189,7 @@ export default function Relatorios() {
             >
               {loading ? 'Gerando...' : 'Gerar Relatório'}
             </button>
+            {getModuleConfig('relatorios').permitir_exportacao_csv && (
             <button
               onClick={exportarCSV}
               disabled={!dataInicial || !dataFinal}
@@ -174,6 +198,7 @@ export default function Relatorios() {
               <span className="material-symbols-outlined">download</span>
               Exportar CSV
             </button>
+            )}
           </div>
         </div>
 
@@ -194,6 +219,7 @@ export default function Relatorios() {
                 <p className="text-text-muted text-sm mb-1">Ticket médio</p>
                 <p className="text-2xl font-bold text-text-main">{formatCurrency(relatorio.ticket_medio)}</p>
               </div>
+              {getModuleConfig('relatorios').mostrar_comparacao_periodos && (
               <div className="bg-bg-elevated p-4 rounded-lg border border-border">
                 <p className="text-text-muted text-sm mb-1">Crescimento vs período anterior</p>
                 {relatorio.variacao_percentual === null ? (
@@ -213,6 +239,7 @@ export default function Relatorios() {
                 )}
                 <p className="text-xs text-text-muted mt-0.5">faturamento vs mês anterior</p>
               </div>
+            )}
             </div>
 
             <div>

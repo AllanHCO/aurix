@@ -4,6 +4,8 @@ import { checkPlanBlock } from '../middleware/checkPlanBlock';
 import {
   listarProdutos,
   obterProduto,
+  historicoCompras,
+  listHistoricoCompras,
   criarProduto,
   atualizarProduto,
   excluirProduto
@@ -13,6 +15,8 @@ const router = Router();
 router.use(authenticate);
 router.use(checkPlanBlock);
 router.get('/', listarProdutos);
+router.get('/historico-compras', listHistoricoCompras);
+router.get('/:id/purchase-history', historicoCompras);
 router.get('/:id', obterProduto);
 router.post('/', criarProduto);
 router.put('/:id', atualizarProduto);

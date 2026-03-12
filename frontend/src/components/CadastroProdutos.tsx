@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
-import { formatCurrency } from '../utils/format';
+import { formatCurrency, formatDate } from '../utils/format';
+import { useBusinessAreas } from '../contexts/BusinessAreaContext';
 import ProdutoModal from './ProdutoModal';
+import TableActionsMenu from './TableActionsMenu';
+import ModalPortal from './ModalPortal';
 
 type FiltroDesempenho = 'todos' | 'mais_vendidos' | 'menos_vendidos' | 'estoque_baixo';
 type PeriodoDesempenho = 'este_mes' | 'ultimos_3_meses';
 
 export interface Produto {
   id: string;
+  item_type?: 'product' | 'service';
   nome: string;
   preco: number;
   custo: number;
@@ -16,13 +20,19 @@ export interface Produto {
   estoque_minimo: number;
   categoria_id?: string;
   categoria_nome?: string;
+  supplier_id?: string | null;
+  supplier_nome?: string | null;
   linha?: string | null;
+  business_area_id?: string | null;
   qtdVendidaMesAtual?: number;
 }
 
 interface CadastroProdutosProps {
   initialFiltro?: FiltroDesempenho;
   initialPeriodo?: PeriodoDesempenho;
+  stockEnabled?: boolean;
+  /** Ao clicar em "Ver histórico de compras deste produto", abre a aba Histórico com filtro pelo produto */
+  onOpenHistoricoCompras?: (productId: string) => void;
 }
 
 function useDebounce<T>(value: T, delayMs: number): T {
@@ -34,24 +44,30 @@ function useDebounce<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
-export default function CadastroProdutos({ initialFiltro, initialPeriodo }: CadastroProdutosProps = {}) {
+export default function CadastroProdutos({ initialFiltro, initialPeriodo, stockEnabled = true, onOpenHistoricoCompras }: CadastroProdutosProps = {}) {
+  const { selectedAreaId, enabled: businessAreasEnabled } = useBusinessAreas();
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [produtoEditando, setProdutoEditando] = useState<Produto | null>(null);
   const [filtro, setFiltro] = useState<FiltroDesempenho>(initialFiltro ?? 'todos');
   const [periodo, setPeriodo] = useState<PeriodoDesempenho>(initialPeriodo ?? 'este_mes');
+  const [itemTypeFilter, setItemTypeFilter] = useState<'todos' | 'product' | 'service'>('todos');
   const [buscaNome, setBuscaNome] = useState('');
   const debouncedNome = useDebounce(buscaNome.trim(), 350);
 
-  const loadProdutos = async (filtroAtual?: FiltroDesempenho, periodoAtual?: PeriodoDesempenho, nome?: string) => {
+  const loadProdutos = async (filtroAtual?: FiltroDesempenho, periodoAtual?: PeriodoDesempenho, nome?: string, itemType?: 'todos' | 'product' | 'service') => {
     const f = filtroAtual ?? filtro;
     const p = periodoAtual ?? periodo;
     const n = nome !== undefined ? nome : debouncedNome;
+    const it = itemType !== undefined ? itemType : itemTypeFilter;
     try {
       setLoading(true);
       const params: Record<string, string> = { filtro: f, periodo: p };
       if (n) params.nome = n;
+      if (it === 'product') params.item_type = 'product';
+      if (it === 'service') params.item_type = 'service';
+      if (businessAreasEnabled && selectedAreaId) params.business_area_id = selectedAreaId;
       const response = await api.get<Produto[]>('/produtos', { params });
       setProdutos(response.data);
     } catch (error: any) {
@@ -61,9 +77,15 @@ export default function CadastroProdutos({ initialFiltro, initialPeriodo }: Cada
     }
   };
 
+  const filtroOptions: FiltroDesempenho[] = stockEnabled ? ['todos', 'mais_vendidos', 'menos_vendidos', 'estoque_baixo'] : ['todos', 'mais_vendidos', 'menos_vendidos'];
+
   useEffect(() => {
-    loadProdutos(filtro, periodo, debouncedNome);
-  }, [filtro, periodo, debouncedNome]);
+    if (!stockEnabled && filtro === 'estoque_baixo') setFiltro('todos');
+  }, [stockEnabled, filtro]);
+
+  useEffect(() => {
+    loadProdutos(filtro, periodo, debouncedNome, itemTypeFilter);
+  }, [filtro, periodo, debouncedNome, itemTypeFilter, businessAreasEnabled, selectedAreaId]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este produto?')) return;
@@ -71,7 +93,7 @@ export default function CadastroProdutos({ initialFiltro, initialPeriodo }: Cada
     try {
       await api.delete(`/produtos/${id}`);
       toast.success('Produto excluído com sucesso!');
-      loadProdutos(filtro, periodo);
+      loadProdutos(filtro, periodo, debouncedNome, itemTypeFilter);
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Erro ao excluir produto');
     }
@@ -92,7 +114,7 @@ export default function CadastroProdutos({ initialFiltro, initialPeriodo }: Cada
   const handlePeriodoChange = (novoPeriodo: PeriodoDesempenho) => setPeriodo(novoPeriodo);
 
   const isEstoqueBaixo = (produto: Produto) =>
-    produto.estoque_atual <= produto.estoque_minimo;
+    (produto.item_type ?? 'product') === 'product' && produto.estoque_atual <= produto.estoque_minimo;
 
   if (loading) {
     return <div className="text-center py-12">Carregando...</div>;
@@ -100,19 +122,43 @@ export default function CadastroProdutos({ initialFiltro, initialPeriodo }: Cada
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="text-xl sm:text-2xl font-bold text-text-main mb-1">Cadastro de Produtos</h2>
-          <p className="text-sm text-text-muted">Listagem, filtros e indicadores de vendas</p>
-        </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
-        >
-          <span className="material-symbols-outlined">add</span>
-          Novo Produto
-        </button>
-      </div>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-text-muted">Tipo:</span>
+              {(['todos', 'product', 'service'] as const).map((it) => (
+                <button
+                  key={it}
+                  type="button"
+                  onClick={() => setItemTypeFilter(it)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[40px] touch-manipulation ${
+                    itemTypeFilter === it ? 'bg-primary text-text-on-primary' : 'bg-bg-card text-text-main border border-border hover:bg-bg-elevated'
+                  }`}
+                >
+                  {it === 'todos' ? 'Todos' : it === 'product' ? 'Produtos' : 'Serviços'}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex-1 min-w-0 max-w-md relative">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-lg pointer-events-none">search</span>
+                <input
+                  id="busca-produto"
+                  type="text"
+                  value={buscaNome}
+                  onChange={(e) => setBuscaNome(e.target.value)}
+                  placeholder="Nome do produto ou serviço..."
+                  className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg bg-input-bg text-text-main placeholder:text-text-muted focus:ring-2 focus:ring-primary outline-none"
+                />
+              </div>
+              <button
+                onClick={() => setModalOpen(true)}
+                className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
+              >
+                <span className="material-symbols-outlined">add</span>
+                Novo Produto
+              </button>
+            </div>
+          </div>
 
       {produtos.length === 0 ? (
         <div className="bg-bg-card rounded-xl border border-border p-12 text-center">
@@ -132,22 +178,6 @@ export default function CadastroProdutos({ initialFiltro, initialPeriodo }: Cada
         </div>
       ) : (
         <>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex-1 min-w-0 max-w-md">
-              <label htmlFor="busca-produto" className="block text-sm font-medium text-text-muted mb-1">Busca por nome</label>
-              <div className="relative">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-lg pointer-events-none">search</span>
-                <input
-                  id="busca-produto"
-                  type="text"
-                  value={buscaNome}
-                  onChange={(e) => setBuscaNome(e.target.value)}
-                  placeholder="Nome do produto..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg bg-input-bg text-text-main placeholder:text-text-muted focus:ring-2 focus:ring-primary outline-none"
-                />
-              </div>
-            </div>
-          </div>
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm text-text-muted">Período:</span>
             <div className="flex flex-wrap gap-2">
@@ -167,7 +197,7 @@ export default function CadastroProdutos({ initialFiltro, initialPeriodo }: Cada
             </div>
             <span className="text-sm text-text-muted ml-1 sm:ml-0">Filtro:</span>
             <div className="flex flex-wrap gap-2">
-              {(['todos', 'mais_vendidos', 'menos_vendidos', 'estoque_baixo'] as FiltroDesempenho[]).map((f) => (
+              {filtroOptions.map((f) => (
                 <button
                   key={f}
                   onClick={() => handleFiltroChange(f)}
@@ -189,6 +219,9 @@ export default function CadastroProdutos({ initialFiltro, initialPeriodo }: Cada
                 <table className="w-full min-w-[640px]">
                   <thead className="bg-bg-elevated border-b border-border">
                     <tr>
+                      <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted w-24">
+                        Tipo
+                      </th>
                       <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-text-muted">
                         Nome
                       </th>
@@ -204,16 +237,20 @@ export default function CadastroProdutos({ initialFiltro, initialPeriodo }: Cada
                       <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted">
                         Custo
                       </th>
-                      <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted">
-                        Estoque
-                      </th>
-                      <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted">
-                        Mínimo
-                      </th>
+                      {stockEnabled && (
+                        <>
+                          <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted">
+                            Estoque
+                          </th>
+                          <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted">
+                            Mínimo
+                          </th>
+                        </>
+                      )}
                       <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-semibold text-text-muted" title="Apenas vendas com status PAGO no período selecionado">
                         Qtd vendida
                       </th>
-                      <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted">
+                      <th className="table-actions-col px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-text-muted w-[80px]">
                         Ações
                       </th>
                     </tr>
@@ -227,13 +264,18 @@ export default function CadastroProdutos({ initialFiltro, initialPeriodo }: Cada
                         <tr
                           key={produto.id}
                           className={`hover:bg-bg-elevated ${
-                            isEstoqueBaixo(produto) ? 'bg-badge-estoque' : ''
-                          }`}
+stockEnabled && isEstoqueBaixo(produto) ? 'bg-badge-estoque' : ''
+                        }`}
                         >
+                          <td className="px-3 sm:px-6 py-3 sm:py-4">
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${(produto.item_type ?? 'product') === 'service' ? 'bg-primary/20 text-primary' : 'bg-bg-elevated text-text-muted'}`}>
+                              {(produto.item_type ?? 'product') === 'service' ? 'Serviço' : 'Produto'}
+                            </span>
+                          </td>
                           <td className="px-3 sm:px-6 py-3 sm:py-4">
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="font-semibold text-text-main truncate">{produto.nome}</span>
-                              {isEstoqueBaixo(produto) && (
+                              {stockEnabled && isEstoqueBaixo(produto) && (
                                 <span className="text-xs bg-badge-estoque text-badge-estoque-text px-2 py-1 rounded shrink-0">
                                   Estoque Baixo
                                 </span>
@@ -250,38 +292,35 @@ export default function CadastroProdutos({ initialFiltro, initialPeriodo }: Cada
                             {produto.categoria_nome ?? '-'}
                           </td>
                           <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm">
-                            {produto.linha ?? '-'}
+                            {(produto.item_type ?? 'product') === 'service' ? '—' : (produto.linha ?? '-')}
                           </td>
                           <td className="px-3 sm:px-6 py-3 sm:py-4 text-right font-semibold text-text-main text-sm sm:text-base">
-                            {formatCurrency(produto.preco)}
+                            {(produto.item_type ?? 'product') === 'service' && produto.preco === 0 ? '—' : formatCurrency(produto.preco)}
                           </td>
                           <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-text-muted text-sm">
                             {formatCurrency(produto.custo)}
                           </td>
-                          <td className="px-3 sm:px-6 py-3 sm:py-4 text-right font-semibold text-text-main">
-                            {produto.estoque_atual}
-                          </td>
-                          <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-text-muted">
-                            {produto.estoque_minimo}
-                          </td>
+                          {stockEnabled && (
+                            <>
+                              <td className="px-3 sm:px-6 py-3 sm:py-4 text-right font-semibold text-text-main">
+                                {(produto.item_type ?? 'product') === 'service' ? '—' : produto.estoque_atual}
+                              </td>
+                              <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-text-muted">
+                                {(produto.item_type ?? 'product') === 'service' ? '—' : produto.estoque_minimo}
+                              </td>
+                            </>
+                          )}
                           <td className="px-3 sm:px-6 py-3 sm:py-4 text-right font-medium text-text-main">
                             {produto.qtdVendidaMesAtual ?? 0}
                           </td>
-                          <td className="px-3 sm:px-6 py-3 sm:py-4">
-                            <div className="flex items-center justify-center gap-1 sm:gap-2">
-                              <button
-                                onClick={() => handleEdit(produto)}
-                                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-primary hover:bg-primary/10 rounded touch-manipulation"
-                              >
-                                <span className="material-symbols-outlined">edit</span>
-                              </button>
-                              <button
-                                onClick={() => handleDelete(produto.id)}
-                                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-error hover:bg-badge-erro rounded touch-manipulation"
-                              >
-                                <span className="material-symbols-outlined">delete</span>
-                              </button>
-                            </div>
+                          <td className="table-actions-col px-3 sm:px-6 py-3 sm:py-4">
+                            <TableActionsMenu
+                              items={[
+                                { label: 'Editar', icon: 'edit', onClick: () => handleEdit(produto) },
+                                { label: 'Excluir', icon: 'delete', onClick: () => handleDelete(produto.id), danger: true }
+                              ]}
+                              className="justify-center"
+                            />
                           </td>
                         </tr>
                       );
@@ -298,8 +337,11 @@ export default function CadastroProdutos({ initialFiltro, initialPeriodo }: Cada
         <ProdutoModal
           produto={produtoEditando}
           onClose={handleCloseModal}
+          stockEnabled={stockEnabled}
+          onVerHistoricoCompras={produtoEditando ? () => { handleCloseModal(); onOpenHistoricoCompras?.(produtoEditando.id); } : undefined}
         />
       )}
+
     </div>
   );
 }

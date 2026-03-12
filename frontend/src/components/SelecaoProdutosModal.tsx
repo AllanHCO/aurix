@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import toast from 'react-hot-toast';
 import { formatCurrency } from '../utils/format';
 import StockStatusBadge, { isStockAvailable } from './StockStatusBadge';
+import ModalPortal from './ModalPortal';
 
 interface Produto {
   id: string;
@@ -24,6 +25,11 @@ export interface ItemVenda {
   nome: string;
   preco_unitario: number;
   quantidade: number;
+  /** Preço cadastrado do produto no momento da adição (para exibir "Preço ajustado" e auditoria) */
+  preco_cadastrado?: number;
+  /** Estoque atual no momento da adição (para exibir disponível vs reservado nesta venda) */
+  estoque_atual?: number;
+  sku?: string;
 }
 
 interface SelecaoProdutosModalProps {
@@ -115,12 +121,24 @@ export default function SelecaoProdutosModal({
       const idx = prev.findIndex((i) => i.produto_id === p.id);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = { ...next[idx], quantidade: next[idx].quantidade + qty };
+        const cur = next[idx];
+        next[idx] = {
+          ...cur,
+          quantidade: cur.quantidade + qty,
+          estoque_atual: p.estoque_atual ?? cur.estoque_atual
+        };
         return next;
       }
       return [
         ...prev,
-        { produto_id: p.id, nome: p.nome, preco_unitario: p.preco, quantidade: qty }
+        {
+          produto_id: p.id,
+          nome: p.nome,
+          preco_unitario: p.preco,
+          quantidade: qty,
+          preco_cadastrado: p.preco,
+          estoque_atual: p.estoque_atual
+        }
       ];
     });
     toast.success('Produto adicionado');
@@ -132,8 +150,9 @@ export default function SelecaoProdutosModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-[60] p-4" style={{ backgroundColor: 'var(--color-overlay)' }}>
-      <div className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+    <ModalPortal>
+      <div className="aurix-modal-overlay fixed inset-0 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--color-overlay)' }}>
+        <div className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
         <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
           <div>
             <h2 className="text-xl font-bold text-text-main">Seleção de Produtos</h2>
@@ -242,8 +261,12 @@ export default function SelecaoProdutosModal({
                 ) : (
                   listaProdutosFiltrados.map((p) => {
                     const { quantidade } = getRowState(p.id);
-                    const disponivel = isStockAvailable(p.estoque_atual);
-                    const adicionado = itensDaVenda.some((item) => item.produto_id === p.id);
+                    const reservadoNaVenda = itensDaVenda
+                      .filter((item) => item.produto_id === p.id)
+                      .reduce((sum, item) => sum + item.quantidade, 0);
+                    const estoqueDisponivel = Math.max(0, (p.estoque_atual ?? 0) - reservadoNaVenda);
+                    const disponivel = isStockAvailable(estoqueDisponivel);
+                    const adicionado = reservadoNaVenda > 0;
                     return (
                       <tr
                         key={p.id}
@@ -254,17 +277,24 @@ export default function SelecaoProdutosModal({
                         <td className="p-3 font-medium">{p.nome}</td>
                         <td className="p-3">{formatCurrency(p.preco)}</td>
                         <td className="p-3">
-                          <StockStatusBadge
-                            estoque={p.estoque_atual}
-                            estoqueMinimo={p.estoque_minimo ?? 0}
-                          />
+                          <div className="flex flex-col gap-0.5">
+                            <StockStatusBadge
+                              estoque={estoqueDisponivel}
+                              estoqueMinimo={p.estoque_minimo ?? 0}
+                            />
+                            {reservadoNaVenda > 0 && (
+                              <span className="text-[11px] text-text-muted">
+                                Reservado nesta venda: {reservadoNaVenda}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-3">
                           <div className="flex items-center gap-1">
                             <input
                               type="number"
                               min="1"
-                              max={p.estoque_atual}
+                              max={estoqueDisponivel || 1}
                               value={quantidade}
                               onChange={(e) =>
                                 setRowStateFor(p.id, {
@@ -316,7 +346,8 @@ export default function SelecaoProdutosModal({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }
 

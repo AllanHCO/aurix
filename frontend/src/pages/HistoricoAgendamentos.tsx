@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
+import TableActionsMenu from '../components/TableActionsMenu';
+import ModalPortal from '../components/ModalPortal';
 
 interface AgendamentoHist {
   id: string;
@@ -329,69 +331,68 @@ export default function HistoricoAgendamentos() {
                   <th className="text-left py-3 px-4 font-medium text-text-muted">Cliente</th>
                   <th className="text-left py-3 px-4 font-medium text-text-muted">Telefone</th>
                   <th className="text-left py-3 px-4 font-medium text-text-muted">Status</th>
-                  <th className="text-right py-3 px-4 font-medium text-text-muted">Ações</th>
+                  <th className="table-actions-col text-right py-3 px-4 font-medium text-text-muted w-[120px]">Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {list.map((a) => (
-                  <tr key={a.id} className="border-b border-border hover:bg-bg-elevated/50">
-                    <td className="py-2 px-4 text-text-main">{new Date(normData(a) + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                    <td className="py-2 px-4 text-text-main">{a.hora_inicio}</td>
-                    <td className="py-2 px-4">
-                      <button
-                        type="button"
-                        onClick={() => setModalDetalhe(a)}
-                        className="font-medium text-text-main hover:underline text-left"
-                      >
-                        {a.nome_cliente}
-                      </button>
-                    </td>
-                    <td className="py-2 px-4">
-                      <span className="text-text-muted">{formatPhone(a.telefone_cliente ?? '')}</span>
-                      {phoneForWhatsApp(a.telefone_cliente ?? '') && (
-                        <a
-                          href={`https://wa.me/${phoneForWhatsApp(a.telefone_cliente ?? '')}?text=${encodeURIComponent(`Oi ${a.nome_cliente.split(' ')[0]}! Confirmando seu horário no dia ${new Date(normData(a) + 'T12:00:00').toLocaleDateString('pt-BR')} às ${a.hora_inicio}. 😊`)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ml-1 inline-flex text-[#25D366] hover:opacity-80"
-                          title="WhatsApp"
-                        >
-                          <span className="material-symbols-outlined text-lg">chat</span>
-                        </a>
-                      )}
-                    </td>
-                    <td className="py-2 px-4">{statusBadge(a)}</td>
-                    <td className="py-2 px-4 text-right">
-                      <div className="flex flex-wrap gap-1 justify-end">
+                {list.map((a) => {
+                  const podeCheckin = a.status !== 'CANCELADO' && !a.checkin_at && !a.no_show;
+                  return (
+                    <tr key={a.id} className="border-b border-border hover:bg-bg-elevated/50">
+                      <td className="py-2 px-4 text-text-main">{new Date(normData(a) + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                      <td className="py-2 px-4 text-text-main">{a.hora_inicio}</td>
+                      <td className="py-2 px-4">
                         <button
                           type="button"
                           onClick={() => setModalDetalhe(a)}
-                          className="text-xs px-2 py-1 rounded border border-border text-text-muted hover:bg-bg-elevated"
+                          className="font-medium text-text-main hover:underline text-left"
                         >
-                          Detalhes
+                          {a.nome_cliente}
                         </button>
-                        {a.status !== 'CANCELADO' && !a.checkin_at && !a.no_show && (
-                          <>
+                      </td>
+                      <td className="py-2 px-4">
+                        <span className="text-text-muted">{formatPhone(a.telefone_cliente ?? '')}</span>
+                        {phoneForWhatsApp(a.telefone_cliente ?? '') && (
+                          <a
+                            href={`https://wa.me/${phoneForWhatsApp(a.telefone_cliente ?? '')}?text=${encodeURIComponent(`Oi ${a.nome_cliente.split(' ')[0]}! Confirmando seu horário no dia ${new Date(normData(a) + 'T12:00:00').toLocaleDateString('pt-BR')} às ${a.hora_inicio}. 😊`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-1 inline-flex text-[#25D366] hover:opacity-80"
+                            title="WhatsApp"
+                          >
+                            <span className="material-symbols-outlined text-lg">chat</span>
+                          </a>
+                        )}
+                      </td>
+                      <td className="py-2 px-4">{statusBadge(a)}</td>
+                      <td className="table-actions-col py-2 px-4 text-right">
+                        <TableActionsMenu
+                          iconSize="md"
+                          items={[
+                            { label: 'Detalhes', icon: 'visibility', onClick: () => setModalDetalhe(a) },
+                            ...(podeCheckin
+                              ? [
+                                  { label: 'Não veio', icon: 'person_off' as const, onClick: () => handleNoShow(a.id) }
+                                ]
+                              : [])
+                          ]}
+                          className="justify-end"
+                        >
+                          {podeCheckin && (
                             <button
                               type="button"
                               onClick={() => handleCheckin(a.id)}
-                              className="text-xs px-2 py-1 rounded bg-badge-pago text-badge-pago-text"
+                              className="text-xs px-2 py-1.5 rounded bg-badge-pago text-badge-pago-text font-medium shrink-0"
+                              title="Check-in"
                             >
                               Check-in
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleNoShow(a.id)}
-                              className={`text-xs px-2 py-1 rounded border ${isPastPlus30(a) ? 'bg-badge-erro/20 border-badge-erro text-badge-erro-text' : 'border-border text-text-muted hover:bg-bg-elevated'}`}
-                            >
-                              Não veio
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          )}
+                        </TableActionsMenu>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -425,12 +426,13 @@ export default function HistoricoAgendamentos() {
 
       {/* Modal detalhe */}
       {modalDetalhe && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: 'var(--color-overlay)' }}
-          onClick={() => setModalDetalhe(null)}
-        >
+        <ModalPortal>
           <div
+            className="aurix-modal-overlay fixed inset-0 flex items-center justify-center p-4"
+            style={{ backgroundColor: 'var(--color-overlay)' }}
+            onClick={() => setModalDetalhe(null)}
+          >
+            <div
             className="bg-bg-elevated border border-border rounded-2xl shadow-xl max-w-sm w-full p-5"
             onClick={(e) => e.stopPropagation()}
           >
@@ -452,6 +454,7 @@ export default function HistoricoAgendamentos() {
             </button>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

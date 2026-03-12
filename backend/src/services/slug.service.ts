@@ -2,12 +2,12 @@
  * Regras do slug (fonte da verdade no backend):
  * - minúsculo, sem acentos, espaços → -, apenas a-z 0-9 -
  * - sem - duplicado, não começar/terminar com -
- * - tamanho 3–60
+ * - tamanho 3–50
  * - palavras reservadas bloqueadas
  */
 
 const SLUG_MIN = 3;
-const SLUG_MAX = 60;
+const SLUG_MAX = 50;
 const RESERVED = new Set(['admin', 'api', 'login', 'dashboard', 'configuracoes']);
 
 /** Remove acentos (NFD e remove caracteres de combinação). */

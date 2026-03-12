@@ -59,7 +59,7 @@ git push -u origin main
 
 ## Depois do push
 
-- **Render** (backend): faz deploy automático ao detectar o push no `main`.
+- **Fly.io** (backend): faz deploy automático ao detectar o push no `main` (se o app estiver conectado ao GitHub). Senão, rode `cd backend && fly deploy`.
 - **Vercel** (frontend): idem.
 
 Só aguardar alguns minutos e testar as URLs.

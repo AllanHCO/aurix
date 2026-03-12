@@ -90,7 +90,7 @@ export default function AgendaPublica() {
         setBranding(brandRes.data);
         setPublicConfig(configRes?.data ?? null);
         document.title = `Agendamento - ${brandRes.data.nomeOrganizacao}`;
-        if (process.env.NODE_ENV === 'development') console.log('[AgendaPublica] branding + config OK para slug:', slug);
+        if (import.meta.env.DEV) console.log('[AgendaPublica] branding + config OK para slug:', slug);
       })
       .catch((err: { response?: { status: number; data?: { error?: string } }; message?: string }) => {
         if (!cancelled) {

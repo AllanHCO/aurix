@@ -3,9 +3,10 @@ import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
 import { getDemoStatus, gerarDadosDemo, resetarDadosDemo } from '../services/demoData.service';
 
-/** Modo demo só em desenvolvimento. Em produção nunca permite (evita alterar dados de clientes reais). */
+/** Modo demo: só em development/staging. Em produção NUNCA permite (evita poluir dados reais). */
 function allowDemo(): boolean {
-  return process.env.NODE_ENV !== 'production';
+  if (process.env.APP_ENV === 'production' || process.env.NODE_ENV === 'production') return false;
+  return true;
 }
 
 /** GET /configuracoes/demo/status */

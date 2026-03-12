@@ -1,5 +1,5 @@
 /**
- * Geração de dados demo (12 meses) para apresentação e testes.
+ * Geração de dados demo (últimos 3 meses / 90 dias até ontem) para apresentação e testes.
  * Timezone Brasil (America/Sao_Paulo). Dados vinculados ao usuario_id via DemoEntity.
  */
 import { prisma } from '../lib/prisma';
@@ -73,7 +73,7 @@ const NOMES_PRODUTOS_SERVICOS = [
   'Pacote 5 Cortes', 'Pacote 10 Unhas', 'Combo Barba + Corte', 'Serviço Express', 'Tratamento Completo'
 ];
 
-export type DemoEntityType = 'cliente' | 'categoria' | 'produto' | 'venda' | 'agendamento' | 'bloqueio';
+export type DemoEntityType = 'cliente' | 'categoria' | 'produto' | 'venda' | 'agendamento' | 'bloqueio' | 'financial_category' | 'financial_transaction';
 
 async function registerDemoEntity(usuarioId: string, entityType: DemoEntityType, entityId: string): Promise<void> {
   await (prisma as any).demoEntity.create({
@@ -83,17 +83,47 @@ async function registerDemoEntity(usuarioId: string, entityType: DemoEntityType,
 
 /** Remove todos os dados criados pelo demo deste usuário. */
 export async function resetarDadosDemo(usuarioId: string): Promise<{ deleted: Record<string, number> }> {
-  const deleted: Record<string, number> = { bloqueio: 0, agendamento: 0, venda: 0, cliente: 0, produto: 0, categoria: 0 };
+  const deleted: Record<string, number> = {
+    bloqueio: 0,
+    agendamento: 0,
+    venda: 0,
+    cliente: 0,
+    produto: 0,
+    categoria: 0,
+    financial_transaction: 0,
+    financial_category: 0
+  };
 
   const demoEntities = await (prisma as any).demoEntity.findMany({
     where: { usuario_id: usuarioId },
     select: { entity_type: true, entity_id: true }
   });
 
-  const byType = { bloqueio: [] as string[], agendamento: [] as string[], venda: [] as string[], cliente: [] as string[], produto: [] as string[], categoria: [] as string[] };
+  const byType = {
+    bloqueio: [] as string[],
+    agendamento: [] as string[],
+    venda: [] as string[],
+    cliente: [] as string[],
+    produto: [] as string[],
+    categoria: [] as string[],
+    financial_transaction: [] as string[],
+    financial_category: [] as string[]
+  };
   for (const e of demoEntities) {
-    if (byType[e.entity_type as keyof typeof byType]) byType[e.entity_type as keyof typeof byType].push(e.entity_id);
+    const key = e.entity_type as keyof typeof byType;
+    if (byType[key]) byType[key].push(e.entity_id);
   }
+
+  // Deduplicar para evitar "Record to delete does not exist" ao deletar o mesmo id duas vezes
+  const uniq = <T>(arr: T[]): T[] => [...new Set(arr)];
+  byType.venda = uniq(byType.venda);
+  byType.agendamento = uniq(byType.agendamento);
+  byType.bloqueio = uniq(byType.bloqueio);
+  byType.cliente = uniq(byType.cliente);
+  byType.produto = uniq(byType.produto);
+  byType.categoria = uniq(byType.categoria);
+  byType.financial_transaction = uniq(byType.financial_transaction);
+  byType.financial_category = uniq(byType.financial_category);
 
   if (byType.bloqueio.length > 0) {
     await prisma.bloqueio.deleteMany({ where: { id: { in: byType.bloqueio }, usuario_id: usuarioId } });
@@ -103,10 +133,22 @@ export async function resetarDadosDemo(usuarioId: string): Promise<{ deleted: Re
     await prisma.agendamento.deleteMany({ where: { id: { in: byType.agendamento }, usuario_id: usuarioId } });
     deleted.agendamento = byType.agendamento.length;
   }
+  // Antes de deletar vendas: remover transações financeiras que referenciam essas vendas (entradas geradas por venda)
+  if (byType.venda.length > 0) {
+    await prisma.financialTransaction.deleteMany({
+      where: { usuario_id: usuarioId, source_type: 'sale', source_id: { in: byType.venda } }
+    });
+  }
+  if (byType.financial_transaction.length > 0) {
+    await prisma.financialTransaction.deleteMany({
+      where: { id: { in: byType.financial_transaction }, usuario_id: usuarioId }
+    });
+    deleted.financial_transaction = byType.financial_transaction.length;
+  }
   if (byType.venda.length > 0) {
     for (const id of byType.venda) {
       await prisma.itemVenda.deleteMany({ where: { venda_id: id } });
-      await prisma.venda.delete({ where: { id } });
+      await prisma.venda.deleteMany({ where: { id, usuario_id: usuarioId } });
     }
     deleted.venda = byType.venda.length;
   }
@@ -121,6 +163,12 @@ export async function resetarDadosDemo(usuarioId: string): Promise<{ deleted: Re
   if (byType.categoria.length > 0) {
     await prisma.categoria.deleteMany({ where: { id: { in: byType.categoria } } });
     deleted.categoria = byType.categoria.length;
+  }
+  if (byType.financial_category.length > 0) {
+    await prisma.financialCategory.deleteMany({
+      where: { id: { in: byType.financial_category }, usuario_id: usuarioId }
+    });
+    deleted.financial_category = byType.financial_category.length;
   }
 
   await (prisma as any).demoEntity.deleteMany({ where: { usuario_id: usuarioId } });
@@ -142,6 +190,8 @@ export async function gerarDadosDemo(usuarioId: string): Promise<{
   vendas: number;
   agendamentos: number;
   bloqueios: number;
+  financial_categories: number;
+  financial_transactions: number;
 }> {
   // 1) Resetar demo anterior se existir
   const existing = await (prisma as any).demoEntity.findMany({ where: { usuario_id: usuarioId }, select: { id: true } });
@@ -163,11 +213,26 @@ export async function gerarDadosDemo(usuarioId: string): Promise<{
   const bloco2Fim = addDays(bloco3Inicio, -1);
   const bloco3Fim = new Date(fim);
 
+  // Categorias financeiras demo (entrada + saídas)
+  const catVendas = await prisma.financialCategory.create({
+    data: { usuario_id: usuarioId, name: 'Vendas', type: 'income' }
+  });
+  await registerDemoEntity(usuarioId, 'financial_category', catVendas.id);
+  const catDespesas = ['Produtos', 'Aluguel', 'Energia', 'Internet', 'Marketing', 'Outros'];
+  const financialCategories: { id: string; name: string; type: 'income' | 'expense' }[] = [catVendas];
+  for (const nome of catDespesas) {
+    const fc = await prisma.financialCategory.create({
+      data: { usuario_id: usuarioId, name: nome, type: 'expense' }
+    });
+    financialCategories.push(fc);
+    await registerDemoEntity(usuarioId, 'financial_category', fc.id);
+  }
+
   const numCategorias = randomInt(8, 20);
   const categoriasNomes = pickN(CATEGORIAS_BASE, numCategorias);
   const categorias: { id: string; nome: string }[] = [];
   for (const nome of categoriasNomes) {
-    const c = await prisma.categoria.create({ data: { nome: `Demo ${nome} ${usuarioId.slice(0, 6)}` } });
+    const c = await prisma.categoria.create({ data: { usuario_id: usuarioId, nome: `Demo ${nome} ${usuarioId.slice(0, 6)}`, tipo: 'produto' } });
     categorias.push({ id: c.id, nome: c.nome });
     await registerDemoEntity(usuarioId, 'categoria', c.id);
   }
@@ -186,6 +251,7 @@ export async function gerarDadosDemo(usuarioId: string): Promise<{
     const estoqueAtual = isServico ? 0 : randomInt(0, 50);
     const p = await prisma.produto.create({
       data: {
+        usuario_id: usuarioId,
         nome: `${nomeBase} - ${linha} ${i}`,
         categoria_id: cat.id,
         linha,
@@ -215,13 +281,14 @@ export async function gerarDadosDemo(usuarioId: string): Promise<{
     const tel = `11${randomInt(9, 9)}${String(100000000 + randomInt(0, 99999999)).slice(-8)}`;
     const obs = randomInt(0, 100) < 30 ? `Preferência: ${pick(['Corte curto', 'Barba aparada', 'Horário manhã', 'Atendimento rápido'])}` : null;
     const c = await prisma.cliente.create({
-      data: { nome, telefone: tel, observacoes: obs }
+      data: { usuario_id: usuarioId, nome, telefone: tel, observacoes: obs }
     });
     clientes.push({ id: c.id, nome: c.nome, telefone: c.telefone ?? tel });
     await registerDemoEntity(usuarioId, 'cliente', c.id);
   }
 
   let totalVendas = 0;
+  let financialTransactionsCount = 0;
   const produtosComEstoque = produtos.filter((p) => p.estoque_atual > 0);
   const produtosServico = produtos.filter((p) => p.estoque_atual === 0 && p.estoque_minimo === 0);
 
@@ -293,6 +360,26 @@ export async function gerarDadosDemo(usuarioId: string): Promise<{
           });
         }
       }
+      // Entrada financeira para venda PAGA (demo não passa pelo controller que cria automaticamente)
+      if (status === 'PAGO') {
+        const dataVenda = new Date(createdAt);
+        dataVenda.setHours(0, 0, 0, 0);
+        const ft = await prisma.financialTransaction.create({
+          data: {
+            usuario_id: usuarioId,
+            type: 'income',
+            category_id: catVendas.id,
+            source_type: 'sale',
+            source_id: venda.id,
+            description: `Venda demo ${venda.id.slice(0, 8)}`,
+            value: Number(venda.total),
+            status: 'confirmed',
+            date: dataVenda
+          }
+        });
+        await registerDemoEntity(usuarioId, 'financial_transaction', ft.id);
+        financialTransactionsCount++;
+      }
       totalVendas++;
     }
   }
@@ -306,6 +393,50 @@ export async function gerarDadosDemo(usuarioId: string): Promise<{
       where: { id: p.id },
       data: { estoque_atual: p.estoque_atual }
     });
+  }
+
+  // Transações financeiras manuais (despesas e algumas entradas) para popular o Financeiro
+  const expenseCategories = financialCategories.filter((c) => c.type === 'expense');
+  const numDespesas = randomInt(40, 80);
+  for (let i = 0; i < numDespesas; i++) {
+    const cat = pick(expenseCategories);
+    const valor = randomInt(50, 800);
+    const dataTx = randomDate(inicio, fim);
+    dataTx.setHours(0, 0, 0, 0);
+    const ft = await prisma.financialTransaction.create({
+      data: {
+        usuario_id: usuarioId,
+        type: 'expense',
+        category_id: cat.id,
+        source_type: 'manual',
+        description: `Demo ${cat.name} ${i}`,
+        value: valor,
+        status: 'confirmed',
+        date: dataTx
+      }
+    });
+    await registerDemoEntity(usuarioId, 'financial_transaction', ft.id);
+    financialTransactionsCount++;
+  }
+  const numEntradasManuais = randomInt(5, 15);
+  for (let i = 0; i < numEntradasManuais; i++) {
+    const valor = randomInt(100, 500);
+    const dataTx = randomDate(inicio, fim);
+    dataTx.setHours(0, 0, 0, 0);
+    const ft = await prisma.financialTransaction.create({
+      data: {
+        usuario_id: usuarioId,
+        type: 'income',
+        category_id: catVendas.id,
+        source_type: 'manual',
+        description: `Entrada manual demo ${i}`,
+        value: valor,
+        status: 'confirmed',
+        date: dataTx
+      }
+    });
+    await registerDemoEntity(usuarioId, 'financial_transaction', ft.id);
+    financialTransactionsCount++;
   }
 
   // Agendamentos: últimos 45 dias até ontem (sem futuro)
@@ -364,7 +495,9 @@ export async function gerarDadosDemo(usuarioId: string): Promise<{
     produtos: produtos.length,
     vendas: totalVendas,
     agendamentos: agendamentosCount,
-    bloqueios: bloqueiosCount
+    bloqueios: bloqueiosCount,
+    financial_categories: financialCategories.length,
+    financial_transactions: financialTransactionsCount
   };
 }
 

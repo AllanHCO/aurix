@@ -46,10 +46,12 @@ export const getRelatorioPeriodo = async (req: AuthRequest, res: Response) => {
   const pageNum = Math.max(1, parseInt(String(page || '1'), 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(String(limit || '20'), 10) || 20));
   const orderDir = order === 'asc' ? 'asc' : 'desc';
+  const businessAreaId = (req.query.business_area_id ?? req.query.areaId) as string | undefined;
+  const areaWhere = businessAreaId?.trim() ? { business_area_id: businessAreaId.trim() } : {};
 
   const { inicio: antInicio, fim: antFim } = periodoAnteriorEquivalente(inicio, fim);
 
-  const whereUsuario = { usuario_id: userId };
+  const whereUsuario = { usuario_id: userId, ...areaWhere };
   const wherePeriodo = { createdAt: { gte: inicio, lte: fim } };
   const whereAnterior = { createdAt: { gte: antInicio, lte: antFim } };
 
@@ -136,12 +138,15 @@ export const exportarCSV = async (req: AuthRequest, res: Response) => {
   const { dataInicial, dataFinal } = req.query;
 
   const { inicio, fim } = parsePeriodo(dataInicial, dataFinal);
+  const businessAreaId = (req.query.business_area_id ?? req.query.areaId) as string | undefined;
+  const areaWhere = businessAreaId?.trim() ? { business_area_id: businessAreaId.trim() } : {};
 
   const vendas = await prisma.venda.findMany({
     where: {
       usuario_id: userId,
       status: 'PAGO',
-      createdAt: { gte: inicio, lte: fim }
+      createdAt: { gte: inicio, lte: fim },
+      ...areaWhere
     },
     include: {
       cliente: { select: { nome: true } },

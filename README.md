@@ -64,7 +64,7 @@ cd backend
 cp .env.example .env
 ```
 
-3. Edite o arquivo `.env` com suas credenciais:
+3. Edite o arquivo `.env` com suas credenciais (use **apenas** banco e credenciais de **desenvolvimento**; nunca use produção em máquina local):
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/aurix?schema=public"
 JWT_SECRET="seu-secret-super-seguro-aqui"
@@ -72,6 +72,8 @@ JWT_EXPIRES_IN="7d"
 PORT=3001
 FRONTEND_URL="http://localhost:5173"
 ```
+
+> **Separação de ambientes:** Localhost nunca deve usar banco, auth ou storage de produção. Para regras completas, arquivos `.env` por ambiente e validações, veja **[docs/ENV.md](docs/ENV.md)**.
 
 ### 4. Execute as migrations
 
