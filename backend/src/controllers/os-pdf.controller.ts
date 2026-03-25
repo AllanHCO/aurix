@@ -8,10 +8,7 @@ import { prisma } from '../lib/prisma';
 import {
   mergeDocumentBranding,
   absolutePathFromRelative,
-  PDF_OS_HEADER_H,
-  PDF_LOGO_BOX_W,
-  PDF_LOGO_BOX_H,
-  getLogoMaxDimensions,
+  getLogoBandContentMaxHeight,
   type DocumentBranding
 } from '../services/document-branding.service';
 
@@ -57,11 +54,14 @@ function ensureSpace(doc: PDFKit.PDFDocument, marginBottom: number, pageBottom: 
   }
 }
 
-async function drawOsLogoInHeader(
+/** Logo centralizada na faixa, contain em largura × altura máxima, sem deformar */
+async function drawOsLogoInBand(
   doc: PDFKit.PDFDocument,
   fullPath: string,
-  boxX: number,
-  boxY: number,
+  bandX: number,
+  bandY: number,
+  bandW: number,
+  maxH: number,
   branding: DocumentBranding
 ): Promise<void> {
   let meta: { width?: number; height?: number };
@@ -72,19 +72,13 @@ async function drawOsLogoInHeader(
   }
   const iw = meta.width || 1;
   const ih = meta.height || 1;
-  const { maxW, maxH } = getLogoMaxDimensions(branding.logo_size);
-  const bw = Math.min(maxW, PDF_LOGO_BOX_W - 4);
-  const bh = Math.min(maxH, PDF_LOGO_BOX_H - 4);
-  const scale = Math.min(bw / iw, bh / ih, 1);
+  const scale = Math.min(bandW / iw, maxH / ih, 1);
   const dw = iw * scale;
   const dh = ih * scale;
-  let imgX = boxX;
-  if (branding.logo_alignment === 'center') imgX = boxX + (PDF_LOGO_BOX_W - dw) / 2;
-  if (branding.logo_alignment === 'right') imgX = boxX + PDF_LOGO_BOX_W - dw;
-  imgX += branding.logo_offset_x;
-  let imgY = boxY + (PDF_LOGO_BOX_H - dh) / 2 + branding.logo_offset_y;
-  imgX = Math.max(boxX - 2, Math.min(imgX, boxX + PDF_LOGO_BOX_W - dw + 2));
-  imgY = Math.max(boxY, Math.min(imgY, boxY + PDF_LOGO_BOX_H - dh));
+  let imgX = bandX + (bandW - dw) / 2 + branding.logo_offset_x;
+  let imgY = bandY + (maxH - dh) / 2 + branding.logo_offset_y;
+  imgX = Math.max(bandX, Math.min(imgX, bandX + bandW - dw));
+  imgY = Math.max(bandY, Math.min(imgY, bandY + maxH - dh));
   try {
     doc.image(fullPath, imgX, imgY, { width: dw, height: dh });
   } catch {
@@ -127,10 +121,6 @@ export async function gerarOsPdf(req: AuthRequest, res: Response): Promise<void>
   if (!venda) throw new AppError('Ordem de serviço não encontrada', 404);
   if (venda.tipo !== 'service_order') throw new AppError('Apenas ordens de serviço possuem PDF.', 400);
 
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: userId }
-  });
-
   const settings = await prisma.companySettings.findUnique({
     where: { usuario_id: userId }
   });
@@ -158,7 +148,6 @@ export async function gerarOsPdf(req: AuthRequest, res: Response): Promise<void>
     }));
   }
 
-  const companyName = usuario?.nome_organizacao || usuario?.nome_unidade || usuario?.nome || 'Empresa';
   const osCode = (venda as { os_code?: string | null }).os_code || venda.id.slice(0, 8);
   const dataAbertura = formatDate(venda.createdAt);
   const dataAberturaShort = formatDateShort(venda.createdAt);
@@ -203,30 +192,49 @@ export async function gerarOsPdf(req: AuthRequest, res: Response): Promise<void>
 
   doc.strokeColor('#000000');
 
-  // ---------- 1) Cabeçalho fixo: logo opcional (área limitada) + título + empresa + Nº OS ----------
-  const headerH = PDF_OS_HEADER_H;
+  // ---------- 1) Cabeçalho: linha 1 (título + Nº OS) | linha 2 opcional (faixa full-width da logo) ----------
+  const row1H = 24;
   const hasLogo = !!logoFullPath;
-  const logoBoxX = marginLeft + 6;
-  const logoBoxY = marginTop + 10;
-  const textBlockX = marginLeft + (hasLogo ? PDF_LOGO_BOX_W + 20 : 12);
-  const titleWidth = pageWidth - (textBlockX - marginLeft) - 100;
+  const bandPadX = 8;
+  const bandPadY = hasLogo ? (documentBranding.logo_band_style === 'compact' ? 5 : 7) : 0;
+  const contentMaxH = hasLogo ? getLogoBandContentMaxHeight(documentBranding.logo_band_style) : 0;
+  const bandH = hasLogo ? bandPadY + contentMaxH + bandPadY : 0;
+  const dividerAfterH = hasLogo ? 1 : 0;
+  const headerBottomPad = 6;
+  const headerTotalH = row1H + (hasLogo ? dividerAfterH + bandH : 4) + headerBottomPad;
 
+  const headerY0 = marginTop;
   doc.lineWidth(BORDA_GROSSA);
-  doc.rect(marginLeft, marginTop, pageWidth, headerH).stroke();
+  doc.rect(marginLeft, headerY0, pageWidth, headerTotalH).stroke();
+
+  const row1TextY = headerY0 + 6;
+  doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000');
+  doc.text('ORDEM DE SERVIÇO', marginLeft + 6, row1TextY, { width: pageWidth * 0.58, align: 'left' });
+  doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
+  doc.text(`Nº OS: ${osCode}`, marginLeft, row1TextY, { width: pageWidth - 10, align: 'right' });
 
   if (hasLogo && logoFullPath) {
-    await drawOsLogoInHeader(doc, logoFullPath, logoBoxX, logoBoxY, documentBranding);
+    const bandY = headerY0 + row1H + 1;
+    doc.lineWidth(BORDA_LEVE);
+    doc.strokeColor('#cccccc');
+    doc.moveTo(marginLeft, bandY).lineTo(marginLeft + pageWidth, bandY).stroke();
+    doc.strokeColor('#000000');
+
+    const bandBoxY = bandY + 1;
+    doc.save();
+    doc.fillColor('#f4f4f4').rect(marginLeft, bandBoxY, pageWidth, bandH).fill();
+    doc.restore();
+
+    const innerX = marginLeft + bandPadX;
+    const innerW = pageWidth - bandPadX * 2;
+    const innerY = bandBoxY + bandPadY;
+    await drawOsLogoInBand(doc, logoFullPath, innerX, innerY, innerW, contentMaxH, documentBranding);
+    doc.lineWidth(BORDA_GROSSA);
+    doc.strokeColor('#000000');
   }
 
-  doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000');
-  doc.text('ORDEM DE SERVIÇO', textBlockX, marginTop + 14, { width: Math.max(titleWidth, 120) });
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
-  doc.text(`Nº OS: ${osCode}`, marginLeft, marginTop + 14, { width: pageWidth - 10, align: 'right' });
-  doc.fontSize(9).font('Helvetica').fillColor('#333333');
-  doc.text(companyName, textBlockX, marginTop + 36, { width: pageWidth - (textBlockX - marginLeft) - 14 });
-
   // ---------- 2) Bloco cliente/veículo: bordas leves nos campos, borda grossa fechando ----------
-  let y = marginTop + headerH + 6;
+  let y = marginTop + headerTotalH + 6;
   const blocoClienteY0 = y;
   doc.lineWidth(BORDA_LEVE);
   const campoH = 14;

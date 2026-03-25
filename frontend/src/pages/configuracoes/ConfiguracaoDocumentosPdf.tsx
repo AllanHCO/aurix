@@ -3,21 +3,19 @@ import { Link } from 'react-router-dom';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 
-export type LogoAlignment = 'left' | 'center' | 'right';
-export type LogoSizePreset = 'small' | 'medium' | 'large';
+export type LogoBandStyle = 'highlight' | 'compact';
 
 export interface DocumentBrandingState {
   logo_path: string | null;
-  logo_alignment: LogoAlignment;
-  logo_size: LogoSizePreset;
+  logo_band_style: LogoBandStyle;
   logo_offset_x: number;
   logo_offset_y: number;
 }
 
-const SIZE_PREVIEW: Record<LogoSizePreset, string> = {
-  small: 'max-h-[22px] max-w-[72px]',
-  medium: 'max-h-[30px] max-w-[88px]',
-  large: 'max-h-[38px] max-w-[100px]'
+/** Alturas aproximadas do preview (px) alinhadas à proporção PDF */
+const BAND_CONTENT_H: Record<LogoBandStyle, string> = {
+  highlight: 'min-h-[52px] max-h-[56px]',
+  compact: 'min-h-[34px] max-h-[38px]'
 };
 
 export default function ConfiguracaoDocumentosPdf() {
@@ -27,6 +25,22 @@ export default function ConfiguracaoDocumentosPdf() {
   const [branding, setBranding] = useState<DocumentBrandingState | null>(null);
   const [draft, setDraft] = useState<DocumentBrandingState | null>(null);
   const [logoBlobUrl, setLogoBlobUrl] = useState<string | null>(null);
+
+  const normalize = useCallback((raw: Record<string, unknown>): DocumentBrandingState => {
+    const band = raw.logo_band_style;
+    const style: LogoBandStyle =
+      band === 'compact' || band === 'highlight'
+        ? band
+        : raw.logo_size === 'small'
+          ? 'compact'
+          : 'highlight';
+    return {
+      logo_path: typeof raw.logo_path === 'string' ? raw.logo_path : null,
+      logo_band_style: style,
+      logo_offset_x: typeof raw.logo_offset_x === 'number' ? raw.logo_offset_x : 0,
+      logo_offset_y: typeof raw.logo_offset_y === 'number' ? raw.logo_offset_y : 0
+    };
+  }, []);
 
   const loadLogoPreview = useCallback(async () => {
     try {
@@ -47,10 +61,11 @@ export default function ConfiguracaoDocumentosPdf() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get<DocumentBrandingState>('/configuracoes/documentos/pdf-branding');
-      setBranding(res.data);
-      setDraft(res.data);
-      if (res.data.logo_path) await loadLogoPreview();
+      const res = await api.get<Record<string, unknown>>('/configuracoes/documentos/pdf-branding');
+      const n = normalize(res.data);
+      setBranding(n);
+      setDraft(n);
+      if (n.logo_path) await loadLogoPreview();
       else {
         setLogoBlobUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
@@ -62,7 +77,7 @@ export default function ConfiguracaoDocumentosPdf() {
     } finally {
       setLoading(false);
     }
-  }, [loadLogoPreview]);
+  }, [loadLogoPreview, normalize]);
 
   useEffect(() => {
     load();
@@ -77,8 +92,7 @@ export default function ConfiguracaoDocumentosPdf() {
   const dirty = useMemo(() => {
     if (!branding || !draft) return false;
     return (
-      branding.logo_alignment !== draft.logo_alignment ||
-      branding.logo_size !== draft.logo_size ||
+      branding.logo_band_style !== draft.logo_band_style ||
       branding.logo_offset_x !== draft.logo_offset_x ||
       branding.logo_offset_y !== draft.logo_offset_y
     );
@@ -89,14 +103,14 @@ export default function ConfiguracaoDocumentosPdf() {
     try {
       setSaving(true);
       await api.put('/configuracoes/documentos/pdf-branding', {
-        logo_alignment: draft.logo_alignment,
-        logo_size: draft.logo_size,
+        logo_band_style: draft.logo_band_style,
         logo_offset_x: draft.logo_offset_x,
         logo_offset_y: draft.logo_offset_y
       });
-      const res = await api.get<DocumentBrandingState>('/configuracoes/documentos/pdf-branding');
-      setBranding(res.data);
-      setDraft(res.data);
+      const res = await api.get<Record<string, unknown>>('/configuracoes/documentos/pdf-branding');
+      const n = normalize(res.data);
+      setBranding(n);
+      setDraft(n);
       toast.success('Configuração salva.');
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
@@ -156,7 +170,7 @@ export default function ConfiguracaoDocumentosPdf() {
     );
   }
 
-  const companyName = 'Nome da empresa';
+  const hasLogo = !!draft.logo_path;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-12 px-1">
@@ -172,14 +186,13 @@ export default function ConfiguracaoDocumentosPdf() {
         Documentos — PDF
       </h1>
       <p className="text-text-muted text-sm">
-        A logo configurada aqui é usada no <strong className="text-text-main">PDF da Ordem de Serviço</strong>. O mesmo padrão poderá ser reutilizado
-        futuramente no PDF de pedido/venda.
+        A logo aparece numa <strong className="text-text-main">faixa em destaque abaixo do título</strong> no PDF da Ordem de Serviço (largura total, centralizada, sem deformar).
       </p>
 
       <section className="rounded-xl border border-border bg-bg-card shadow-sm p-6 space-y-4">
         <h2 className="text-lg font-semibold text-text-main">Logo da Ordem de Serviço</h2>
         <p className="text-sm text-text-muted">
-          Envie PNG, JPG ou WEBP (até 2 MB). A imagem é otimizada automaticamente. Ajuste posição e tamanho no preview e salve.
+          Envie PNG, JPG ou WEBP (até 2 MB). Escolha entre faixa <strong>destacada</strong> ou <strong>compacta</strong>. Use os deslizadores para ajuste fino.
         </p>
 
         <div className="flex flex-wrap gap-3 items-center">
@@ -201,39 +214,34 @@ export default function ConfiguracaoDocumentosPdf() {
         </div>
 
         <div className="space-y-3">
-          <p className="text-sm font-medium text-text-main">Alinhamento horizontal da logo</p>
+          <p className="text-sm font-medium text-text-main">Tamanho da faixa da logo</p>
           <div className="flex flex-wrap gap-2">
-            {(['left', 'center', 'right'] as const).map((a) => (
-              <button
-                key={a}
-                type="button"
-                onClick={() => setDraft((d) => (d ? { ...d, logo_alignment: a } : d))}
-                className={`rounded-lg px-3 py-1.5 text-sm border ${
-                  draft.logo_alignment === a ? 'border-primary bg-primary/10 text-primary' : 'border-border text-text-muted hover:border-primary/40'
-                }`}
-              >
-                {a === 'left' ? 'Esquerda' : a === 'center' ? 'Centro' : 'Direita'}
-              </button>
-            ))}
+            <button
+              type="button"
+              onClick={() => setDraft((d) => (d ? { ...d, logo_band_style: 'highlight' } : d))}
+              className={`rounded-lg px-3 py-1.5 text-sm border ${
+                draft.logo_band_style === 'highlight'
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-text-muted hover:border-primary/40'
+              }`}
+            >
+              Destacada
+            </button>
+            <button
+              type="button"
+              onClick={() => setDraft((d) => (d ? { ...d, logo_band_style: 'compact' } : d))}
+              className={`rounded-lg px-3 py-1.5 text-sm border ${
+                draft.logo_band_style === 'compact'
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-text-muted hover:border-primary/40'
+              }`}
+            >
+              Compacta
+            </button>
           </div>
-        </div>
-
-        <div className="space-y-3">
-          <p className="text-sm font-medium text-text-main">Tamanho da logo</p>
-          <div className="flex flex-wrap gap-2">
-            {(['small', 'medium', 'large'] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setDraft((d) => (d ? { ...d, logo_size: s } : d))}
-                className={`rounded-lg px-3 py-1.5 text-sm border ${
-                  draft.logo_size === s ? 'border-primary bg-primary/10 text-primary' : 'border-border text-text-muted hover:border-primary/40'
-                }`}
-              >
-                {s === 'small' ? 'Pequeno' : s === 'medium' ? 'Médio' : 'Grande'}
-              </button>
-            ))}
-          </div>
+          <p className="text-xs text-text-muted">
+            Destacada: altura maior na faixa. Compacta: faixa mais baixa — útil para logos pequenas ou para economizar espaço vertical.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -268,49 +276,44 @@ export default function ConfiguracaoDocumentosPdf() {
         </div>
 
         <div>
-          <p className="text-sm font-medium text-text-main mb-2">Preview do cabeçalho (simulação)</p>
+          <p className="text-sm font-medium text-text-main mb-2">Preview do cabeçalho</p>
           <div className="rounded-lg border-2 border-border bg-white overflow-hidden shadow-inner">
+            {/* Linha 1: título + Nº OS */}
             <div
-              className="flex items-stretch min-h-[88px] px-3 py-3 gap-3"
+              className={`flex items-center justify-between gap-2 px-3 border-b border-border ${hasLogo ? '' : 'pb-2'}`}
               style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}
             >
-              {draft.logo_path && (
-                <div
-                  className="shrink-0 flex items-center border border-dashed border-border/80 bg-bg-main/80 rounded"
-                  style={{
-                    width: 118,
-                    height: 52,
-                    justifyContent:
-                      draft.logo_alignment === 'center' ? 'center' : draft.logo_alignment === 'right' ? 'flex-end' : 'flex-start'
-                  }}
-                >
-                  {logoBlobUrl ? (
-                    <img
-                      src={logoBlobUrl}
-                      alt=""
-                      className={`object-contain ${SIZE_PREVIEW[draft.logo_size]}`}
-                      style={{
-                        transform: `translate(${draft.logo_offset_x * 1.2}px, ${draft.logo_offset_y * 1.2}px)`
-                      }}
-                    />
-                  ) : (
-                    <span className="text-[10px] text-text-muted px-1">Logo</span>
-                  )}
-                </div>
-              )}
-              <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-sm font-bold text-black leading-tight">ORDEM DE SERVIÇO</span>
-                  <span className="text-xs font-bold text-black whitespace-nowrap">Nº OS: 00001</span>
-                </div>
-                <span className="text-[11px] text-gray-700 truncate">{companyName}</span>
-              </div>
+              <span className="text-sm font-bold text-black shrink-0">ORDEM DE SERVIÇO</span>
+              <span className="text-xs font-bold text-black whitespace-nowrap">Nº OS: 00001</span>
             </div>
+            {/* Linha 2: faixa da logo (só com logo) */}
+            {hasLogo && (
+              <div
+                className={`w-full flex items-center justify-center bg-[#f4f4f4] px-3 py-2 ${BAND_CONTENT_H[draft.logo_band_style]}`}
+              >
+                {logoBlobUrl ? (
+                  <img
+                    src={logoBlobUrl}
+                    alt=""
+                    className="max-w-full w-full object-contain"
+                    style={{
+                      maxHeight: draft.logo_band_style === 'highlight' ? 56 : 36,
+                      transform: `translate(${draft.logo_offset_x * 1.1}px, ${draft.logo_offset_y * 1.1}px)`
+                    }}
+                  />
+                ) : (
+                  <span className="text-xs text-text-muted">Carregando preview…</span>
+                )}
+              </div>
+            )}
+            {!hasLogo && (
+              <div className="px-3 py-2 text-[11px] text-text-muted border-t border-transparent">
+                Sem logo: o PDF mostra só a linha do título e o número — sem faixa cinza.
+              </div>
+            )}
           </div>
           <p className="text-xs text-text-muted mt-2">
-            {draft.logo_path
-              ? 'Preview aproximado; o PDF final segue a mesma área fixa e proporções.'
-              : 'Sem logo, o PDF exibe apenas título, empresa e número da OS — sem espaço vazio estranho.'}
+            No PDF, a logo usa toda a larg útil (contain), altura máxima fixa conforme o modo destacada/compacta.
           </p>
         </div>
 

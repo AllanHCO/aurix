@@ -9,39 +9,34 @@ import { getUploadsBaseDir } from '../config/env';
 
 export type LogoAlignment = 'left' | 'center' | 'right';
 export type LogoSizePreset = 'small' | 'medium' | 'large';
+/** Faixa da logo no PDF da OS: maior destaque ou mais discreta */
+export type LogoBandStyle = 'highlight' | 'compact';
 
 export interface DocumentBranding {
   /** Caminho relativo à pasta base de uploads (ex.: branding/logos/{userId}/x.jpg) */
   logo_path: string | null;
+  /** Legado; na faixa full-width a logo é centralizada (offsets aplicam ajuste fino) */
   logo_alignment: LogoAlignment;
+  /** Legado; mapeado para band_style quando ausente */
   logo_size: LogoSizePreset;
+  /** Destacada = faixa mais alta; compacta = faixa menor */
+  logo_band_style: LogoBandStyle;
   /** Ajuste fino em pontos PDF (~1 pt ≈ 1/72 pol) */
   logo_offset_x: number;
   logo_offset_y: number;
 }
 
-export const PDF_LOGO_BOX_W = 118;
-export const PDF_LOGO_BOX_H = 52;
-/** Altura mínima do bloco de cabeçalho da OS (pontos) — fixa com ou sem logo */
-export const PDF_OS_HEADER_H = 72;
-
-export function getLogoMaxDimensions(size: LogoSizePreset): { maxW: number; maxH: number } {
-  switch (size) {
-    case 'small':
-      return { maxW: 100, maxH: 28 };
-    case 'large':
-      return { maxW: 115, maxH: 48 };
-    case 'medium':
-    default:
-      return { maxW: 110, maxH: 38 };
-  }
+/** Altura máxima do conteúdo da logo dentro da faixa (pontos) */
+export function getLogoBandContentMaxHeight(style: LogoBandStyle): number {
+  return style === 'compact' ? 34 : 52;
 }
 
 export function getDefaultDocumentBranding(): DocumentBranding {
   return {
     logo_path: null,
-    logo_alignment: 'left',
+    logo_alignment: 'center',
     logo_size: 'medium',
+    logo_band_style: 'highlight',
     logo_offset_x: 0,
     logo_offset_y: 0
   };
@@ -53,10 +48,19 @@ export function mergeDocumentBranding(raw: unknown): DocumentBranding {
   const o = raw as Record<string, unknown>;
   const align = o.logo_alignment;
   const size = o.logo_size;
+  const band = o.logo_band_style;
+  let bandStyle: LogoBandStyle;
+  if (band === 'highlight' || band === 'compact') {
+    bandStyle = band;
+  } else {
+    const sz = size === 'small' || size === 'medium' || size === 'large' ? size : d.logo_size;
+    bandStyle = sz === 'small' ? 'compact' : 'highlight';
+  }
   return {
     logo_path: typeof o.logo_path === 'string' && o.logo_path.length > 0 ? o.logo_path : null,
     logo_alignment: align === 'left' || align === 'center' || align === 'right' ? align : d.logo_alignment,
     logo_size: size === 'small' || size === 'medium' || size === 'large' ? size : d.logo_size,
+    logo_band_style: bandStyle,
     logo_offset_x: typeof o.logo_offset_x === 'number' && Number.isFinite(o.logo_offset_x) ? clampOffset(o.logo_offset_x) : d.logo_offset_x,
     logo_offset_y: typeof o.logo_offset_y === 'number' && Number.isFinite(o.logo_offset_y) ? clampOffset(o.logo_offset_y) : d.logo_offset_y
   };

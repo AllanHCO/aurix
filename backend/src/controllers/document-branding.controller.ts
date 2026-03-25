@@ -53,6 +53,7 @@ export async function getPdfBranding(req: AuthRequest, res: Response): Promise<v
 const putSchema = z.object({
   logo_alignment: z.enum(['left', 'center', 'right']).optional(),
   logo_size: z.enum(['small', 'medium', 'large']).optional(),
+  logo_band_style: z.enum(['highlight', 'compact']).optional(),
   logo_offset_x: z.number().min(-18).max(18).optional(),
   logo_offset_y: z.number().min(-18).max(18).optional()
 });
