@@ -11,7 +11,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx src/prisma/seed.ts",
-    "db:add-area-columns": "tsx scripts/add-business-area-columns.ts"
+    "db:add-area-columns": "tsx scripts/add-business-area-columns.ts",
+    "audit:seed": "tsx scripts/seed-audit-two-companies.ts",
+    "audit:test-isolation": "tsx scripts/test-isolation.ts"
   },
   "prisma": {
     "seed": "tsx src/prisma/seed.ts"
@@ -28,6 +30,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "pdfkit": "^0.17.2",
+    "sharp": "^0.33.5",
     "swagger-ui-express": "^5.0.0",
     "zod": "^3.22.4"
   },

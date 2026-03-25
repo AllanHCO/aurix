@@ -31,6 +31,7 @@ import ConfiguracaoFinanceiro from './pages/configuracoes/ConfiguracaoFinanceiro
 import ConfiguracaoSeguranca from './pages/configuracoes/ConfiguracaoSeguranca';
 import ConfiguracaoPlano from './pages/configuracoes/ConfiguracaoPlano';
 import ConfiguracaoSistema from './pages/configuracoes/ConfiguracaoSistema';
+import ConfiguracaoDocumentosPdf from './pages/configuracoes/ConfiguracaoDocumentosPdf';
 import AssinaturaBloqueio from './pages/AssinaturaBloqueio';
 import AgendaPublica from './pages/AgendaPublica';
 import Layout from './components/Layout';
@@ -91,6 +92,7 @@ function AppRoutes() {
         <Route path="agendamentos/bloqueios" element={<ModuleGuard moduleKey="agendamentos"><Bloqueios /></ModuleGuard>} />
         <Route path="configuracoes" element={<ConfiguracoesHub />} />
         <Route path="configuracoes/empresa" element={<ConfiguracaoEmpresa />} />
+        <Route path="configuracoes/documentos-pdf" element={<ConfiguracaoDocumentosPdf />} />
         <Route path="configuracoes/areas-negocio" element={<ConfiguracaoAreasNegocio />} />
         <Route path="configuracoes/clientes" element={<ConfiguracaoClientes />} />
         <Route path="configuracoes/vendas" element={<ConfiguracaoVendas />} />

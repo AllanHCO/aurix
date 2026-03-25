@@ -8,6 +8,7 @@ import {
   type PersonalizacaoPayload,
   type ModoPreset
 } from '../services/personalizacao.service';
+import { mergeDocumentBranding } from '../services/document-branding.service';
 
 const modos: ModoPreset[] = ['padrao', 'barbearia', 'mecanica', 'assistencia_tecnica', 'estetica', 'personalizado'];
 
@@ -119,10 +120,17 @@ export const getPersonalizacao = async (req: AuthRequest, res: Response) => {
 export const putPersonalizacao = async (req: AuthRequest, res: Response) => {
   const userId = req.userId!;
   const body = putSchema.parse(req.body);
-  await getOrCreateSettings(userId);
+  const settings = await getOrCreateSettings(userId);
+  const existingJson = (settings.personalizacao_json as Record<string, unknown> | null) || {};
+  const preservedBranding = mergeDocumentBranding(existingJson.document_branding);
   await prisma.companySettings.update({
     where: { usuario_id: userId },
-    data: { personalizacao_json: body as object }
+    data: {
+      personalizacao_json: {
+        ...body,
+        document_branding: preservedBranding
+      } as object
+    }
   });
   return res.json({ success: true, message: 'Personalização salva com sucesso.' });
 };
@@ -131,12 +139,19 @@ export const putPersonalizacao = async (req: AuthRequest, res: Response) => {
 export const postPersonalizacaoResetar = async (req: AuthRequest, res: Response) => {
   const userId = req.userId!;
   const defaultConfig = getDefaultPersonalizacao();
-  await getOrCreateSettings(userId);
+  const settings = await getOrCreateSettings(userId);
+  const existingJson = (settings.personalizacao_json as Record<string, unknown> | null) || {};
+  const preservedBranding = mergeDocumentBranding(existingJson.document_branding);
   await prisma.companySettings.update({
     where: { usuario_id: userId },
-    data: { personalizacao_json: defaultConfig as object }
+    data: {
+      personalizacao_json: {
+        ...defaultConfig,
+        document_branding: preservedBranding
+      } as object
+    }
   });
-  return res.json({ success: true, data: defaultConfig, message: 'Configurações padrão restauradas.' });
+  return res.json({ success: true, data: { ...defaultConfig, document_branding: preservedBranding }, message: 'Configurações padrão restauradas.' });
 };
 
 /** GET /configuracoes/personalizacao/preset?modo=barbearia — retorna config do preset (para preview) */

@@ -226,7 +226,7 @@ export const swaggerDocument = {
                   },
                   desconto: { type: 'number' },
                   forma_pagamento: { type: 'string' },
-                  status: { type: 'string', enum: ['PAGO', 'PENDENTE'] }
+                  status: { type: 'string', enum: ['PAGO', 'PENDENTE', 'PARCIAL'] }
                 },
                 required: ['cliente_id', 'itens', 'forma_pagamento']
               }

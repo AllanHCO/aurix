@@ -168,13 +168,6 @@ export default function HistoricoAgendamentos() {
     }
   };
 
-  const isPastPlus30 = (a: AgendamentoHist) => {
-    const d = normData(a);
-    const [h, m] = a.hora_inicio.split(':').map(Number);
-    const agendamentoMin = new Date(d + 'T12:00:00').setHours(h, m, 0, 0);
-    return Date.now() > agendamentoMin + 30 * 60 * 1000;
-  };
-
   const exportarCSV = () => {
     const rows = list;
     const headers = ['data', 'hora', 'cliente', 'telefone', 'status', 'checkin_at', 'no_show'];

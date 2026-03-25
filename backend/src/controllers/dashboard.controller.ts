@@ -158,7 +158,8 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
   >`
     SELECT id, nome, estoque_atual, estoque_minimo
     FROM produtos
-    WHERE estoque_atual <= estoque_minimo
+    WHERE usuario_id = ${userId}
+      AND estoque_atual <= estoque_minimo
   `;
 
   // Últimas 5 vendas
@@ -325,10 +326,10 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
       where: { usuario_id: userId, tipo: 'sale', status: 'PAGO', createdAt: createdAtRange, ...areaWhere }
     }),
     prisma.$queryRaw<Array<{ count: bigint }>>(
-      Prisma.sql`SELECT COUNT(*)::bigint AS count FROM produtos WHERE estoque_atual <= estoque_minimo ${businessAreaId ? Prisma.sql`AND business_area_id = ${businessAreaId}` : Prisma.empty}`
+      Prisma.sql`SELECT COUNT(*)::bigint AS count FROM produtos WHERE usuario_id = ${userId} AND estoque_atual <= estoque_minimo ${businessAreaId ? Prisma.sql`AND business_area_id = ${businessAreaId}` : Prisma.empty}`
     ),
     prisma.$queryRaw<Array<{ id: string; nome: string; estoque_atual: number; estoque_minimo: number }>>(
-      Prisma.sql`SELECT id, nome, estoque_atual, estoque_minimo FROM produtos WHERE estoque_atual <= estoque_minimo ${businessAreaId ? Prisma.sql`AND business_area_id = ${businessAreaId}` : Prisma.empty} LIMIT ${LIMIT_PRODUTOS_ESTOQUE_BAIXO}`
+      Prisma.sql`SELECT id, nome, estoque_atual, estoque_minimo FROM produtos WHERE usuario_id = ${userId} AND estoque_atual <= estoque_minimo ${businessAreaId ? Prisma.sql`AND business_area_id = ${businessAreaId}` : Prisma.empty} LIMIT ${LIMIT_PRODUTOS_ESTOQUE_BAIXO}`
     ),
     prisma.venda.aggregate({
       where: { usuario_id: userId, tipo: 'sale', status: 'PENDENTE', createdAt: createdAtRange, ...areaWhere },
@@ -617,7 +618,7 @@ export const getDashboardSummary = async (req: AuthRequest, res: Response) => {
 
   const payload = {
     periodo: periodoSafe,
-    ...(periodoSafe === 'custom' && { dataInicio: dataInicialQ!.trim(), dataFim: dataFinalQ!.trim() }),
+    ...(periodoSafe === 'custom' && { dataInicio: String(dataInicialQ ?? '').trim(), dataFim: String(dataFinalQ ?? '').trim() }),
     modulos,
     metaFaturamentoMes,
     resultado: {

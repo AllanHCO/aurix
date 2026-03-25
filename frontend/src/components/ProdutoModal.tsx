@@ -135,7 +135,7 @@ export default function ProdutoModal({ produto, onClose, stockEnabled = true, on
         business_area_id: produto.business_area_id ?? '',
         pricing_type: (produto.pricing_type as 'fixed' | 'manual' | 'percentage') ?? null,
         percentage_value: produto.percentage_value ?? null,
-        percentage_base: (produto.percentage_base as keyof typeof PERCENTAGE_BASE_LABELS) ?? null,
+        percentage_base: (produto.percentage_base as 'over_parts_total' | 'over_sale_total' | 'over_previous_subtotal' | null) ?? null,
         observacao: produto.observacao ?? ''
       });
     } else {

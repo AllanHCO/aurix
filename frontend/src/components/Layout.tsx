@@ -26,7 +26,7 @@ export default function Layout() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const { getModuleLabel, isModuleEnabled } = usePersonalizacao();
-  const { areas, selectedAreaId } = useBusinessAreas();
+  useBusinessAreas();
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');

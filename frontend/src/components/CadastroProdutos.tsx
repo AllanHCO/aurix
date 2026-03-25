@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
-import { formatCurrency, formatDate } from '../utils/format';
+import { formatCurrency } from '../utils/format';
 import { useBusinessAreas } from '../contexts/BusinessAreaContext';
 import ProdutoModal from './ProdutoModal';
 import TableActionsMenu from './TableActionsMenu';
-import ModalPortal from './ModalPortal';
 
 type FiltroDesempenho = 'todos' | 'mais_vendidos' | 'menos_vendidos' | 'estoque_baixo';
 type PeriodoDesempenho = 'este_mes' | 'ultimos_3_meses';

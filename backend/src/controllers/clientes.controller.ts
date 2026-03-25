@@ -203,7 +203,10 @@ export const listarClientes = async (req: AuthRequest, res: Response) => {
     if (error instanceof z.ZodError) {
       throw new AppError('Parâmetros inválidos', 400);
     }
-    console.error('Erro ao listar clientes:', error);
+    console.error('Erro ao listar clientes:', error?.message ?? error);
+    if (error?.message && /usuario_id|column.*does not exist/i.test(String(error.message))) {
+      console.error('[clientes] Se o banco não tem coluna usuario_id, rode: backend/prisma/migrations_add_tenant_usuario_id.sql no Supabase.');
+    }
     throw new AppError('Erro ao carregar clientes. Tente novamente.', 500);
   }
 };
@@ -514,7 +517,7 @@ export const importarClientes = async (req: AuthRequest, res: Response) => {
             client_id: clienteCriado.id,
             type: tipo,
             title: row.dados_adicionais_titulo,
-            data_json: dataJson,
+            data_json: dataJson as import('@prisma/client').Prisma.InputJsonValue,
             show_on_quote: row.dados_adicionais_mostrar_orcamento ?? true,
             show_on_sale: row.dados_adicionais_mostrar_venda ?? true,
             internal_only: row.dados_adicionais_apenas_interno ?? false

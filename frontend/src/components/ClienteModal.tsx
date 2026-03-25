@@ -308,14 +308,14 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
                         <div className="min-w-0">
                           <p className="font-medium text-text-main truncate">{it.title}</p>
                           <p className="text-xs text-text-muted capitalize">{it.type}</p>
-                          {it.type === 'veiculo' && it.data_json?.placa && (
-                            <p className="text-xs text-text-muted">Placa: {String(it.data_json.placa)}</p>
+                          {it.type === 'veiculo' && it.data_json?.placa != null && (
+                            <p className="text-xs text-text-muted">Placa: {String((it.data_json as Record<string, unknown>).placa)}</p>
                           )}
                           {it.type === 'veiculo' && (it.data_json?.km != null) && (
-                            <p className="text-xs text-text-muted">KM: {String(it.data_json.km)}</p>
+                            <p className="text-xs text-text-muted">KM: {String((it.data_json as Record<string, unknown>).km)}</p>
                           )}
-                          {it.type === 'equipamento' && it.data_json?.problema && (
-                            <p className="text-xs text-text-muted">Problema: {String(it.data_json.problema)}</p>
+                          {it.type === 'equipamento' && (it.data_json as Record<string, unknown>).problema != null && (
+                            <p className="text-xs text-text-muted">Problema: {String((it.data_json as Record<string, unknown>).problema)}</p>
                           )}
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
@@ -352,14 +352,14 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
                       <div className="min-w-0">
                         <p className="font-medium text-text-main truncate">{it.title}</p>
                         <p className="text-xs text-text-muted capitalize">{it.type}</p>
-                        {it.type === 'veiculo' && it.data_json?.placa && (
-                          <p className="text-xs text-text-muted">Placa: {String(it.data_json.placa)}</p>
+                        {it.type === 'veiculo' && it.data_json?.placa != null && (
+                          <p className="text-xs text-text-muted">Placa: {String((it.data_json as Record<string, unknown>).placa)}</p>
                         )}
                         {it.type === 'veiculo' && (it.data_json?.km != null) && (
-                          <p className="text-xs text-text-muted">KM: {String(it.data_json.km)}</p>
+                          <p className="text-xs text-text-muted">KM: {String((it.data_json as Record<string, unknown>).km)}</p>
                         )}
-                        {it.type === 'equipamento' && it.data_json?.problema && (
-                          <p className="text-xs text-text-muted">Problema: {String(it.data_json.problema)}</p>
+                        {it.type === 'equipamento' && (it.data_json as Record<string, unknown>).problema != null && (
+                          <p className="text-xs text-text-muted">Problema: {String((it.data_json as Record<string, unknown>).problema)}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">

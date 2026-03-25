@@ -38,7 +38,7 @@ export const registrarCompra = async (req: AuthRequest, res: Response) => {
 
   const productIds = [...new Set(body.items.map((i) => i.product_id))];
   const products = await prisma.produto.findMany({
-    where: { id: { in: productIds } }
+    where: { id: { in: productIds }, usuario_id: userId }
   });
   if (products.length !== productIds.length) {
     const found = new Set(products.map((p) => p.id));

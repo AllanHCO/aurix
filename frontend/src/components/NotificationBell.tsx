@@ -113,7 +113,7 @@ export default function NotificationBell() {
             >
               <span className="material-symbols-outlined text-amber-500">person_off</span>
               <span className="text-sm text-[var(--color-text-main)]">
-                {receitaEmRisco.clientesNaoVoltaram} cliente(s) há mais de 30 dias sem voltar
+                {receitaEmRisco?.clientesNaoVoltaram ?? 0} cliente(s) há mais de 30 dias sem voltar
               </span>
             </button>
           )}
@@ -137,7 +137,7 @@ export default function NotificationBell() {
             >
               <span className="material-symbols-outlined text-primary">pending_actions</span>
               <span className="text-sm text-[var(--color-text-main)]">
-                {receitaEmRisco.vendasPendentesCount} venda(s) pendente(s) de pagamento
+                {receitaEmRisco?.vendasPendentesCount ?? 0} venda(s) pendente(s) de pagamento
               </span>
             </button>
           )}

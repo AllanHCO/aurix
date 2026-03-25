@@ -314,15 +314,15 @@ function AbaVisaoGeral() {
         ) : (
           <div className="h-64 sm:h-80 financeiro-chart-wrap" style={{ background: 'var(--color-bg-card)' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} cursor={{ fill: 'transparent' }}>
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickFormatter={(v) => `R$ ${v}`} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickFormatter={(v: unknown) => `R$ ${Number(v ?? 0)}`} />
                 <Tooltip
                   contentStyle={{ backgroundColor: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 8, color: 'var(--color-text-main)' }}
                   wrapperStyle={{ outline: 'none' }}
                   labelStyle={{ color: 'var(--color-text-main)' }}
-                  formatter={(value: number) => [formatCurrency(value), '']}
+                  formatter={(value: unknown) => [formatCurrency(Number(value ?? 0)), '']}
                   labelFormatter={(label) => `Período: ${label}`}
                 />
                 <Legend />
@@ -743,7 +743,7 @@ function ModalMovimentacao({
   isEdit: boolean;
   fechar: () => void;
 }) {
-  const { areas: businessAreas, selectedAreaId } = useBusinessAreas();
+  const { selectedAreaId } = useBusinessAreas();
   const isDuplicar = !!transacao && !isEdit;
   const isNovaSaida = tipo === 'expense' && !isEdit && !isDuplicar;
   const categoriasFiltradas = categorias.filter((c) => c.type === tipo);
@@ -1381,9 +1381,9 @@ function AbaAnalise() {
                     layout="vertical"
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                    <XAxis type="number" tickFormatter={(v) => formatCurrency(v)} stroke="var(--color-text-muted)" />
+                    <XAxis type="number" tickFormatter={(v: unknown) => formatCurrency(Number(v ?? 0))} stroke="var(--color-text-muted)" />
                     <YAxis type="category" dataKey="name" width={120} tick={{ fill: 'var(--color-text-main)' }} />
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                    <Tooltip formatter={(value: unknown) => formatCurrency(Number(value ?? 0))} />
                     <Legend />
                     <Bar dataKey="Entradas" fill="var(--color-success)" radius={[0, 4, 4, 0]} />
                     <Bar dataKey="Saídas" fill="var(--color-error)" radius={[0, 4, 4, 0]} />
@@ -1449,13 +1449,16 @@ function AbaAnalise() {
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
-                      label={({ category_name, total }) => `${category_name}: ${formatCurrency(total)}`}
+                      label={(props) => {
+                      const d = (props as unknown as { category_name: string; total: number });
+                      return `${d.category_name}: ${formatCurrency(d.total)}`;
+                    }}
                     >
                       {despesasData.map((_, i) => (
                         <Cell key={i} fill={coresPie[i % coresPie.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                    <Tooltip formatter={(value: unknown) => formatCurrency(Number(value ?? 0))} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -1487,13 +1490,16 @@ function AbaAnalise() {
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
-                      label={({ category_name, total }) => `${category_name}: ${formatCurrency(total)}`}
+                      label={(props) => {
+                      const d = (props as unknown as { category_name: string; total: number });
+                      return `${d.category_name}: ${formatCurrency(d.total)}`;
+                    }}
                     >
                       {entradasData.map((_, i) => (
                         <Cell key={i} fill={coresPie[i % coresPie.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                    <Tooltip formatter={(value: unknown) => formatCurrency(Number(value ?? 0))} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>

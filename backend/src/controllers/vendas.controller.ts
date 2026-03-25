@@ -1,12 +1,12 @@
 import { Response } from 'express';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
 import { invalidatePrefix } from '../services/cache.service';
 import { getUploadsBaseDir } from '../config/env';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 /** Retorna o ID da categoria de entrada "Vendas" (cria se não existir). Usar dentro de tx. */
 async function getOrCreateVendasCategory(
@@ -79,7 +79,7 @@ const vendaSchema = z.object({
     )
     .default(0),
   forma_pagamento: z.string().min(1).optional().nullable(),
-  status: z.enum(['PAGO', 'PENDENTE', 'ORCAMENTO']).default('PENDENTE'),
+  status: z.enum(['PAGO', 'PENDENTE', 'PARCIAL', 'ORCAMENTO']).default('PENDENTE'),
   agendamento_id: z.string().uuid().optional(),
   // Ordem de Serviço
   os_status: z.enum(['ABERTA', 'EM_EXECUCAO', 'CONCLUIDA']).optional(),
@@ -92,7 +92,12 @@ const vendaSchema = z.object({
   (data) => data.tipo !== 'sale' || (data.forma_pagamento != null && String(data.forma_pagamento).length > 0),
   { message: 'Forma de pagamento é obrigatória para venda direta', path: ['forma_pagamento'] }
 ).refine(
-  (data) => data.tipo === 'service_order' ? (data.itens.length >= 1 || (data.servicos?.length ?? 0) >= 1) : data.itens.length >= 1,
+  // Venda direta (tipo=sale) também pode ser feita apenas com serviços (sem produtos),
+  // mantendo "quote" com regra antiga (exige itens/produtos).
+  (data) =>
+    data.tipo === 'quote'
+      ? data.itens.length >= 1
+      : data.itens.length >= 1 || (data.servicos?.length ?? 0) >= 1,
   { message: 'Adicione pelo menos um item (peça) ou um serviço.', path: ['itens'] }
 );
 
@@ -127,7 +132,7 @@ export const listarVendas = async (req: AuthRequest, res: Response) => {
   const userId = req.userId!;
   const status = req.query.status as string | undefined;
   const tipoFilter = req.query.tipo as string | undefined; // 'sale' | 'quote' | undefined (todos)
-  const statusFilter = ['PENDENTE', 'PAGO', 'FECHADA', 'ORCAMENTO', 'CANCELADO'].includes(status ?? '')
+  const statusFilter = ['PENDENTE', 'PAGO', 'PARCIAL', 'FECHADA', 'ORCAMENTO', 'CANCELADO'].includes(status ?? '')
     ? status
     : undefined;
   const q = ((req.query.q ?? req.query.searchTerm) as string)?.trim();
@@ -145,7 +150,7 @@ export const listarVendas = async (req: AuthRequest, res: Response) => {
     ...(tipoFilter === 'sale' && { tipo: 'sale' }),
     ...(tipoFilter === 'quote' && { tipo: 'quote' }),
     ...(tipoFilter === 'service_order' && { tipo: 'service_order' }),
-    ...(statusFilter && { status: statusFilter }),
+    ...(statusFilter && { status: statusFilter as Prisma.EnumVendaStatusFilter }),
     ...(businessAreaId && businessAreaId.length > 0 && { business_area_id: businessAreaId })
   };
   if (startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) || endDate && /^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
@@ -206,7 +211,10 @@ export const obterVenda = async (req: AuthRequest, res: Response) => {
       client_extra_item: true,
       business_area: true,
       itens: { include: { produto: true } },
-      anexos: true
+      servicos: true,
+      // IMPORTANTE: a tabela de anexos pode não existir em bancos legados.
+      // O modal já carrega anexos por endpoint separado e trata erro; assim,
+      // evitamos quebrar o fluxo de edição inteiro.
     }
   });
 
@@ -241,8 +249,8 @@ export const criarVenda = async (req: AuthRequest, res: Response) => {
 
     const isOs = data.tipo === 'service_order';
     const isQuote = data.tipo === 'quote';
-    if (!isOs && data.itens.length === 0) {
-      throw new AppError('Venda deve ter pelo menos um item após consolidar itens', 400);
+    if (!isOs && data.itens.length === 0 && data.servicos.length === 0) {
+      throw new AppError('Venda deve ter pelo menos um item (produto) ou um serviço', 400);
     }
     if (isOs && data.itens.length === 0 && data.servicos.length === 0) {
       throw new AppError('Ordem de serviço deve ter pelo menos um item (peça) ou um serviço.', 400);
@@ -319,11 +327,11 @@ export const criarVenda = async (req: AuthRequest, res: Response) => {
             sale_code: saleCode,
             os_code: isOs ? (attempt === 0 ? osCode : `OS-${generateSaleCode()}${attempt}`) : null,
             tipo: data.tipo,
-            cliente_id: data.cliente_id,
-            usuario_id: userId,
-            business_area_id: businessAreaId,
-            agendamento_id: agendamentoId ?? null,
-            client_extra_item_id: clientExtraItemId,
+            cliente: { connect: { id: data.cliente_id } },
+            usuario: { connect: { id: userId } },
+            ...(businessAreaId ? { business_area: { connect: { id: businessAreaId } } } : {}),
+            ...(agendamentoId ? { agendamento: { connect: { id: agendamentoId } } } : {}),
+            ...(clientExtraItemId ? { client_extra_item: { connect: { id: clientExtraItemId } } } : {}),
             total,
             desconto: valorDesconto,
             forma_pagamento: formaPagamento,
@@ -437,7 +445,7 @@ const vendaUpdateSchema = z.object({
     .pipe(z.number().min(-100).max(100))
     .optional(),
   forma_pagamento: z.string().min(1).nullable().optional(),
-  status: z.enum(['PAGO', 'PENDENTE', 'ORCAMENTO', 'CANCELADO']).optional(),
+  status: z.enum(['PAGO', 'PENDENTE', 'PARCIAL', 'ORCAMENTO', 'CANCELADO']).optional(),
   os_status: z.enum(['ABERTA', 'EM_EXECUCAO', 'CONCLUIDA']).optional(),
   problema_relatado: z.string().max(10000).nullable().optional(),
   observacoes_tecnicas: z.string().max(10000).nullable().optional(),
@@ -512,7 +520,8 @@ export const atualizarVenda = async (req: AuthRequest, res: Response) => {
   const forma_pagamento = body.forma_pagamento !== undefined ? body.forma_pagamento : vendaExistente.forma_pagamento;
   let statusNovo = body.status ?? vendaExistente.status;
   if (isQuote) {
-    if (statusNovo === 'PAGO' || statusNovo === 'PENDENTE' || statusNovo === 'FECHADA') {
+    const statusStr = String(statusNovo);
+    if (statusStr === 'PAGO' || statusStr === 'PENDENTE' || statusStr === 'FECHADA') {
       statusNovo = vendaExistente.status;
     }
   }
@@ -554,7 +563,7 @@ export const atualizarVenda = async (req: AuthRequest, res: Response) => {
   const total = Math.round((subtotalCalc - valorDesconto) * 100) / 100;
 
   const vendaAtualizada = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const statusAntigo = vendaExistente.status as 'PAGO' | 'PENDENTE' | 'FECHADA' | 'ORCAMENTO' | 'CANCELADO';
+    const statusAntigo = vendaExistente.status as 'PAGO' | 'PENDENTE' | 'PARCIAL' | 'FECHADA' | 'ORCAMENTO' | 'CANCELADO';
     const isSale = vendaExistente.tipo === 'sale';
 
     // 1) Reverter estoque dos itens antigos (apenas venda PAGA)
@@ -617,9 +626,9 @@ export const atualizarVenda = async (req: AuthRequest, res: Response) => {
 
     // 5) Atualizar cabeçalho da venda
     const updateData: Prisma.VendaUpdateInput = {
-      cliente_id,
-      client_extra_item_id,
-      business_area_id,
+      cliente: { connect: { id: cliente_id } },
+      ...(client_extra_item_id ? { client_extra_item: { connect: { id: client_extra_item_id } } } : { client_extra_item: { disconnect: true } }),
+      ...(business_area_id ? { business_area: { connect: { id: business_area_id } } } : { business_area: { disconnect: true } }),
       total,
       desconto: valorDesconto,
       forma_pagamento,
@@ -758,7 +767,10 @@ export const converterOsEmVenda = async (req: AuthRequest, res: Response) => {
   if (venda.os_status === 'CANCELADA') throw new AppError('OS cancelada não pode ser convertida.', 400);
   if (venda.os_status === 'CONVERTIDA_EM_VENDA') throw new AppError('Esta OS já foi convertida em venda.', 400);
 
-  const saleCode = generateSaleCode();
+  // Mantém o mesmo "código exibido" após converter OS->Venda:
+  // no frontend o código da OS é `os_code`, e depois da conversão passa a ser `sale_code`.
+  // Se a OS já tinha `os_code`, reaproveitamos ele como `sale_code` para não "trocar o código".
+  const saleCode = venda.os_code ?? generateSaleCode();
   const statusAposConversao = marcarComoPago ? 'PAGO' : 'PENDENTE';
 
   const atualizada = await prisma.$transaction(async (tx) => {
@@ -924,6 +936,69 @@ export const faturarLote = async (req: AuthRequest, res: Response) => {
   res.json({ successIds, failed });
 };
 
+const excluirLoteSchema = z.object({
+  saleIds: z.array(z.string().min(1, 'ID inválido')).min(1, 'Informe ao menos um pedido').max(100, 'Máximo 100 por vez')
+});
+
+/** POST /vendas/excluir-lote — Exclui vários pedidos (apenas tipo=sale). Reverte estoque/financeiro quando necessário. */
+export const excluirLote = async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const parsed = excluirLoteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new AppError(parsed.error.errors[0]?.message ?? 'Dados inválidos', 400);
+  }
+  const saleIds = parsed.data.saleIds;
+
+  const successIds: string[] = [];
+  const failed: Array<{ id: string; motivo: string }> = [];
+
+  for (const id of saleIds) {
+    const venda = await prisma.venda.findFirst({
+      where: { id, usuario_id: userId },
+      include: { itens: true }
+    });
+    if (!venda) {
+      failed.push({ id, motivo: 'não encontrado' });
+      continue;
+    }
+    if (venda.tipo !== 'sale') {
+      failed.push({ id, motivo: 'apenas vendas (pedido) podem ser excluídas em lote' });
+      continue;
+    }
+    if (venda.status === 'FECHADA') {
+      failed.push({ id, motivo: 'pedido faturado/fechado não pode ser excluído em lote' });
+      continue;
+    }
+
+    try {
+      const isPago = venda.status === 'PAGO';
+      await prisma.$transaction(async (tx) => {
+        if (isPago && venda.itens.length > 0) {
+          for (const item of venda.itens) {
+            await tx.produto.update({
+              where: { id: item.produto_id },
+              data: { estoque_atual: { increment: item.quantidade } }
+            });
+          }
+          await tx.financialTransaction.deleteMany({
+            where: { usuario_id: userId, source_type: 'sale', source_id: id }
+          });
+        }
+        await tx.venda.delete({ where: { id } });
+      });
+      successIds.push(id);
+    } catch {
+      failed.push({ id, motivo: 'erro ao excluir' });
+    }
+  }
+
+  if (successIds.length > 0) {
+    invalidatePrefix(`dashboard:summary:${userId}:`);
+  }
+
+  res.json({ successIds, failed });
+};
+
 // --- Anexos da venda ---
 const ANEXOS_ALLOWED_MIMES = [
   'application/pdf',
@@ -974,11 +1049,20 @@ export const listarAnexosVenda = async (req: AuthRequest, res: Response) => {
     select: { id: true }
   });
   if (!venda) throw new AppError('Venda não encontrada', 404);
-  const anexos = await prisma.vendaAnexo.findMany({
-    where: { venda_id: id },
-    orderBy: { createdAt: 'desc' }
-  });
-  res.json(anexos);
+  try {
+    const anexos = await prisma.vendaAnexo.findMany({
+      where: { venda_id: id },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(anexos);
+  } catch (e: any) {
+    // Bancos legados podem não ter a tabela venda_anexos ainda
+    const msg = String(e?.message ?? e ?? '');
+    if (/venda_anexos|does not exist|relation .* does not exist/i.test(msg)) {
+      return res.json([]);
+    }
+    throw e;
+  }
 };
 
 export const uploadAnexoVenda = async (req: AuthRequest, res: Response) => {
@@ -999,16 +1083,56 @@ export const uploadAnexoVenda = async (req: AuthRequest, res: Response) => {
   if (!venda) throw new AppError('Venda não encontrada', 404);
 
   const pathRelativo = (file as any).pathRelative ?? `vendas/${id}/${file.filename}`;
-  const anexo = await prisma.vendaAnexo.create({
-    data: {
-      venda_id: id,
-      nome_original: file.originalname,
-      path: pathRelativo,
-      mime_type: file.mimetype,
-      tamanho: file.size
+  const tryCreate = async () => {
+    return prisma.vendaAnexo.create({
+      data: {
+        venda_id: id,
+        nome_original: file.originalname,
+        path: pathRelativo,
+        mime_type: file.mimetype,
+        tamanho: file.size
+      }
+    });
+  };
+
+  try {
+    const anexo = await tryCreate();
+    res.status(201).json(anexo);
+  } catch (e: any) {
+    const msg = String(e?.message ?? e ?? '');
+    if (/venda_anexos|does not exist/i.test(msg)) {
+      // Alguns bancos legados podem não ter a tabela criada.
+      // Tentamos criar de forma defensiva; se falhar, retornamos uma mensagem acionável.
+      try {
+        // Importante: no banco da produção, `vendas.id` está como TEXT (não UUID).
+        // Então criamos `venda_anexos` com tipos TEXT também para evitar erro de FK incompatível.
+        await prisma.$executeRawUnsafe(`
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          CREATE TABLE IF NOT EXISTS venda_anexos (
+            id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+            venda_id text NOT NULL,
+            nome_original varchar(255) NOT NULL,
+            path varchar(500) NOT NULL,
+            mime_type varchar(100),
+            tamanho integer,
+            "createdAt" timestamptz(6) NOT NULL DEFAULT now(),
+            CONSTRAINT venda_anexos_venda_id_fkey
+              FOREIGN KEY (venda_id) REFERENCES vendas(id) ON DELETE CASCADE
+          );
+          CREATE INDEX IF NOT EXISTS venda_anexos_venda_id_idx ON venda_anexos(venda_id);
+        `);
+        const anexo = await tryCreate();
+        res.status(201).json(anexo);
+        return;
+      } catch (e2: any) {
+        throw new AppError(
+          'Falha ao anexar: a tabela `venda_anexos` não existe/está inacessível no banco. Rode a migração da tabela e tente novamente.',
+          500
+        );
+      }
     }
-  });
-  res.status(201).json(anexo);
+    throw e;
+  }
 };
 
 export const deletarAnexoVenda = async (req: AuthRequest, res: Response) => {

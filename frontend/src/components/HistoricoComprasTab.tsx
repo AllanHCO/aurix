@@ -36,7 +36,7 @@ interface HistoricoComprasTabProps {
 
 export default function HistoricoComprasTab({ initialProductId = null }: HistoricoComprasTabProps) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { areas, selectedAreaId } = useBusinessAreas();
+  const { selectedAreaId } = useBusinessAreas();
   const [period, setPeriod] = useState<PeriodPreset>(() => (searchParams.get('period') as PeriodPreset) || '30');
   const [customStart, setCustomStart] = useState(searchParams.get('start_date') ?? '');
   const [customEnd, setCustomEnd] = useState(searchParams.get('end_date') ?? '');

@@ -93,7 +93,7 @@ export const criarExtraItem = async (req: AuthRequest, res: Response) => {
       client_id: clientId,
       type: parsed.type as 'veiculo' | 'equipamento' | 'outro',
       title,
-      data_json: dataJson,
+      data_json: dataJson as import('@prisma/client').Prisma.InputJsonValue,
       show_on_quote: parsed.show_on_quote,
       show_on_sale: parsed.show_on_sale,
       internal_only: parsed.internal_only
@@ -138,7 +138,7 @@ export const atualizarExtraItem = async (req: AuthRequest, res: Response) => {
 
   const updated = await prisma.clientExtraItem.update({
     where: { id: itemId },
-    data: updates
+    data: updates as import('@prisma/client').Prisma.ClientExtraItemUpdateInput
   });
   res.json(updated);
 };

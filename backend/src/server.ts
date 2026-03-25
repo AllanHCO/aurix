@@ -38,7 +38,7 @@ import devRoutes from './routes/dev.routes';
 
 // Render/Supabase e outros Postgres remotos exigem SSL. Não alterar URL local (localhost).
 const dbUrl = process.env.DATABASE_URL || '';
-const isRemoteDb = /supabase\.co|render\.com|fly\.(io|dev)|neon\.tech|amazonaws\.com/i.test(dbUrl);
+const isRemoteDb = /supabase\.(co|com)|render\.com|fly\.(io|dev)|neon\.tech|amazonaws\.com/i.test(dbUrl);
 if (dbUrl && isRemoteDb && !dbUrl.includes('sslmode=')) {
   const sep = dbUrl.includes('?') ? '&' : '?';
   process.env.DATABASE_URL = dbUrl + sep + 'sslmode=require';

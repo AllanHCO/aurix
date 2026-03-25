@@ -1,10 +1,19 @@
+import fs from 'fs';
 import { Response } from 'express';
 import PDFDocument from 'pdfkit';
-import { PrismaClient } from '@prisma/client';
+import sharp from 'sharp';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
+import {
+  mergeDocumentBranding,
+  absolutePathFromRelative,
+  PDF_OS_HEADER_H,
+  PDF_LOGO_BOX_W,
+  PDF_LOGO_BOX_H,
+  getLogoMaxDimensions,
+  type DocumentBranding
+} from '../services/document-branding.service';
 
 const TEXTO_GARANTIA_PADRAO =
   'Os serviços realizados possuem garantia de 3 (três) meses, contados a partir da data da conclusão conforme consta na ordem de serviço. ' +
@@ -48,12 +57,49 @@ function ensureSpace(doc: PDFKit.PDFDocument, marginBottom: number, pageBottom: 
   }
 }
 
+async function drawOsLogoInHeader(
+  doc: PDFKit.PDFDocument,
+  fullPath: string,
+  boxX: number,
+  boxY: number,
+  branding: DocumentBranding
+): Promise<void> {
+  let meta: { width?: number; height?: number };
+  try {
+    meta = await sharp(fullPath).metadata();
+  } catch {
+    return;
+  }
+  const iw = meta.width || 1;
+  const ih = meta.height || 1;
+  const { maxW, maxH } = getLogoMaxDimensions(branding.logo_size);
+  const bw = Math.min(maxW, PDF_LOGO_BOX_W - 4);
+  const bh = Math.min(maxH, PDF_LOGO_BOX_H - 4);
+  const scale = Math.min(bw / iw, bh / ih, 1);
+  const dw = iw * scale;
+  const dh = ih * scale;
+  let imgX = boxX;
+  if (branding.logo_alignment === 'center') imgX = boxX + (PDF_LOGO_BOX_W - dw) / 2;
+  if (branding.logo_alignment === 'right') imgX = boxX + PDF_LOGO_BOX_W - dw;
+  imgX += branding.logo_offset_x;
+  let imgY = boxY + (PDF_LOGO_BOX_H - dh) / 2 + branding.logo_offset_y;
+  imgX = Math.max(boxX - 2, Math.min(imgX, boxX + PDF_LOGO_BOX_W - dw + 2));
+  imgY = Math.max(boxY, Math.min(imgY, boxY + PDF_LOGO_BOX_H - dh));
+  try {
+    doc.image(fullPath, imgX, imgY, { width: dw, height: dh });
+  } catch {
+    /* fallback: cabeçalho segue sem imagem */
+  }
+}
+
 /** GET /vendas/:id/os-pdf — Gera PDF da Ordem de Serviço (layout para impressão A4) */
 export async function gerarOsPdf(req: AuthRequest, res: Response): Promise<void> {
   const { id } = req.params;
   const userId = req.userId!;
 
   let venda: Awaited<ReturnType<typeof prisma.venda.findFirst>> & {
+    cliente?: { nome: string };
+    itens?: Array<{ quantidade: number; preco_unitario: unknown; produto: { nome: string } }>;
     servicos?: Array<{ descricao: string; quantidade: number; valor_unitario: unknown }>;
   };
   try {
@@ -90,6 +136,14 @@ export async function gerarOsPdf(req: AuthRequest, res: Response): Promise<void>
   });
   const personalizacao = settings?.personalizacao_json as { modulos?: { vendas?: { mostrar_dados_adicionais_pdf_os?: boolean } } } | null | undefined;
   const mostrarDadosAdicionaisOs = personalizacao?.modulos?.vendas?.mostrar_dados_adicionais_pdf_os ?? true;
+  const documentBranding = mergeDocumentBranding(
+    (settings?.personalizacao_json as { document_branding?: unknown } | null | undefined)?.document_branding
+  );
+  let logoFullPath: string | null = null;
+  if (documentBranding.logo_path) {
+    const abs = absolutePathFromRelative(documentBranding.logo_path);
+    if (fs.existsSync(abs)) logoFullPath = abs;
+  }
 
   let clientExtraItems: Array<{ title: string; type: string; data_json: Record<string, unknown> | null }> = [];
   if (mostrarDadosAdicionaisOs && venda.cliente_id) {
@@ -149,19 +203,27 @@ export async function gerarOsPdf(req: AuthRequest, res: Response): Promise<void>
 
   doc.strokeColor('#000000');
 
-  // ---------- 1) Topo: quadrado grande (ORDEM DE SERVIÇO + empresa) e quadrado menor (Nº OS) com bordas pretas ----------
-  const headerH = 28;
-  const boxLeftW = pageWidth * 0.72;
-  const boxRightW = pageWidth - boxLeftW;
+  // ---------- 1) Cabeçalho fixo: logo opcional (área limitada) + título + empresa + Nº OS ----------
+  const headerH = PDF_OS_HEADER_H;
+  const hasLogo = !!logoFullPath;
+  const logoBoxX = marginLeft + 6;
+  const logoBoxY = marginTop + 10;
+  const textBlockX = marginLeft + (hasLogo ? PDF_LOGO_BOX_W + 20 : 12);
+  const titleWidth = pageWidth - (textBlockX - marginLeft) - 100;
+
   doc.lineWidth(BORDA_GROSSA);
-  doc.rect(marginLeft, marginTop, boxLeftW, headerH).stroke();
-  doc.rect(marginLeft + boxLeftW, marginTop, boxRightW, headerH).stroke();
+  doc.rect(marginLeft, marginTop, pageWidth, headerH).stroke();
+
+  if (hasLogo && logoFullPath) {
+    await drawOsLogoInHeader(doc, logoFullPath, logoBoxX, logoBoxY, documentBranding);
+  }
+
   doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000');
-  doc.text('ORDEM DE SERVIÇO', marginLeft + 5, marginTop + 4, { width: boxLeftW - 10 });
-  doc.fontSize(9).font('Helvetica');
-  doc.text(companyName, marginLeft + 5, marginTop + 16, { width: boxLeftW - 10 });
-  doc.fontSize(10).font('Helvetica-Bold');
-  doc.text(`Nº OS: ${osCode}`, marginLeft + boxLeftW + 5, marginTop + 8, { width: boxRightW - 10, align: 'center' });
+  doc.text('ORDEM DE SERVIÇO', textBlockX, marginTop + 14, { width: Math.max(titleWidth, 120) });
+  doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
+  doc.text(`Nº OS: ${osCode}`, marginLeft, marginTop + 14, { width: pageWidth - 10, align: 'right' });
+  doc.fontSize(9).font('Helvetica').fillColor('#333333');
+  doc.text(companyName, textBlockX, marginTop + 36, { width: pageWidth - (textBlockX - marginLeft) - 14 });
 
   // ---------- 2) Bloco cliente/veículo: bordas leves nos campos, borda grossa fechando ----------
   let y = marginTop + headerH + 6;
@@ -235,8 +297,8 @@ export async function gerarOsPdf(req: AuthRequest, res: Response): Promise<void>
       const nome = (prod?.nome || '—').slice(0, 45);
       doc.text(nome, marginLeft + 2, rowY + 3, { width: colPeca[0] - 4 });
       doc.text(String(item.quantidade), marginLeft + colPeca[0] + 2, rowY + 3);
-      doc.text(formatMoney(item.preco_unitario), marginLeft + colPeca[0] + colPeca[1] + 2, rowY + 3);
-      doc.text(formatMoney(item.quantidade * Number(item.preco_unitario)), valorColX + 2, rowY + 3);
+      doc.text(formatMoney(Number(item.preco_unitario)), marginLeft + colPeca[0] + colPeca[1] + 2, rowY + 3);
+      doc.text(formatMoney(Number(item.quantidade) * Number(item.preco_unitario)), valorColX + 2, rowY + 3);
     }
     y = rowY + LINHA_ALTURA;
   }

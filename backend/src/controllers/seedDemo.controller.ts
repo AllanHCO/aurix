@@ -38,13 +38,14 @@ export const seedDemo = async (req: AuthRequest, res: Response) => {
   const start = new Date(end.getFullYear(), end.getMonth() - months, 1, 0, 0, 0, 0);
 
   const categorias = await Promise.all(
-    NOMES_CATEGORIAS.map((nome, i) =>
-      prisma.categoria.upsert({
-        where: { nome: `Demo ${nome} ${userId.slice(0, 6)}` },
-        create: { nome: `Demo ${nome} ${userId.slice(0, 6)}` },
+    NOMES_CATEGORIAS.map((nome) => {
+      const nomeVal = `Demo ${nome} ${userId.slice(0, 6)}`;
+      return prisma.categoria.upsert({
+        where: { usuario_id_nome_tipo: { usuario_id: userId, nome: nomeVal, tipo: 'produto' } },
+        create: { usuario_id: userId, nome: nomeVal, tipo: 'produto' },
         update: {}
-      })
-    )
+      });
+    })
   );
 
   const produtos: { id: string; preco: number; nome: string }[] = [];
@@ -55,8 +56,9 @@ export const seedDemo = async (req: AuthRequest, res: Response) => {
     const estoqueMin = randomInt(2, 10);
     const estoqueAtual = randomInt(0, 15);
     const p = await prisma.produto.upsert({
-      where: { nome_categoria_id: { nome, categoria_id: cat.id } },
+      where: { usuario_id_nome_categoria_id_item_type: { usuario_id: userId, nome, categoria_id: cat.id, item_type: 'product' } },
       create: {
+        usuario_id: userId,
         nome,
         categoria_id: cat.id,
         preco,
@@ -75,6 +77,7 @@ export const seedDemo = async (req: AuthRequest, res: Response) => {
     const nome = NOMES_CLIENTES[i % NOMES_CLIENTES.length] + ` ${i}`;
     const c = await prisma.cliente.create({
       data: {
+        usuario_id: userId,
         nome,
         telefone: `1199${String(10000000 + i).slice(-8)}`
       }

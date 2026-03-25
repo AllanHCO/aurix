@@ -41,7 +41,7 @@ interface Supplier {
   ultimaCompra?: string | null;
 }
 
-interface SupplierDetail extends Supplier {
+interface SupplierDetail extends Omit<Supplier, 'ultimaCompra'> {
   produtos?: { id: string; nome: string; custo: number; preco: number; estoque_atual: number; ultimaVenda: string | null }[];
   movimentacoes?: { id: string; date: string; description: string; category: string; value: number; status: string; source_type: string }[];
   compras?: { id: string; product_id: string; product_name: string; quantity: number; total_cost: number; date: string }[];

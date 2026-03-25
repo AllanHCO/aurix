@@ -122,7 +122,13 @@ export default function ConfiguracaoEmpresa() {
           />
           <p className="text-xs text-text-muted mt-1">Usado no Dashboard para a barra de progresso.</p>
         </div>
-        <p className="text-xs text-text-muted">Nome da empresa, logo e cor da marca: em breve.</p>
+        <p className="text-xs text-text-muted">
+          Logo no PDF da Ordem de Serviço:{' '}
+          <Link to="/configuracoes/documentos-pdf" className="text-primary underline">
+            Documentos (PDF)
+          </Link>
+          .
+        </p>
       </section>
 
       <div className="flex justify-end">

@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
-import { formatCurrency, formatDate } from '../utils/format';
+import { formatCurrency } from '../utils/format';
 import { usePersonalizacao } from '../contexts/PersonalizacaoContext';
 import { useAuth } from '../contexts/AuthContext';
 import SelecaoProdutosModal, { type ItemVenda } from './SelecaoProdutosModal';
@@ -24,7 +24,7 @@ const vendaSchema = z.object({
     .max(100, 'Use entre -100% e 100%')
     .default(0),
   forma_pagamento: z.string().optional(),
-  status: z.enum(['PAGO', 'PENDENTE']).default('PENDENTE')
+  status: z.enum(['PAGO', 'PENDENTE', 'PARCIAL']).default('PENDENTE')
 });
 
 type VendaForm = z.infer<typeof vendaSchema>;
@@ -33,7 +33,7 @@ function subtotalItem(item: ItemVenda): number {
   return Math.round(item.preco_unitario * item.quantidade * 100) / 100;
 }
 
-function resolveServicoValorUnitario(s: ItemServicoOs, idx: number, servicos: ItemServicoOs[], subtotalPecas: number): number {
+function resolveServicoValorUnitario(s: ItemServicoOs, _idx: number, servicos: ItemServicoOs[], subtotalPecas: number): number {
   if (!s.is_percentage || s.percentage_value == null || !s.percentage_base) return s.valor_unitario;
   let base = 0;
   if (s.percentage_base === 'over_parts_total' || s.percentage_base === 'over_previous_subtotal') base = subtotalPecas;
@@ -75,12 +75,12 @@ interface VendaParaEdicao {
   client_extra_item?: { id: string; title: string; type: string } | null;
   desconto: number;
   forma_pagamento?: string | null;
-  status: 'PAGO' | 'PENDENTE' | 'FECHADA' | 'ORCAMENTO' | 'CANCELADO';
+  status: 'PAGO' | 'PENDENTE' | 'PARCIAL' | 'FECHADA' | 'ORCAMENTO' | 'CANCELADO';
   problema_relatado?: string | null;
   observacoes_tecnicas?: string | null;
   texto_garantia?: string | null;
   os_agradecimento?: string | null;
-  os_status?: string;
+  os_status?: string | null;
   itens: Array<{
     produto_id: string;
     quantidade: number;
@@ -88,6 +88,33 @@ interface VendaParaEdicao {
     produto?: { nome: string; preco?: number; estoque_atual?: number };
   }>;
   servicos?: Array<{ descricao: string; quantidade: number; valor_unitario: number }>;
+}
+
+type PaymentTipo = 'dinheiro' | 'pix' | 'debito' | 'credito' | 'fiado';
+type PaymentDraft = {
+  id?: string;
+  tipo_pagamento: PaymentTipo;
+  valor: number;
+  parcelas: number | null;
+  data_pagamento: string; // ISO
+  __autoSecond?: boolean;
+};
+
+function tipoPagamentoToFormaPag(t: PaymentTipo): string {
+  switch (t) {
+    case 'dinheiro':
+      return 'Dinheiro';
+    case 'pix':
+      return 'Pix';
+    case 'debito':
+      return 'Cartão de Débito';
+    case 'credito':
+      return 'Cartão de Crédito';
+    case 'fiado':
+      return 'Fiado';
+    default:
+      return 'A definir';
+  }
 }
 
 /** Calcula percentual de desconto/acréscimo a partir do valor em R$ e do subtotal (aceita negativo = acréscimo). */
@@ -150,10 +177,16 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
   const [anexosVenda, setAnexosVenda] = useState<{ id: string; nome_original: string; mime_type?: string | null; tamanho?: number | null }[]>([]);
   const [loadingAnexos, setLoadingAnexos] = useState(false);
   const [uploadingAnexo, setUploadingAnexo] = useState(false);
+  const [pagamentos, setPagamentos] = useState<PaymentDraft[]>([]);
+  const [loadingPagamentos, setLoadingPagamentos] = useState(false);
+  const [pagamentosErro, setPagamentosErro] = useState<string | null>(null);
   const inputAnexoRef = useRef<HTMLInputElement>(null);
 
   const { areas: businessAreas, selectedAreaId, enabled: businessAreasEnabled } = useBusinessAreas();
   const { user } = useAuth();
+
+  const [itensErro, setItensErro] = useState<string | null>(null);
+  const [servicosErro, setServicosErro] = useState<string | null>(null);
 
   useEffect(() => {
     if (!businessAreasEnabled) {
@@ -170,6 +203,8 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
     watch,
     reset,
     setValue,
+    setError,
+    clearErrors,
     formState: { errors }
   } = useForm<VendaForm>({
     resolver: zodResolver(vendaSchema),
@@ -200,8 +235,53 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
   }, [vendaId]);
 
   useEffect(() => {
-    if (!loading && venda && venda.itens?.length) {
-      const itensIniciais: ItemVenda[] = venda.itens.map((i) => ({
+    if (!vendaId || !venda || venda.tipo !== 'sale') {
+      setPagamentos([]);
+      setPagamentosErro(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingPagamentos(true);
+    api
+      .get<
+        Array<{
+          id: string;
+          tipo_pagamento: PaymentTipo;
+          valor: number;
+          parcelas: number | null;
+          data_pagamento: string;
+        }>
+      >(`/vendas/${vendaId}/pagamentos`)
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res.data) ? res.data : [];
+        setPagamentos(
+          list.map((p) => ({
+            id: p.id,
+            tipo_pagamento: p.tipo_pagamento,
+            valor: Number(p.valor),
+            parcelas: p.parcelas ?? null,
+            data_pagamento: p.data_pagamento,
+            __autoSecond: false
+          }))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setPagamentos([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPagamentos(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [vendaId, venda]);
+
+  useEffect(() => {
+    if (!loading && venda) {
+      const itensIniciais: ItemVenda[] = (venda.itens ?? []).map((i) => ({
         produto_id: i.produto_id,
         nome: i.produto?.nome ?? '',
         preco_unitario: Number(i.preco_unitario),
@@ -210,15 +290,32 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
         estoque_atual: i.produto?.estoque_atual,
         sku: (i.produto as { sku?: string })?.sku
       }));
-      const subtotalBruto = itensIniciais.reduce((acc, i) => acc + subtotalItem(i), 0);
-      const percentual = descontoPercentualFromValor(Number(venda.desconto) || 0, subtotalBruto);
+      const servicosIniciais: ItemServicoOs[] = (venda as VendaParaEdicao & { servicos?: ItemServicoOs[] }).servicos?.map((s) => ({
+        produto_id: (s as any).produto_id ?? null,
+        descricao: s.descricao,
+        quantidade: s.quantidade,
+        valor_unitario: Number(s.valor_unitario)
+      })) ?? [];
+
+      const subtotalPecas = itensIniciais.reduce((acc, i) => acc + subtotalItem(i), 0);
+      const subtotalServicos = servicosIniciais.reduce((acc, s) => acc + Number(s.valor_unitario) * Number(s.quantidade), 0);
+      const subtotalGeral = subtotalPecas + subtotalServicos;
+
+      const percentual = descontoPercentualFromValor(Number(venda.desconto) || 0, subtotalGeral);
+      const statusForForm =
+        venda.status === 'FECHADA' || venda.status === 'ORCAMENTO' || venda.status === 'CANCELADO'
+          ? 'PAGO'
+          : venda.status === 'PAGO' || venda.status === 'PENDENTE' || venda.status === 'PARCIAL'
+            ? venda.status
+            : 'PENDENTE';
       reset({
         cliente_id: venda.cliente_id ?? '',
         desconto_percentual: Math.round(percentual * 100) / 100,
         forma_pagamento: venda.forma_pagamento ?? '',
-        status: (venda.status === 'FECHADA' ? 'PAGO' : venda.status) ?? 'PENDENTE'
+        status: statusForForm
       });
       setItens(itensIniciais);
+      setServicos(servicosIniciais);
       if (venda.cliente_id && venda.cliente?.nome) {
         setSelectedCliente({ id: venda.cliente_id, nome: venda.cliente.nome, telefone: null });
         setClienteSearch('');
@@ -227,7 +324,6 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
       else setSelectedExtraItemId(null);
       setBusinessAreaId(venda.business_area_id ?? venda.business_area?.id ?? null);
       setTipoRegistro((venda.tipo === 'quote' ? 'quote' : venda.tipo === 'service_order' ? 'service_order' : 'sale') as 'sale' | 'quote' | 'service_order');
-      setServicos((venda as VendaParaEdicao & { servicos?: ItemServicoOs[] }).servicos?.map(s => ({ descricao: s.descricao, quantidade: s.quantidade, valor_unitario: Number(s.valor_unitario) })) ?? []);
       setProblemaRelatado((venda as VendaParaEdicao).problema_relatado ?? '');
       setObservacoesTecnicas((venda as VendaParaEdicao).observacoes_tecnicas ?? '');
       setTextoGarantia((venda as VendaParaEdicao).texto_garantia ?? '');
@@ -423,6 +519,16 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
     setItens(itens.filter((_, i) => i !== index));
   };
 
+  useEffect(() => {
+    if (itensErro) setItensErro(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itens.length]);
+
+  useEffect(() => {
+    if (servicosErro) setServicosErro(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [servicos.length]);
+
   const atualizarItemVenda = (index: number, valor: number) => {
     const novosItens = [...itens];
     novosItens[index] = { ...novosItens[index], quantidade: Math.max(1, Math.floor(valor)) };
@@ -444,6 +550,35 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
   const descontoPct = Math.max(-100, Math.min(100, Number(descontoPercentual) ?? 0));
   const valorDesconto = Math.round(subtotalGeral * (descontoPct / 100) * 100) / 100;
   const totalFinal = Math.round((subtotalGeral - valorDesconto) * 100) / 100;
+
+  const totalPago = Math.round(pagamentos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0) * 100) / 100;
+  const restante = Math.round((totalFinal - totalPago) * 100) / 100;
+  const statusCalculadoVenda: 'PENDENTE' | 'PARCIAL' | 'PAGO' =
+    totalPago <= 0 ? 'PENDENTE' : totalPago + 0.0001 < totalFinal ? 'PARCIAL' : 'PAGO';
+  const pagamentosExcedemTotal = totalPago - totalFinal > 0.0001;
+
+  useEffect(() => {
+    if (isQuote || isOs) return;
+    const p0 = pagamentos[0];
+    if (!p0) return;
+
+    const rem = Math.round((totalFinal - p0.valor) * 100) / 100;
+
+    if (pagamentos.length === 1) {
+      return;
+    }
+
+    if (pagamentos.length === 2 && pagamentos[1]?.__autoSecond) {
+      setPagamentos((prev) => {
+        if (prev.length !== 2) return prev;
+        const p1 = prev[1];
+        if (!p1.__autoSecond) return prev;
+        if (rem <= 0.0001) return [prev[0]];
+        if (Math.abs(Number(p1.valor) - rem) <= 0.0001) return prev;
+        return [prev[0], { ...p1, valor: rem }];
+      });
+    }
+  }, [totalFinal, pagamentos.length, pagamentos[0]?.valor, pagamentos[0]?.tipo_pagamento, pagamentos[0]?.parcelas, pagamentos[1]?.__autoSecond, isQuote, isOs]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -470,36 +605,62 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
   const onSubmit = async (data: VendaForm) => {
     if (isSubmitting) return;
     if (!data.cliente_id || data.cliente_id === '') {
-      toast.error('Selecione um cliente');
+      setError('cliente_id', { type: 'manual', message: 'Selecione um cliente' });
       return;
     }
-    if (!isQuote && !isOs && (!data.forma_pagamento || data.forma_pagamento === '')) {
-      toast.error('Selecione uma forma de pagamento');
+    if (!isQuote && !isOs && pagamentosExcedemTotal) {
+      setPagamentosErro('A soma dos pagamentos excede o total da venda.');
       return;
     }
     if (isOs) {
       if (itens.length === 0 && servicos.length === 0) {
-        toast.error('Adicione pelo menos uma peça ou um serviço à ordem de serviço');
+        setItensErro('Adicione pelo menos uma peça ou um serviço');
+        setServicosErro('Adicione pelo menos uma peça ou um serviço');
         return;
       }
       const servicosInvalidos = servicos.filter((s) => !s.descricao?.trim() || s.quantidade <= 0 || s.valor_unitario < 0);
       if (servicosInvalidos.length > 0) {
-        toast.error('Revise os serviços (descrição, quantidade e valor)');
+        setServicosErro('Revise os serviços (descrição, quantidade e valor)');
         return;
       }
     } else if (itens.length === 0) {
-      toast.error(isQuote ? 'Adicione pelo menos um produto ao orçamento' : 'Adicione pelo menos um produto à venda');
-      return;
+      // Venda direta pode ter apenas serviços (sem produtos).
+      if (servicos.length === 0) {
+        setItensErro(isQuote ? 'Adicione pelo menos um produto ao orçamento' : 'Adicione pelo menos um produto à venda');
+        return;
+      }
     }
     const itensInvalidos = itens.filter(
       (item) => !item.produto_id || item.quantidade <= 0 || item.preco_unitario <= 0
     );
     if (itensInvalidos.length > 0) {
-      toast.error('Revise os itens (quantidade e preço devem ser positivos)');
+      setItensErro('Revise os itens (quantidade e preço devem ser positivos)');
       return;
     }
 
     setIsSubmitting(true);
+    clearErrors(['cliente_id', 'forma_pagamento']);
+
+    const isSaleDirect = !isQuote && !isOs;
+    const pagamentosPayload = isSaleDirect
+      ? pagamentos.map((p) => ({
+          tipo_pagamento: p.tipo_pagamento,
+          valor: Math.round((Number(p.valor) || 0) * 100) / 100,
+          parcelas: p.tipo_pagamento === 'credito' ? p.parcelas : null,
+          data_pagamento: p.data_pagamento
+        }))
+      : [];
+    const statusPayloadVenda: 'PENDENTE' | 'PAGO' | 'PARCIAL' =
+      isEdit && venda?.status && (venda.status === 'PAGO' || venda.status === 'PENDENTE' || venda.status === 'PARCIAL') ? venda.status : 'PENDENTE';
+    const formaPagamentoPayloadVenda =
+      isSaleDirect
+        ? pagamentos.length === 1
+          ? tipoPagamentoToFormaPag(pagamentos[0].tipo_pagamento)
+          : pagamentos.length > 1
+            ? 'Múltiplos'
+            : 'A definir'
+        : '';
+
     const payloadItens = itens.map((item) => ({
       produto_id: item.produto_id,
       quantidade: Number(item.quantidade),
@@ -551,7 +712,18 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
           else vendaData.forma_pagamento = null;
         }
         if (showDadosAdicionaisVenda || showDadosAdicionaisOrcamento || showDadosAdicionaisOs) vendaData.client_extra_item_id = selectedExtraItemId || null;
+
+        if (!isQuote && !isOs) {
+          // Mantém o “status” do cabeçalho compatível no momento da edição.
+          // O status final (PENDENTE/PARCIAL/PAGO) e o financeiro são sincronizados no endpoint de pagamentos.
+          vendaData.status = statusPayloadVenda;
+          vendaData.forma_pagamento = formaPagamentoPayloadVenda;
+        }
         await api.put(`/vendas/${vendaId}`, vendaData);
+
+        if (!isQuote && !isOs) {
+          await api.put(`/vendas/${vendaId}/pagamentos`, { payments: pagamentosPayload });
+        }
         toast.success(isOs ? 'Ordem de serviço atualizada!' : isQuote ? 'Orçamento atualizado!' : 'Venda atualizada com sucesso!');
         onClose();
       } catch (error: any) {
@@ -585,10 +757,22 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
     if (showDadosAdicionaisVenda || showDadosAdicionaisOrcamento || showDadosAdicionaisOs) vendaData.client_extra_item_id = selectedExtraItemId || null;
     vendaData.business_area_id = businessAreaId || null;
 
+    if (!isQuote && !isOs) {
+      vendaData.status = statusPayloadVenda;
+      vendaData.forma_pagamento = formaPagamentoPayloadVenda;
+    }
+
     try {
-      await api.post('/vendas', vendaData, {
+      const created = await api.post('/vendas', vendaData, {
         headers: { 'Idempotency-Key': idempotencyKeyRef.current }
       });
+
+      if (!isQuote && !isOs) {
+        const createdId = (created.data as any)?.id;
+        if (createdId) {
+          await api.put(`/vendas/${createdId}/pagamentos`, { payments: pagamentosPayload });
+        }
+      }
       toast.success(isOs ? 'Ordem de serviço salva!' : isQuote ? 'Orçamento salvo!' : 'Venda registrada com sucesso!');
       onClose();
     } catch (error: any) {
@@ -609,9 +793,6 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
       </ModalPortal>
     );
   }
-
-  const now = new Date();
-  const dataHora = { data: formatDate(now), hora: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) };
 
   return (
     <ModalPortal>
@@ -730,7 +911,9 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                 onKeyDown={handleClienteKeyDown}
                 placeholder="Pesquisar cliente por nome ou CPF..."
                 autoComplete="off"
-                className="w-full pl-4 pr-10 py-3 border border-border rounded-lg bg-bg-main text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[44px] touch-manipulation transition-shadow"
+                className={`w-full pl-4 pr-10 py-3 border rounded-lg bg-bg-main text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 min-h-[44px] touch-manipulation transition-shadow ${
+                  errors.cliente_id ? 'border-error focus:ring-error/20' : 'border-border focus:ring-primary/20'
+                }`}
                 aria-label="Buscar cliente"
                 aria-expanded={clienteDropdownOpen}
                 aria-haspopup="listbox"
@@ -851,12 +1034,15 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
               </button>
             </div>
 
+            {itensErro && (
+              <p className="text-error text-sm mb-2 font-medium">{itensErro}</p>
+            )}
             {itens.length === 0 ? (
-              <div className="text-center py-8 border border-border rounded-lg text-text-muted bg-bg-elevated">
+              <div className={`text-center py-8 border rounded-lg text-text-muted bg-bg-elevated ${itensErro ? 'border-error' : 'border-border'}`}>
                 {isOs ? 'Nenhuma peça. Adicione produtos e/ou serviços abaixo.' : 'Nenhum item adicionado. Clique em "Adicionar Produtos" para abrir o catálogo.'}
               </div>
             ) : (
-              <div className="border border-border rounded-lg overflow-x-auto">
+              <div className={`border rounded-lg overflow-x-auto ${itensErro ? 'border-error' : 'border-border'}`}>
                 <table className="w-full text-left text-sm">
                   <thead className="bg-bg-elevated text-text-muted">
                     <tr>
@@ -966,6 +1152,9 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
               <h3 className="text-sm font-bold text-text-main uppercase tracking-wide mb-2">
                 {isOs ? 'Serviços executados' : 'Serviços'}
               </h3>
+              {servicosErro && (
+                <p className="text-error text-sm mb-2 font-medium">{servicosErro}</p>
+              )}
               <div className="flex flex-wrap items-end gap-2 mb-2">
                 <div className="flex-1 min-w-[200px]">
                   <div className="flex flex-wrap gap-2">
@@ -1001,7 +1190,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
               {servicos.length === 0 ? (
                 <p className="text-sm text-text-muted py-2">Nenhum serviço. Use &quot;Adicionar serviço cadastrado&quot; ou &quot;Serviço manual&quot; para incluir.</p>
               ) : (
-                <div className="border border-border rounded-lg overflow-hidden">
+                <div className={`border rounded-lg overflow-hidden ${servicosErro ? 'border-error' : 'border-border'}`}>
                   <table className="w-full text-left text-sm">
                     <thead className="bg-bg-elevated text-text-muted">
                       <tr>
@@ -1214,7 +1403,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
           </div>
 
           {/* Coluna direita: Resumo da Venda (fixa, sem scroll) */}
-          <div className="lg:col-span-1 flex flex-col gap-4 lg:min-h-0">
+          <div className="lg:col-span-1 flex flex-col gap-4 lg:min-h-0 overflow-y-auto pr-1">
             <div className="bg-bg-elevated p-4 rounded-xl border border-border shadow-sm flex flex-col gap-4 flex-shrink-0">
               <h3 className="text-sm font-bold text-text-main uppercase tracking-wide">Resumo da Venda</h3>
               <div className="flex justify-between items-center">
@@ -1251,34 +1440,215 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                   <p className="text-sm text-primary mt-1">Acréscimo aplicado — +{formatCurrency(-valorDesconto)}</p>
                 )}
               </div>
-              {!isQuote && (
-                <>
-                  <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-bg-main border border-border">
-                    <label className="text-sm font-medium text-text-main cursor-pointer" htmlFor="venda-marcar-pago">
-                      Marcar como pago ao finalizar
-                    </label>
+              {!isQuote && !isOs && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-bold text-text-main uppercase tracking-wide">Pagamentos</h4>
                     <button
-                      id="venda-marcar-pago"
                       type="button"
-                      role="switch"
-                      aria-checked={watch('status') === 'PAGO'}
-                      onClick={() => setValue('status', watch('status') === 'PAGO' ? 'PENDENTE' : 'PAGO')}
-                      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
-                        watch('status') === 'PAGO' ? 'bg-primary' : 'bg-bg-elevated'
-                      }`}
+                      onClick={() => {
+                        const remaining = Math.max(0, restante);
+                        if (pagamentos.length === 0) {
+                          setPagamentos([
+                            {
+                              tipo_pagamento: 'dinheiro',
+                              valor: remaining,
+                              parcelas: null,
+                              data_pagamento: new Date().toISOString()
+                            }
+                          ]);
+                          return;
+                        }
+
+                        const tipoDefault = pagamentos[0]?.tipo_pagamento ?? 'dinheiro';
+                        setPagamentos((prev) => [
+                          ...prev,
+                          {
+                            tipo_pagamento: tipoDefault,
+                            valor: remaining,
+                            parcelas: tipoDefault === 'credito' ? (pagamentos[0]?.parcelas ?? null) : null,
+                            data_pagamento: new Date().toISOString()
+                          }
+                        ]);
+                      }}
+                      className="px-3 py-1.5 rounded-lg border border-border bg-bg-card text-text-main hover:bg-bg-elevated text-sm font-medium flex items-center gap-1"
+                      disabled={pagamentosExcedemTotal || restante <= 0.0001}
+                      title="Adicionar pagamento"
                     >
-                      <span
-                        className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${
-                          watch('status') === 'PAGO' ? 'translate-x-5' : 'translate-x-0.5'
-                        }`}
-                      />
+                      <span className="material-symbols-outlined text-base">add</span>
+                      Adicionar pagamento
                     </button>
                   </div>
+
+                  {pagamentos.length === 1 && restante > 0.0001 && (
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm text-text-muted">
+                        Sugestão: adicionar pagamento 2 com o restante ({formatCurrency(restante)}).
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const p0 = pagamentos[0];
+                          if (!p0) return;
+                          setPagamentos((prev) => [
+                            ...prev,
+                            {
+                              tipo_pagamento: p0.tipo_pagamento,
+                              valor: restante,
+                              parcelas: p0.tipo_pagamento === 'credito' ? p0.parcelas : null,
+                              data_pagamento: new Date().toISOString(),
+                              __autoSecond: true
+                            }
+                          ]);
+                        }}
+                        className="px-3 py-1.5 rounded-lg border border-border bg-bg-card text-text-main hover:bg-bg-elevated text-sm font-medium flex items-center gap-1"
+                        title="Adicionar pagamento 2 sugerido"
+                      >
+                        <span className="material-symbols-outlined text-base">add</span>
+                        Adicionar 2
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="bg-bg-main border border-border rounded-lg p-3 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-text-muted">Total da venda</span>
+                      <span className="font-semibold text-text-main">{formatCurrency(totalFinal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-text-muted">Total pago</span>
+                      <span className="font-semibold text-text-main">{formatCurrency(totalPago)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-text-muted">Restante</span>
+                      <span className={`font-semibold ${restante <= 0 ? 'text-success' : 'text-text-main'}`}>{formatCurrency(restante)}</span>
+                    </div>
+                    <div className="pt-2">
+                      <span
+                        className={`text-xs px-2 py-1 rounded shrink-0 ${
+                          statusCalculadoVenda === 'PAGO'
+                            ? 'bg-badge-pago text-badge-pago-text'
+                            : statusCalculadoVenda === 'PARCIAL'
+                              ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                              : 'bg-badge-pendente text-badge-pendente-text'
+                        }`}
+                      >
+                        {statusCalculadoVenda === 'PAGO' ? 'Pago' : statusCalculadoVenda === 'PARCIAL' ? 'Parcial' : 'Pendente'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className={`border rounded-lg p-3 ${pagamentosExcedemTotal ? 'border-error' : 'border-border'} ${pagamentos.length === 0 ? 'bg-bg-elevated/50' : ''}`}>
+                    {loadingPagamentos ? (
+                      <p className="text-sm text-text-muted">Carregando pagamentos…</p>
+                    ) : pagamentos.length === 0 ? (
+                      <p className="text-sm text-text-muted">Adicione pagamentos para calcular o status automaticamente.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {pagamentos.map((p, idx) => (
+                          <div key={`${p.id ?? idx}-${idx}`} className="flex flex-col gap-2 border border-border rounded-lg p-2 bg-bg-main">
+                            <div className="flex flex-wrap items-end gap-2">
+                              <div className="min-w-[200px] flex-1">
+                                <label className="block text-xs font-medium text-text-muted mb-1">Tipo</label>
+                                <SearchableSelect
+                                  label=""
+                                  options={[
+                                    { value: 'dinheiro', label: 'Dinheiro' },
+                                    { value: 'pix', label: 'Pix' },
+                                    { value: 'debito', label: 'Cartão de Débito' },
+                                    { value: 'credito', label: 'Cartão de Crédito' },
+                                    { value: 'fiado', label: 'Fiado' }
+                                  ]}
+                                  value={p.tipo_pagamento}
+                                  onChange={(v) => {
+                                    const nextTipo = v as PaymentTipo;
+                                    setPagamentos((prev) =>
+                                      prev.map((x, i) =>
+                                        i !== idx
+                                          ? x
+                                          : {
+                                              ...x,
+                                              tipo_pagamento: nextTipo,
+                                              parcelas: nextTipo === 'credito' ? (x.parcelas ?? null) : null,
+                                            }
+                                      )
+                                    );
+                                  }}
+                                  placeholder="Selecionar"
+                                  emptyMessage="Nenhum tipo encontrado"
+                                />
+                              </div>
+                              <div className="w-32">
+                                <label className="block text-xs font-medium text-text-muted mb-1">Valor</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min={0}
+                                  value={p.valor}
+                                  onChange={(e) => {
+                                    const v = Number(e.target.value);
+                                    setPagamentos((prev) =>
+                                      prev.map((x, i) => {
+                                        if (i !== idx) return x;
+                                        const nextValor = Number.isFinite(v) ? Math.round(v * 100) / 100 : 0;
+                                        return { ...x, valor: nextValor, __autoSecond: idx === 1 ? false : x.__autoSecond };
+                                      })
+                                    );
+                                  }}
+                                  className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-bg-main text-text-main"
+                                />
+                              </div>
+                              {p.tipo_pagamento === 'credito' && (
+                                <div className="w-28">
+                                  <label className="block text-xs font-medium text-text-muted mb-1">Parcelas</label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={p.parcelas ?? ''}
+                                    onChange={(e) => {
+                                      const v = e.target.value === '' ? null : Math.max(1, Math.floor(Number(e.target.value)));
+                                      setPagamentos((prev) => prev.map((x, i) => (i === idx ? { ...x, parcelas: v } : x)));
+                                    }}
+                                    className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-bg-main text-text-main"
+                                  />
+                                </div>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPagamentos((prev) => prev.filter((_, i) => i !== idx));
+                                }}
+                                className="p-2 rounded-lg text-error hover:bg-badge-erro/20"
+                                title="Remover pagamento"
+                              >
+                                <span className="material-symbols-outlined text-base">delete</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {pagamentosExcedemTotal && (
+                      <p className="text-error text-sm mt-2 font-medium">A soma dos pagamentos excede o total da venda.</p>
+                    )}
+                    {!pagamentosExcedemTotal && pagamentosErro && (
+                      <p className="text-error text-sm mt-2 font-medium">{pagamentosErro}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!isQuote && isOs && (
+                <>
                   <div>
                     <label className="block text-sm font-medium text-text-main mb-1">Forma de Pagamento {!isOs ? '*' : ''}</label>
                     <select
                       {...register('forma_pagamento')}
-                      className="w-full pl-3 pr-8 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-bg-main text-text-main"
+                      className={`w-full pl-3 pr-8 py-2 border rounded-lg focus:ring-2 outline-none bg-bg-main text-text-main ${
+                        errors.forma_pagamento ? 'border-error focus:ring-error/20 focus:border-error' : 'border-border focus:ring-primary focus:border-primary'
+                      }`}
                     >
                       <option value="">Selecione</option>
                       <option value="Dinheiro">Dinheiro</option>
@@ -1300,6 +1670,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                     >
                       <option value="PENDENTE">● Aguardando pagamento</option>
                       <option value="PAGO">● Pago</option>
+                      <option value="PARCIAL">● Parcial</option>
                     </select>
                   </div>
                 </>
@@ -1313,7 +1684,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
               <div className="flex flex-col gap-2 pt-2">
                 <button
                   type="submit"
-                  disabled={isSubmitting || (isOs ? itens.length === 0 && servicos.length === 0 : itens.length === 0)}
+                  disabled={isSubmitting || (!isQuote && !isOs && pagamentosExcedemTotal)}
                   className="w-full bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed min-h-[48px] transition-colors"
                 >
                   {isSubmitting ? (

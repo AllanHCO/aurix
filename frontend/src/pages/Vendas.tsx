@@ -161,36 +161,32 @@ export default function Vendas() {
     loadVendas();
   };
 
-  const handleVerDetalhe = (venda: Venda) => {
-    setDetalheVenda(venda);
-  };
-
-  const handleExcluirVenda = async (venda: Venda) => {
-    const tipoLabel = venda.tipo === 'quote' ? 'orçamento' : venda.tipo === 'service_order' ? 'ordem de serviço' : 'venda';
-    const codigo = venda.tipo === 'service_order' ? (venda.os_code ?? venda.id) : (venda.sale_code ?? venda.id);
-    if (!window.confirm(`Excluir esta ${tipoLabel} (${codigo})? Esta ação não pode ser desfeita.`)) return;
+  const handleVerDetalhe = async (venda: Venda) => {
     try {
-      await api.delete(`/vendas/${venda.id}`);
-      toast.success(`${tipoLabel.charAt(0).toUpperCase() + tipoLabel.slice(1)} excluída.`);
-      loadVendas();
-      setDetalheVenda(null);
-      if (vendaEditando?.id === venda.id) setVendaEditando(null);
+      const response = await api.get<Venda>(`/vendas/${venda.id}`);
+      setDetalheVenda(response.data);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Erro ao excluir.');
+      toast.error(err.response?.data?.error || 'Erro ao carregar detalhes');
     }
   };
 
-  const handleEditarVenda = (venda: VendaDetalhe) => {
+  const handleEditarVenda = async (venda: VendaDetalhe) => {
     setDetalheVenda(null);
-    const full = vendas.find((v) => v.id === venda.id);
-    if (full) {
-      setVendaEditando(full);
+    try {
+      // Buscar detalhes completos (itens/servicos/anexos/etc.) para o modal de edição
+      const response = await api.get<Venda>(`/vendas/${venda.id}`);
+      setVendaEditando(response.data);
       setModalOpen(true);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Erro ao carregar dados para edição');
     }
   };
 
   const selectableOnPage = vendas.filter(
-    (v) => v.tipo !== 'quote' && v.tipo !== 'service_order' && ((v.status || 'PENDENTE') === 'PENDENTE' || v.status === 'PAGO')
+    (v) =>
+      v.tipo !== 'quote' &&
+      v.tipo !== 'service_order' &&
+      ((v.status || 'PENDENTE') === 'PENDENTE' || v.status === 'PARCIAL' || v.status === 'PAGO')
   );
   const allSelectableSelected =
     selectableOnPage.length > 0 && selectableOnPage.every((v) => selectedIds.has(v.id));
@@ -222,6 +218,31 @@ export default function Vendas() {
 
   const selectedVendas = vendas.filter((v) => selectedIds.has(v.id));
   const handleAbrirFaturarModal = () => setShowFaturarModal(true);
+
+  const [excluindoLote, setExcluindoLote] = useState(false);
+  const confirmExcluirLote = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Excluir ${ids.length} pedido(s) selecionado(s)? Esta ação não pode ser desfeita.`)) return;
+    setExcluindoLote(true);
+    try {
+      const { data } = await api.post<{ successIds: string[]; failed: Array<{ id: string; motivo: string }> }>(
+        '/vendas/excluir-lote',
+        { saleIds: ids }
+      );
+      await loadVendas();
+      setSelectedIds(new Set());
+      const ok = data.successIds?.length ?? 0;
+      const fail = data.failed?.length ?? 0;
+      if (fail === 0) toast.success(`${ok} pedido(s) excluído(s).`);
+      else toast.success(`${ok} excluído(s). ${fail} falharam.`);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg && typeof msg === 'string' ? msg : 'Erro ao excluir em lote');
+    } finally {
+      setExcluindoLote(false);
+    }
+  };
 
   const confirmFaturarLote = async () => {
     const ids = Array.from(selectedIds);
@@ -432,9 +453,18 @@ export default function Vendas() {
             <button
               type="button"
               onClick={handleAbrirFaturarModal}
-              className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-2 rounded-lg text-sm"
+              disabled={faturandoLote || excluindoLote}
+              className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-2 rounded-lg text-sm disabled:opacity-50"
             >
               Faturar Selecionados
+            </button>
+            <button
+              type="button"
+              onClick={confirmExcluirLote}
+              disabled={excluindoLote || faturandoLote}
+              className="px-3 py-2 rounded-lg border border-border bg-bg-card text-error hover:bg-badge-erro text-sm disabled:opacity-50"
+            >
+              {excluindoLote ? 'Excluindo…' : 'Excluir selecionados'}
             </button>
             <button
               type="button"
@@ -493,14 +523,25 @@ export default function Vendas() {
                   ? (venda.os_status === 'CONVERTIDA_EM_VENDA' ? 'Convertida' : venda.os_status === 'CANCELADA' ? 'Cancelada' : venda.os_status === 'CONCLUIDA' ? 'Concluída' : venda.os_status === 'EM_EXECUCAO' ? 'Em execução' : 'Aberta')
                   : isQuote
                     ? (status === 'ORCAMENTO' ? 'Orçamento' : status === 'CANCELADO' ? 'Cancelado' : status)
-                    : status === 'PAGO' ? 'Pago' : status === 'FECHADA' ? 'Fechada' : 'Pendente';
+                    : status === 'PAGO'
+                      ? 'Pago'
+                      : status === 'PARCIAL'
+                        ? 'Parcial'
+                        : status === 'FECHADA'
+                          ? 'Fechada'
+                          : 'Pendente';
                 const statusClass = isOs
                   ? venda.os_status === 'CANCELADA' ? 'bg-text-muted/20 text-text-muted' : venda.os_status === 'CONVERTIDA_EM_VENDA' ? 'bg-text-muted/20 text-text-muted' : 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
                   : isQuote
                     ? status === 'CANCELADO' ? 'bg-text-muted/20 text-text-muted' : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
-                    : status === 'PAGO' ? 'bg-badge-pago text-badge-pago-text' : status === 'FECHADA' ? 'bg-text-muted/20 text-text-muted' : 'bg-badge-pendente text-badge-pendente-text';
-                const canSelect = !isQuote && !isOs && (status === 'PENDENTE' || status === 'PAGO');
-                const canEdit = isOs ? (venda.os_status !== 'CANCELADA' && venda.os_status !== 'CONVERTIDA_EM_VENDA') : isQuote ? status === 'ORCAMENTO' : status !== 'FECHADA';
+                    : status === 'PAGO'
+                      ? 'bg-badge-pago text-badge-pago-text'
+                      : status === 'PARCIAL'
+                        ? 'bg-badge-pendente text-badge-pendente-text'
+                        : status === 'FECHADA'
+                          ? 'bg-text-muted/20 text-text-muted'
+                          : 'bg-badge-pendente text-badge-pendente-text';
+                const canSelect = !isQuote && !isOs && (status === 'PENDENTE' || status === 'PARCIAL' || status === 'PAGO');
                 return (
                   <tr key={venda.id} className="hover:bg-bg-elevated">
                     <td className="w-10 px-2 py-3 sm:py-4 text-center">
@@ -541,9 +582,7 @@ export default function Vendas() {
                     <td className="table-actions-col px-3 sm:px-6 py-3 sm:py-4 text-center">
                       <TableActionsMenu
                         items={[
-                          { label: 'Ver detalhes', icon: 'visibility', onClick: () => handleVerDetalhe(venda) },
-                          ...(canEdit ? [{ label: 'Editar', icon: 'edit' as const, onClick: () => handleEditarVenda(venda) }] : []),
-                          { label: 'Excluir', icon: 'delete' as const, onClick: () => handleExcluirVenda(venda), danger: true }
+                          { label: 'Ver detalhes', icon: 'visibility', onClick: () => handleVerDetalhe(venda) }
                         ]}
                         className="justify-center"
                       />

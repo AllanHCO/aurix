@@ -284,6 +284,7 @@ model Venda {
   itens            ItemVenda[]
   servicos         ItemServicoOrdem[]
   anexos          VendaAnexo[]
+  pagamentos      SalePayment[]
 
   @@index([tipo, status])
   @@index([os_status])
@@ -294,6 +295,24 @@ model Venda {
   @@index([usuario_id, createdAt])
   @@index([usuario_id, business_area_id])
   @@map("vendas")
+}
+
+model SalePayment {
+  id             String            @id @default(uuid())
+  venda_id       String
+  usuario_id     String
+  tipo_pagamento String            @db.VarChar(20)
+  valor          Decimal          @db.Decimal(12, 2)
+  parcelas       Int?
+  data_pagamento DateTime
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  venda          Venda            @relation(fields: [venda_id], references: [id], onDelete: Cascade)
+
+  @@index([usuario_id])
+  @@index([venda_id])
+  @@map("sale_payments")
 }
 
 model VendaAnexo {
@@ -349,6 +368,7 @@ model ItemServicoOrdem {
 enum VendaStatus {
   PAGO
   PENDENTE
+  PARCIAL
   FECHADA
   ORCAMENTO   // orçamento ativo (tipo = quote)
   CANCELADO   // orçamento cancelado (tipo = quote)

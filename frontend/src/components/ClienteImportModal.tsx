@@ -5,18 +5,6 @@ import toast from 'react-hot-toast';
 import ModalPortal from './ModalPortal';
 
 const COLUNAS_OBRIGATORIAS = ['nome'];
-const COLUNAS_OPCIONAIS = [
-  'telefone',
-  'cpf',
-  'observacoes',
-  'time_futebol',
-  'dados_adicionais_tipo',
-  'dados_adicionais_titulo',
-  'dados_adicionais_descricao',
-  'dados_adicionais_mostrar_orcamento',
-  'dados_adicionais_mostrar_venda',
-  'dados_adicionais_apenas_interno'
-];
 
 export type LinhaImportacao = Record<string, string | undefined>;
 
@@ -122,27 +110,30 @@ export default function ClienteImportModal({ onClose, onSuccess }: ClienteImport
     const reader = new FileReader();
     reader.onload = () => {
       try {
+        let rows: LinhaImportacao[] = [];
         if (isXlsx) {
           const buf = reader.result as ArrayBuffer;
-          const { rows, headers: h } = parseXLSX(buf);
-          if (!validarColunas(h)) {
+          const parsed = parseXLSX(buf);
+          rows = parsed.rows;
+          if (!validarColunas(parsed.headers)) {
             setErroPlanilha('A planilha precisa conter as colunas obrigatórias para importação de clientes.');
             setTodasLinhas([]);
             setHeaders([]);
             return;
           }
-          setHeaders(h);
+          setHeaders(parsed.headers);
           setTodasLinhas(rows);
         } else {
           const text = String(reader.result ?? '');
-          const { rows, headers: h } = parseCSV(text);
-          if (!validarColunas(h)) {
+          const parsed = parseCSV(text);
+          rows = parsed.rows;
+          if (!validarColunas(parsed.headers)) {
             setErroPlanilha('A planilha precisa conter as colunas obrigatórias para importação de clientes.');
             setTodasLinhas([]);
             setHeaders([]);
             return;
           }
-          setHeaders(h);
+          setHeaders(parsed.headers);
           setTodasLinhas(rows);
         }
         if (rows.length > 50) {

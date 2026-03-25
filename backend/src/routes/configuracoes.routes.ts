@@ -9,6 +9,14 @@ import {
   postPersonalizacaoResetar,
   getPersonalizacaoPreset
 } from '../controllers/personalizacao.controller';
+import {
+  getPdfBranding,
+  putPdfBranding,
+  postPdfBrandingLogo,
+  deletePdfBrandingLogo,
+  getPdfBrandingLogoFile
+} from '../controllers/document-branding.controller';
+import { uploadBrandingLogoMemory } from '../middleware/uploadBrandingLogo';
 
 const router = Router();
 router.use(authenticate);
@@ -22,6 +30,22 @@ router.get('/personalizacao', getPersonalizacao);
 router.put('/personalizacao', putPersonalizacao);
 router.post('/personalizacao/resetar', postPersonalizacaoResetar);
 router.get('/personalizacao/preset', getPersonalizacaoPreset);
+
+// PDF / documentos — marca visual (OS; futuro pedido)
+router.get('/documentos/pdf-branding', getPdfBranding);
+router.put('/documentos/pdf-branding', putPdfBranding);
+router.post(
+  '/documentos/pdf-branding/logo',
+  (req, res, next) => {
+    uploadBrandingLogoMemory.single('file')(req, res, (err: unknown) => {
+      if (err) return next(err);
+      next();
+    });
+  },
+  postPdfBrandingLogo
+);
+router.delete('/documentos/pdf-branding/logo', deletePdfBrandingLogo);
+router.get('/documentos/pdf-branding/logo-file', getPdfBrandingLogoFile);
 
 // Modo Demo (Sistema)
 router.get('/demo/status', getDemoStatusHandler);

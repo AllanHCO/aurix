@@ -20,6 +20,15 @@ const MODULOS: Array<{
   keywords: string[];
 }> = [
   { id: 'empresa', path: '/configuracoes/empresa', icon: 'business', titulo: 'Empresa', descricao: 'Nome, slug, link público e meta de faturamento.', status: 'ativo', keywords: ['nome empresa', 'slug', 'link público', 'logo', 'cor'] },
+  {
+    id: 'documentos-pdf',
+    path: '/configuracoes/documentos-pdf',
+    icon: 'picture_as_pdf',
+    titulo: 'Documentos (PDF)',
+    descricao: 'Logo e cabeçalho do PDF da Ordem de Serviço.',
+    status: 'ativo',
+    keywords: ['pdf', 'logo', 'ordem de serviço', 'os', 'cabeçalho', 'impressão', 'marca']
+  },
   { id: 'areas-negocio', path: '/configuracoes/areas-negocio', icon: 'account_tree', titulo: 'Áreas de negócio', descricao: 'Mecânica, Funilaria, etc. Veja resultado por área ou consolidado.', status: 'ativo', keywords: ['área', 'mecânica', 'funilaria', 'consolidado', 'frente', 'negócio'] },
   { id: 'clientes', path: '/configuracoes/clientes', icon: 'group', titulo: 'Clientes', descricao: 'Configura regras de retenção, dias para atenção e inativo.', status: 'ativo', keywords: ['retenção', 'atenção', 'inativo', 'dados adicionais', 'orçamento', 'venda'] },
   { id: 'vendas', path: '/configuracoes/vendas', icon: 'payments', titulo: 'Vendas', descricao: 'Orçamentos, nome do módulo e regras do fluxo comercial.', status: 'ativo', keywords: ['orçamento', 'atendimentos', 'ordens de serviço', 'fluxo comercial'] },

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
 import { formatCurrency, formatDateTime } from '../utils/format';
@@ -12,11 +12,11 @@ export interface VendaDetalhe {
   os_status?: string | null;
   cliente_id?: string;
   client_extra_item_id?: string | null;
-  client_extra_item?: { id: string; title: string; type: string } | null;
+  client_extra_item?: { id: string; title: string; type: string; data_json?: Record<string, unknown> | null } | null;
   total: number;
   desconto: number;
   forma_pagamento: string | null;
-  status: 'PAGO' | 'PENDENTE' | 'FECHADA' | 'ORCAMENTO' | 'CANCELADO';
+  status: 'PAGO' | 'PENDENTE' | 'PARCIAL' | 'FECHADA' | 'ORCAMENTO' | 'CANCELADO';
   problema_relatado?: string | null;
   observacoes_tecnicas?: string | null;
   texto_garantia?: string | null;
@@ -32,6 +32,17 @@ export interface VendaDetalhe {
   anexos?: Array<{ id: string; nome_original: string; mime_type?: string | null }>;
 }
 
+type SalePaymentTipo = 'dinheiro' | 'pix' | 'debito' | 'credito' | 'fiado';
+export interface SalePayment {
+  id: string;
+  venda_id: string;
+  usuario_id: string;
+  tipo_pagamento: SalePaymentTipo;
+  valor: number;
+  parcelas: number | null;
+  data_pagamento: string;
+}
+
 interface VendaDetalheModalProps {
   venda: VendaDetalhe;
   onClose: () => void;
@@ -43,6 +54,7 @@ function statusLabel(s: string): string {
   switch (s) {
     case 'PAGO': return 'Pago';
     case 'PENDENTE': return 'Pendente';
+    case 'PARCIAL': return 'Parcial';
     case 'FECHADA': return 'Fechada';
     case 'ORCAMENTO': return 'Orçamento';
     case 'CANCELADO': return 'Cancelado';
@@ -54,10 +66,28 @@ function statusClass(s: string): string {
   switch (s) {
     case 'PAGO': return 'bg-badge-pago text-badge-pago-text';
     case 'PENDENTE': return 'bg-badge-pendente text-badge-pendente-text';
+    case 'PARCIAL': return 'bg-badge-pendente text-badge-pendente-text';
     case 'FECHADA': return 'bg-text-muted/20 text-text-muted';
     case 'ORCAMENTO': return 'bg-amber-500/20 text-amber-700 dark:text-amber-300';
     case 'CANCELADO': return 'bg-text-muted/20 text-text-muted';
     default: return 'bg-bg-elevated text-text-main';
+  }
+}
+
+function tipoPagamentoLabel(t: SalePaymentTipo): string {
+  switch (t) {
+    case 'dinheiro':
+      return 'Dinheiro';
+    case 'pix':
+      return 'Pix';
+    case 'debito':
+      return 'Cartão de Débito';
+    case 'credito':
+      return 'Cartão de Crédito';
+    case 'fiado':
+      return 'Fiado';
+    default:
+      return t;
   }
 }
 
@@ -69,6 +99,11 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
   const [loadingConverterOs, setLoadingConverterOs] = useState(false);
   const [loadingCancelarOs, setLoadingCancelarOs] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
+  const [anexos, setAnexos] = useState<Array<{ id: string; nome_original: string; mime_type?: string | null }>>([]);
+  const [loadingAnexos, setLoadingAnexos] = useState(false);
+  const anexosRef = useRef<HTMLDivElement | null>(null);
+  const [pagamentos, setPagamentos] = useState<SalePayment[]>([]);
+  const [loadingPagamentos, setLoadingPagamentos] = useState(false);
 
   const subtotalItens = venda.itens.reduce(
     (acc, item) => acc + Number(item.preco_unitario) * item.quantidade,
@@ -85,6 +120,38 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
   const isQuoteOrcamento = isQuote && venda.status === 'ORCAMENTO';
   const isOsAtiva = isOs && venda.os_status !== 'CANCELADA' && venda.os_status !== 'CONVERTIDA_EM_VENDA';
   const isFechada = venda.status === 'FECHADA';
+
+  const extraDj = venda.client_extra_item?.data_json ?? null;
+  const extraType = String(venda.client_extra_item?.type ?? '').toLowerCase();
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingAnexos(true);
+    api.get<Array<{ id: string; nome_original: string; mime_type?: string | null }>>(`/vendas/${venda.id}/anexos`)
+      .then((res) => { if (!cancelled) setAnexos(Array.isArray(res.data) ? res.data : []); })
+      .catch(() => { if (!cancelled) setAnexos([]); })
+      .finally(() => { if (!cancelled) setLoadingAnexos(false); });
+    return () => { cancelled = true; };
+  }, [venda.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingPagamentos(true);
+    api
+      .get<SalePayment[]>(`/vendas/${venda.id}/pagamentos`)
+      .then((res) => {
+        if (!cancelled) setPagamentos(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setPagamentos([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPagamentos(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venda.id]);
 
   const handleConverterEmVenda = async () => {
     setLoadingConverter(true);
@@ -144,10 +211,40 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
     }
   };
 
-  const handleGerarPdf = async () => {
+  const handleGerarPdfOs = async () => {
     setLoadingPdf(true);
     try {
       const { data } = await api.get<Blob>(`/vendas/${venda.id}/os-pdf`, {
+        responseType: 'blob'
+      });
+      const url = URL.createObjectURL(data);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      toast.success('PDF aberto em nova aba.');
+    } catch (err: any) {
+      let msg = 'Erro ao gerar PDF';
+      const data = err.response?.data;
+      if (data instanceof Blob) {
+        try {
+          const text = await data.text();
+          const parsed = JSON.parse(text);
+          msg = parsed?.error || parsed?.message || msg;
+        } catch {
+          msg = 'Erro ao gerar PDF';
+        }
+      } else if (data?.error || data?.message) {
+        msg = data.error || data.message;
+      } else if (err.message) msg = err.message;
+      toast.error(typeof msg === 'string' ? msg : 'Erro ao gerar PDF');
+    } finally {
+      setLoadingPdf(false);
+    }
+  };
+
+  const handleGerarPdfPedido = async () => {
+    setLoadingPdf(true);
+    try {
+      const { data } = await api.get<Blob>(`/vendas/${venda.id}/pedido-pdf`, {
         responseType: 'blob'
       });
       const url = URL.createObjectURL(data);
@@ -224,11 +321,11 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
             <div className="col-span-2">
               <span className="text-text-muted block">Cliente</span>
               <span className="font-semibold text-text-main">{venda.cliente.nome}</span>
-              {(venda.cliente as { cpf?: string | null }).cpf && (
-                <span className="text-text-muted text-xs block mt-0.5">CPF: {(venda.cliente as { cpf: string }).cpf}</span>
+              {(venda.cliente as unknown as { cpf?: string | null }).cpf && (
+                <span className="text-text-muted text-xs block mt-0.5">CPF: {(venda.cliente as unknown as { cpf: string }).cpf}</span>
               )}
-              {(venda.cliente as { telefone?: string | null }).telefone && (
-                <span className="text-text-muted text-xs block">Tel.: {(venda.cliente as { telefone: string }).telefone}</span>
+              {(venda.cliente as unknown as { telefone?: string | null }).telefone && (
+                <span className="text-text-muted text-xs block">Tel.: {(venda.cliente as unknown as { telefone: string }).telefone}</span>
               )}
             </div>
             {venda.client_extra_item && (
@@ -236,6 +333,29 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
                 <span className="text-text-muted block">Item do cliente</span>
                 <span className="font-semibold text-text-main">{venda.client_extra_item.title}</span>
                 <span className="text-text-muted text-xs ml-1">({venda.client_extra_item.type})</span>
+                {extraDj && extraType === 'veiculo' && (
+                  <div className="mt-2 space-y-0.5">
+                    {(extraDj as any).placa != null && (
+                      <p className="text-xs text-text-muted">Placa: {String((extraDj as any).placa)}</p>
+                    )}
+                    {(extraDj as any).km != null && (
+                      <p className="text-xs text-text-muted">KM: {String((extraDj as any).km)}</p>
+                    )}
+                    {(extraDj as any).ano != null && (
+                      <p className="text-xs text-text-muted">Ano: {String((extraDj as any).ano)}</p>
+                    )}
+                  </div>
+                )}
+                {extraDj && extraType === 'equipamento' && (
+                  <div className="mt-2 space-y-0.5">
+                    {(extraDj as any).numero_serie_imei != null && (
+                      <p className="text-xs text-text-muted">Série/IMEI: {String((extraDj as any).numero_serie_imei)}</p>
+                    )}
+                    {(extraDj as any).marca_modelo != null && (
+                      <p className="text-xs text-text-muted">Marca/Modelo: {String((extraDj as any).marca_modelo)}</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {!isQuote && (
@@ -251,6 +371,48 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
               </span>
             </div>
           </div>
+
+          {!isQuote && !isOs && (
+            <div>
+              <h3 className="text-sm font-medium text-text-muted mb-2">Pagamentos</h3>
+              {loadingPagamentos ? (
+                <div className="text-sm text-text-muted px-3 py-3 border border-border rounded-lg bg-bg-elevated">
+                  Carregando pagamentos…
+                </div>
+              ) : pagamentos.length === 0 ? (
+                <div className="text-sm text-text-muted px-3 py-3 border border-border rounded-lg bg-bg-elevated">
+                  Nenhum pagamento registrado.
+                </div>
+              ) : (
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-bg-elevated">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-text-muted">Tipo</th>
+                        <th className="px-3 py-2 text-right font-semibold text-text-muted">Valor</th>
+                        <th className="px-3 py-2 text-right font-semibold text-text-muted">Parcelas</th>
+                        <th className="px-3 py-2 text-right font-semibold text-text-muted">Data</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {pagamentos.map((p) => (
+                        <tr key={p.id}>
+                          <td className="px-3 py-2 font-medium text-text-main">{tipoPagamentoLabel(p.tipo_pagamento)}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-text-main">{formatCurrency(Number(p.valor))}</td>
+                          <td className="px-3 py-2 text-right text-text-muted text-sm">
+                            {p.tipo_pagamento === 'credito' ? (p.parcelas ?? '—') : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right text-text-muted text-sm">
+                            {p.data_pagamento ? formatDateTime(p.data_pagamento) : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {isOs && venda.problema_relatado && (
             <div>
@@ -296,9 +458,11 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
               </table>
             </div>
           </div>
-          {isOs && (venda.servicos?.length ?? 0) > 0 && (
+          {(venda.servicos?.length ?? 0) > 0 && (
             <div>
-              <h3 className="text-sm font-medium text-text-muted mb-2">Serviços executados</h3>
+              <h3 className="text-sm font-medium text-text-muted mb-2">
+                {isOs ? 'Serviços executados' : 'Serviços'}
+              </h3>
               <div className="border border-border rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-bg-elevated">
@@ -357,37 +521,54 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
             </div>
           </div>
 
-          {(venda.anexos?.length ?? 0) > 0 && (
+          <div ref={anexosRef} />
+          {(loadingAnexos || anexos.length > 0) && (
             <div>
-              <h3 className="text-sm font-medium text-text-muted mb-2">Anexos do pedido</h3>
-              <ul className="border border-border rounded-lg divide-y divide-border">
-                {venda.anexos!.map((a) => (
-                  <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                    <span className="text-sm text-text-main truncate" title={a.nome_original}>{a.nome_original}</span>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const res = await api.get(`/vendas/${venda.id}/anexos/${a.id}/download`, { responseType: 'blob' });
-                          const url = URL.createObjectURL(res.data as Blob);
-                          const link = document.createElement('a');
-                          link.href = url;
-                          link.download = a.nome_original;
-                          link.click();
-                          URL.revokeObjectURL(url);
-                        } catch {
-                          toast.error('Erro ao baixar anexo');
-                        }
-                      }}
-                      className="p-1.5 rounded text-text-muted hover:bg-bg-elevated flex items-center gap-1 text-sm"
-                      title="Baixar anexo"
-                    >
-                      <span className="material-symbols-outlined text-lg">download</span>
-                      Baixar
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <h3 className="text-sm font-medium text-text-muted">Anexos do pedido</h3>
+                {anexos.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => anexosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    className="px-3 py-1.5 border border-border rounded-lg text-text-main hover:bg-bg-elevated text-sm flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-base">attach_file</span>
+                    Ver anexos
+                  </button>
+                )}
+              </div>
+              {loadingAnexos ? (
+                <div className="text-sm text-text-muted px-3 py-3 border border-border rounded-lg bg-bg-elevated">Carregando anexos…</div>
+              ) : anexos.length === 0 ? null : (
+                <ul className="border border-border rounded-lg divide-y divide-border">
+                  {anexos.map((a) => (
+                    <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                      <span className="text-sm text-text-main truncate" title={a.nome_original}>{a.nome_original}</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await api.get(`/vendas/${venda.id}/anexos/${a.id}/download`, { responseType: 'blob' });
+                            const url = URL.createObjectURL(res.data as Blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = a.nome_original;
+                            link.click();
+                            URL.revokeObjectURL(url);
+                          } catch {
+                            toast.error('Erro ao baixar anexo');
+                          }
+                        }}
+                        className="p-1.5 rounded text-text-muted hover:bg-bg-elevated flex items-center gap-1 text-sm"
+                        title="Baixar anexo"
+                      >
+                        <span className="material-symbols-outlined text-lg">download</span>
+                        Baixar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
@@ -396,7 +577,7 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 min-w-[100px] px-4 py-2 border border-border rounded-lg text-text-main hover:bg-bg-elevated"
+                className="flex-1 min-w-[100px] px-3 py-1.5 border border-border rounded-lg text-text-main hover:bg-bg-elevated text-sm"
               >
                 Fechar
               </button>
@@ -405,16 +586,16 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
                   <button
                     type="button"
                     onClick={() => onEdit(venda)}
-                    className="flex-1 min-w-[100px] px-4 py-2 border border-border rounded-lg text-text-main hover:bg-bg-elevated flex items-center justify-center gap-2"
+                    className="flex-1 min-w-[100px] px-3 py-1.5 border border-border rounded-lg text-text-main hover:bg-bg-elevated flex items-center justify-center gap-1.5 text-sm"
                   >
-                    <span className="material-symbols-outlined text-lg">edit</span>
-                    Editar orçamento
+                    <span className="material-symbols-outlined text-base">edit</span>
+                    Editar
                   </button>
                   <button
                     type="button"
                     onClick={handleConverterEmVenda}
                     disabled={loadingConverter}
-                    className="flex-1 min-w-[140px] bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="flex-1 min-w-[140px] bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 disabled:opacity-50 text-sm"
                   >
                     {loadingConverter ? 'Convertendo…' : 'Converter em venda'}
                   </button>
@@ -422,9 +603,9 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
                     type="button"
                     onClick={handleCancelarOrcamento}
                     disabled={loadingCancelar}
-                    className="flex-1 min-w-[100px] px-4 py-2 border border-red-500/50 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-500/10 disabled:opacity-50"
+                    className="flex-1 min-w-[100px] px-3 py-1.5 border border-red-500/50 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-500/10 disabled:opacity-50 text-sm"
                   >
-                    {loadingCancelar ? 'Cancelando…' : 'Cancelar orçamento'}
+                    {loadingCancelar ? 'Cancelando…' : 'Cancelar'}
                   </button>
                 </>
               )}
@@ -433,16 +614,16 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
                   <button
                     type="button"
                     onClick={() => onEdit(venda)}
-                    className="flex-1 min-w-[100px] px-4 py-2 border border-border rounded-lg text-text-main hover:bg-bg-elevated flex items-center justify-center gap-2"
+                    className="flex-1 min-w-[100px] px-3 py-1.5 border border-border rounded-lg text-text-main hover:bg-bg-elevated flex items-center justify-center gap-1.5 text-sm"
                   >
-                    <span className="material-symbols-outlined text-lg">edit</span>
-                    Editar OS
+                    <span className="material-symbols-outlined text-base">edit</span>
+                    Editar
                   </button>
                   <button
                     type="button"
                     onClick={handleConverterOsEmVenda}
                     disabled={loadingConverterOs}
-                    className="flex-1 min-w-[140px] bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="flex-1 min-w-[140px] bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 disabled:opacity-50 text-sm"
                   >
                     {loadingConverterOs ? 'Convertendo…' : 'Converter em venda'}
                   </button>
@@ -450,22 +631,22 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
                     type="button"
                     onClick={handleCancelarOs}
                     disabled={loadingCancelarOs}
-                    className="flex-1 min-w-[100px] px-4 py-2 border border-red-500/50 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-500/10 disabled:opacity-50"
+                    className="flex-1 min-w-[100px] px-3 py-1.5 border border-red-500/50 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-500/10 disabled:opacity-50 text-sm"
                   >
-                    {loadingCancelarOs ? 'Cancelando…' : 'Cancelar OS'}
+                    {loadingCancelarOs ? 'Cancelando…' : 'Cancelar'}
                   </button>
                   <button
                     type="button"
-                    onClick={handleGerarPdf}
+                    onClick={handleGerarPdfOs}
                     disabled={loadingPdf}
-                    className="flex-1 min-w-[100px] px-4 py-2 border border-border rounded-lg text-text-muted hover:bg-bg-elevated flex items-center justify-center gap-1 disabled:opacity-50"
+                    className="flex-1 min-w-[140px] px-3 py-1.5 border border-border rounded-lg text-text-muted hover:bg-bg-elevated flex items-center justify-center gap-1 disabled:opacity-50 text-sm"
                   >
                     {loadingPdf ? (
-                      <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                      <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
                     ) : (
-                      <span className="material-symbols-outlined">picture_as_pdf</span>
+                      <span className="material-symbols-outlined text-base">picture_as_pdf</span>
                     )}
-                    {loadingPdf ? 'Gerando…' : 'Gerar PDF'}
+                    {loadingPdf ? 'Gerando…' : 'Gerar PDF da OS'}
                   </button>
                 </>
               )}
@@ -474,15 +655,28 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
                   <button
                     type="button"
                     onClick={() => onEdit(venda)}
-                    className="flex-1 min-w-[100px] bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2"
+                    className="flex-1 min-w-[100px] bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 text-sm"
                   >
-                    <span className="material-symbols-outlined text-lg">edit</span>
-                    Editar venda
+                    <span className="material-symbols-outlined text-base">edit</span>
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGerarPdfPedido}
+                    disabled={loadingPdf}
+                    className="flex-1 min-w-[140px] px-3 py-1.5 border border-border rounded-lg text-text-muted hover:bg-bg-elevated flex items-center justify-center gap-1 disabled:opacity-50 text-sm"
+                  >
+                    {loadingPdf ? (
+                      <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
+                    ) : (
+                      <span className="material-symbols-outlined text-base">picture_as_pdf</span>
+                    )}
+                    {loadingPdf ? 'Gerando…' : 'Gerar PDF do pedido'}
                   </button>
                   <button
                     type="button"
                     onClick={handleMarcarFechada}
-                    className="flex-1 min-w-[100px] px-4 py-2 border border-border rounded-lg text-text-muted hover:bg-bg-elevated"
+                    className="flex-1 min-w-[120px] px-3 py-1.5 border border-border rounded-lg text-text-muted hover:bg-bg-elevated text-sm"
                   >
                     Marcar como Fechada
                   </button>
@@ -498,7 +692,7 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
                 <button
                   type="button"
                   onClick={() => setConfirmFechar(false)}
-                  className="flex-1 px-4 py-2 border border-border rounded-lg text-text-main hover:bg-bg-elevated"
+                  className="flex-1 px-3 py-1.5 border border-border rounded-lg text-text-main hover:bg-bg-elevated text-sm"
                 >
                   Cancelar
                 </button>
@@ -506,7 +700,7 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
                   type="button"
                   onClick={handleMarcarFechada}
                   disabled={loadingFechar}
-                  className="flex-1 bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-2 rounded-lg disabled:opacity-50"
+                  className="flex-1 bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 text-sm"
                 >
                   {loadingFechar ? 'Salvando…' : 'Sim, marcar como Fechada'}
                 </button>

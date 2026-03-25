@@ -177,8 +177,8 @@ export const exportarCSV = async (req: AuthRequest, res: Response) => {
     ];
   });
 
-  const escape = (cell: string | number) => `"${String(cell).replace(/"/g, '""')}"`;
-  const csv = BOM + [headers.map(escape).join(','), ...rows.map((r) => r.map(escape).join(','))].join('\r\n');
+  const escape = (cell: string | number | null) => `"${String(cell ?? '').replace(/"/g, '""')}"`;
+  const csv = BOM + [headers.map(escape).join(','), ...rows.map((r) => r.map((c) => escape(c)).join(','))].join('\r\n');
 
   const dI = inicio.getDate().toString().padStart(2, '0');
   const mI = (inicio.getMonth() + 1).toString().padStart(2, '0');

@@ -241,7 +241,6 @@ export default function Dashboard() {
   const { getModuleConfig } = usePersonalizacao();
   const { selectedAreaId } = useBusinessAreas();
   const produtosConfig = getModuleConfig('produtos');
-  const marketingConfig = getModuleConfig('marketing');
   const { inicio: defaultInicio, fim: defaultFim } = getMesAtualRange();
   const [dataInicial, setDataInicial] = useState(defaultInicio);
   const [dataFinal, setDataFinal] = useState(defaultFim);

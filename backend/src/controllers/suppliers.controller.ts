@@ -124,27 +124,30 @@ export const listar = async (req: AuthRequest, res: Response) => {
   }
 
   res.json(
-    suppliers.map((s) => ({
-      id: s.id,
-      name: s.name,
-      phone: s.phone,
-      whatsapp: s.whatsapp,
-      email: s.email,
-      cpf_cnpj: s.cpf_cnpj,
-      category_id: s.category_id,
-      business_area_id: s.business_area_id,
-      category: s.category,
-      city: s.city,
-      address: s.address,
-      notes: s.notes,
-      is_active: s.is_active,
-      createdAt: s.createdAt,
-      updatedAt: s.updatedAt,
-      produtosCount: s._count.produtos,
-      transactionsCount: s._count.transactions,
-      totalGasto: totalBySupplier.get(s.id) ?? 0,
-      ultimaCompra: lastBySupplier.get(s.id) ?? null
-    }))
+    suppliers.map((s) => {
+      const sInc = s as typeof s & { category?: { id: string; name: string } | null; _count?: { produtos: number; transactions: number } };
+      return {
+        id: s.id,
+        name: s.name,
+        phone: s.phone,
+        whatsapp: s.whatsapp,
+        email: s.email,
+        cpf_cnpj: s.cpf_cnpj,
+        category_id: s.category_id,
+        business_area_id: s.business_area_id,
+        category: sInc.category ?? null,
+        city: s.city,
+        address: s.address,
+        notes: s.notes,
+        is_active: s.is_active,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+        produtosCount: sInc._count?.produtos ?? 0,
+        transactionsCount: sInc._count?.transactions ?? 0,
+        totalGasto: totalBySupplier.get(s.id) ?? 0,
+        ultimaCompra: lastBySupplier.get(s.id) ?? null
+      };
+    })
   );
 };
 
