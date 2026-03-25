@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { PersonalizacaoProvider, usePersonalizacao, type ModuleKey } from './contexts/PersonalizacaoContext';
@@ -36,8 +36,9 @@ import AssinaturaBloqueio from './pages/AssinaturaBloqueio';
 import AgendaPublica from './pages/AgendaPublica';
 import Layout from './components/Layout';
 import EnvironmentBadge from './components/EnvironmentBadge';
+import OnboardingNicho from './pages/OnboardingNicho';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute() {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -54,7 +55,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   return (
     <PersonalizacaoProvider>
-      <BusinessAreaProvider>{children}</BusinessAreaProvider>
+      <BusinessAreaProvider>
+        <Outlet />
+      </BusinessAreaProvider>
     </PersonalizacaoProvider>
   );
 }
@@ -68,17 +71,12 @@ function ModuleGuard({ moduleKey, children }: { moduleKey: ModuleKey; children: 
 function AppRoutes() {
   return (
     <Routes>
-        <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/agenda/:slug" element={<AgendaPublica />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
+      <Route element={<ProtectedRoute />}>
+        <Route path="/onboarding/nicho" element={<OnboardingNicho />} />
+        <Route path="/" element={<Layout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="clientes" element={<ModuleGuard moduleKey="clientes"><Clientes /></ModuleGuard>} />
@@ -111,6 +109,7 @@ function AppRoutes() {
         {/* Redirects antigos para não quebrar */}
         <Route path="agendamento" element={<Navigate to="/configuracoes/agendamento" replace />} />
         <Route path="config/agendamento" element={<Navigate to="/configuracoes/agendamento" replace />} />
+        </Route>
       </Route>
     </Routes>
   );

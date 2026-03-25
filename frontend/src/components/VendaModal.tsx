@@ -785,9 +785,9 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
   if (loading) {
     return (
       <ModalPortal>
-        <div className="aurix-modal-overlay fixed inset-0 flex items-center justify-center" style={{ backgroundColor: 'var(--color-overlay)' }}>
-          <div className="bg-bg-elevated border border-border-soft rounded-2xl p-8">
-            <p>Carregando...</p>
+        <div className="aurix-modal-overlay fixed inset-0 flex items-stretch md:items-center justify-center p-0 md:p-4" style={{ backgroundColor: 'var(--color-overlay)' }}>
+          <div className="bg-bg-elevated border-0 md:border border-border-soft md:rounded-2xl rounded-none p-8 w-full min-h-[100dvh] md:min-h-0 md:max-w-md flex items-center justify-center">
+            <p className="text-text-main">Carregando...</p>
           </div>
         </div>
       </ModalPortal>
@@ -797,12 +797,12 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
   return (
     <ModalPortal>
       <div
-        className="fixed inset-0 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm z-50"
+        className="fixed inset-0 flex items-stretch md:items-center justify-center p-0 md:p-4 overflow-y-auto overscroll-contain backdrop-blur-sm z-50 touch-manipulation"
         style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
       >
-        <div className="bg-bg-elevated border border-border-soft rounded-2xl shadow-2xl w-full max-w-[1280px] max-h-[92vh] overflow-hidden flex flex-col my-4">
+        <div className="bg-bg-elevated border-0 md:border border-border-soft md:rounded-2xl shadow-2xl w-full max-w-[1280px] min-h-[100dvh] max-h-none md:min-h-0 md:max-h-[92vh] md:h-auto overflow-x-hidden overflow-y-visible md:overflow-hidden flex flex-col my-0 md:my-4 safe-area-pad">
           {/* Header */}
-          <div className="p-5 sm:p-6 border-b border-border shrink-0">
+          <div className="sticky top-0 z-30 p-4 sm:p-6 border-b border-border shrink-0 bg-bg-elevated">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold text-text-main">
@@ -832,13 +832,13 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
 
             {/* Tabs */}
             {(permitirOrcamentos || permitirOrdemServico) && !isEdit && (
-              <nav className="flex gap-0 mt-4 border-b border-border -mb-px" role="tablist">
+              <nav className="flex gap-0 mt-4 border-b border-border -mb-px overflow-x-auto scrollbar-touch flex-nowrap" role="tablist">
                 <button
                   type="button"
                   role="tab"
                   aria-selected={tipoRegistro === 'sale'}
                   onClick={() => setTipoRegistro('sale')}
-                  className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 flex items-center gap-2 ${
+                  className={`shrink-0 whitespace-nowrap px-4 py-3 min-h-[48px] text-sm font-medium transition-colors border-b-2 flex items-center gap-2 touch-manipulation ${
                     tipoRegistro === 'sale'
                       ? 'border-primary text-primary font-bold'
                       : 'border-transparent text-text-muted hover:text-text-main'
@@ -853,7 +853,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                     role="tab"
                     aria-selected={tipoRegistro === 'quote'}
                     onClick={() => setTipoRegistro('quote')}
-                    className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 flex items-center gap-2 ${
+                    className={`shrink-0 whitespace-nowrap px-4 py-3 min-h-[48px] text-sm font-medium transition-colors border-b-2 flex items-center gap-2 touch-manipulation ${
                       tipoRegistro === 'quote'
                         ? 'border-primary text-primary font-bold'
                         : 'border-transparent text-text-muted hover:text-text-main'
@@ -869,7 +869,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                     role="tab"
                     aria-selected={tipoRegistro === 'service_order'}
                     onClick={() => setTipoRegistro('service_order')}
-                    className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 flex items-center gap-2 ${
+                    className={`shrink-0 whitespace-nowrap px-4 py-3 min-h-[48px] text-sm font-medium transition-colors border-b-2 flex items-center gap-2 touch-manipulation ${
                       tipoRegistro === 'service_order'
                         ? 'border-primary text-primary font-bold'
                         : 'border-transparent text-text-muted hover:text-text-main'
@@ -1019,14 +1019,14 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
           )}
 
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
               <h3 className="text-sm font-bold text-text-main uppercase tracking-wide">
                 {isOs ? 'Peças / Itens *' : 'Itens da Venda'}
               </h3>
               <button
                 type="button"
                 onClick={() => setShowSelecaoProdutos(true)}
-                className="bg-primary hover:bg-primary-hover text-text-on-primary text-sm font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+                className="bg-primary hover:bg-primary-hover text-text-on-primary text-sm font-semibold px-4 py-3 min-h-[48px] rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm w-full sm:w-auto touch-manipulation"
                 title="F2"
               >
                 <span className="material-symbols-outlined">add</span>
@@ -1042,50 +1042,51 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                 {isOs ? 'Nenhuma peça. Adicione produtos e/ou serviços abaixo.' : 'Nenhum item adicionado. Clique em "Adicionar Produtos" para abrir o catálogo.'}
               </div>
             ) : (
-              <div className={`border rounded-lg overflow-x-auto ${itensErro ? 'border-error' : 'border-border'}`}>
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-bg-elevated text-text-muted">
-                    <tr>
-                      <th className="p-3 font-medium">Produto</th>
-                      <th className="p-3 font-medium w-32">Quantidade</th>
-                      <th className="p-3 font-medium w-28">Unitário</th>
-                      <th className="p-3 font-medium w-28 text-right">Subtotal</th>
-                      <th className="p-3 w-12" aria-label="Remover" />
-                    </tr>
-                  </thead>
-                  <tbody className="text-text-main divide-y divide-border">
-                    {itens.map((item, index) => (
-                      <tr key={`${item.produto_id}-${index}`} className="hover:bg-bg-elevated/50 transition-colors">
-                        <td className="p-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-bg-card border border-border flex items-center justify-center shrink-0">
-                              <span className="material-symbols-outlined text-text-muted text-xl">inventory_2</span>
-                            </div>
-                            <div className="min-w-0">
-                              <span className="font-medium block">{item.nome}</span>
-                              {(item.sku ?? ('sku' in item && (item as { sku?: string }).sku)) && (
-                                <span className="text-xs text-text-muted">SKU: {item.sku ?? (item as { sku?: string }).sku}</span>
-                              )}
-                              {item.estoque_atual != null && (
-                                <div className="mt-1 space-y-0.5">
-                                  <div className="text-xs text-text-muted">
-                                    <span>Estoque disponível: {Math.max(0, (item.estoque_atual ?? 0) - itens.filter((i) => i.produto_id === item.produto_id).reduce((s, i) => s + i.quantidade, 0))}</span>
-                                    <span className="ml-2">Reservado nesta venda: {itens.filter((i) => i.produto_id === item.produto_id).reduce((s, i) => s + i.quantidade, 0)}</span>
-                                  </div>
-                                  {itens.filter((i) => i.produto_id === item.produto_id).reduce((s, i) => s + i.quantidade, 0) > (item.estoque_atual ?? 0) && (
-                                    <p className="text-xs text-error font-medium">Quantidade acima do estoque disponível</p>
-                                  )}
-                                </div>
+              <>
+                <div className="md:hidden space-y-3">
+                  {itens.map((item, index) => (
+                    <div
+                      key={`m-${item.produto_id}-${index}`}
+                      className={`rounded-xl border p-4 space-y-3 bg-bg-main ${itensErro ? 'border-error' : 'border-border'}`}
+                    >
+                      <div className="flex gap-3">
+                        <div className="w-11 h-11 rounded-lg bg-bg-card border border-border flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-text-muted text-xl">inventory_2</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="font-medium text-text-main block">{item.nome}</span>
+                          {(item.sku ?? ('sku' in item && (item as { sku?: string }).sku)) && (
+                            <span className="text-xs text-text-muted">SKU: {item.sku ?? (item as { sku?: string }).sku}</span>
+                          )}
+                          {item.estoque_atual != null && (
+                            <div className="mt-1 space-y-0.5 text-xs text-text-muted">
+                              <span>
+                                Disp.: {Math.max(0, (item.estoque_atual ?? 0) - itens.filter((i) => i.produto_id === item.produto_id).reduce((s, i) => s + i.quantidade, 0))} · Reservado:{' '}
+                                {itens.filter((i) => i.produto_id === item.produto_id).reduce((s, i) => s + i.quantidade, 0)}
+                              </span>
+                              {itens.filter((i) => i.produto_id === item.produto_id).reduce((s, i) => s + i.quantidade, 0) > (item.estoque_atual ?? 0) && (
+                                <p className="text-error font-medium">Acima do estoque disponível</p>
                               )}
                             </div>
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-1 border border-border rounded-lg bg-bg-main w-fit">
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removerItem(index)}
+                          className="text-error hover:bg-badge-erro/20 p-2.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors touch-manipulation shrink-0"
+                          title="Remover item"
+                        >
+                          <span className="material-symbols-outlined text-lg">delete</span>
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="text-xs font-medium text-text-muted mb-1 block">Quantidade</label>
+                          <div className="flex items-center gap-1 border border-border rounded-lg bg-bg-elevated w-full max-w-[200px]">
                             <button
                               type="button"
                               onClick={() => atualizarItemVenda(index, Math.max(1, item.quantidade - 1))}
-                              className="p-1.5 rounded-l-md text-text-muted hover:text-text-main hover:bg-bg-elevated transition-colors"
+                              className="p-2.5 min-w-[44px] rounded-l-md text-text-muted hover:text-text-main hover:bg-bg-card touch-manipulation"
                               aria-label="Diminuir quantidade"
                             >
                               <span className="material-symbols-outlined text-lg">remove</span>
@@ -1094,56 +1095,146 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                               type="number"
                               min={1}
                               value={item.quantidade}
-                              onChange={(e) =>
-                                atualizarItemVenda(index, Math.max(1, parseInt(e.target.value, 10) || 1))
-                              }
-                              className="w-12 text-center py-1.5 border-0 bg-transparent text-text-main [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              onChange={(e) => atualizarItemVenda(index, Math.max(1, parseInt(e.target.value, 10) || 1))}
+                              className="flex-1 min-w-0 text-center py-2.5 border-0 bg-transparent text-text-main text-base [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               aria-label="Quantidade"
                             />
                             <button
                               type="button"
                               onClick={() => atualizarItemVenda(index, item.quantidade + 1)}
-                              className="p-1.5 rounded-r-md text-text-muted hover:text-text-main hover:bg-bg-elevated transition-colors"
+                              className="p-2.5 min-w-[44px] rounded-r-md text-text-muted hover:text-text-main hover:bg-bg-card touch-manipulation"
                               aria-label="Aumentar quantidade"
                             >
                               <span className="material-symbols-outlined text-lg">add</span>
                             </button>
                           </div>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex flex-col gap-1">
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              value={item.preco_unitario || ''}
-                              onChange={(e) => atualizarPrecoUnitario(index, parseFloat(e.target.value) || 0)}
-                              className="w-28 px-2 py-1.5 border border-border rounded bg-bg-main text-text-main text-sm font-medium"
-                              aria-label="Valor unitário"
-                            />
-                            {item.preco_cadastrado != null && item.preco_unitario !== item.preco_cadastrado && (
-                              <span className="text-xs text-primary font-medium" title="Valor alterado em relação ao cadastro do produto">Preço alterado manualmente</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-3 text-right font-medium">
-                          {formatCurrency(subtotalItem(item))}
-                        </td>
-                        <td className="p-3">
-                          <button
-                            type="button"
-                            onClick={() => removerItem(index)}
-                            className="text-error hover:bg-badge-erro p-2 rounded transition-colors"
-                            title="Remover item"
-                          >
-                            <span className="material-symbols-outlined text-lg">delete</span>
-                          </button>
-                        </td>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-text-muted mb-1 block">Valor unitário</label>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={item.preco_unitario || ''}
+                            onChange={(e) => atualizarPrecoUnitario(index, parseFloat(e.target.value) || 0)}
+                            className="w-full min-h-[44px] px-3 py-2 border border-border rounded-lg bg-bg-main text-text-main text-base font-medium"
+                            aria-label="Valor unitário"
+                          />
+                          {item.preco_cadastrado != null && item.preco_unitario !== item.preco_cadastrado && (
+                            <span className="text-xs text-primary font-medium mt-1 block">Preço alterado manualmente</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 border-t border-border">
+                        <span className="text-sm text-text-muted">Subtotal</span>
+                        <span className="text-lg font-semibold text-text-main">{formatCurrency(subtotalItem(item))}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className={`hidden md:block border rounded-lg overflow-x-auto ${itensErro ? 'border-error' : 'border-border'}`}>
+                  <table className="w-full text-left text-sm min-w-[640px]">
+                    <thead className="bg-bg-elevated text-text-muted">
+                      <tr>
+                        <th className="p-3 font-medium">Produto</th>
+                        <th className="p-3 font-medium w-32">Quantidade</th>
+                        <th className="p-3 font-medium w-28">Unitário</th>
+                        <th className="p-3 font-medium w-28 text-right">Subtotal</th>
+                        <th className="p-3 w-12" aria-label="Remover" />
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="text-text-main divide-y divide-border">
+                      {itens.map((item, index) => (
+                        <tr key={`${item.produto_id}-${index}`} className="hover:bg-bg-elevated/50 transition-colors">
+                          <td className="p-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-bg-card border border-border flex items-center justify-center shrink-0">
+                                <span className="material-symbols-outlined text-text-muted text-xl">inventory_2</span>
+                              </div>
+                              <div className="min-w-0">
+                                <span className="font-medium block">{item.nome}</span>
+                                {(item.sku ?? ('sku' in item && (item as { sku?: string }).sku)) && (
+                                  <span className="text-xs text-text-muted">SKU: {item.sku ?? (item as { sku?: string }).sku}</span>
+                                )}
+                                {item.estoque_atual != null && (
+                                  <div className="mt-1 space-y-0.5">
+                                    <div className="text-xs text-text-muted">
+                                      <span>Estoque disponível: {Math.max(0, (item.estoque_atual ?? 0) - itens.filter((i) => i.produto_id === item.produto_id).reduce((s, i) => s + i.quantidade, 0))}</span>
+                                      <span className="ml-2">Reservado nesta venda: {itens.filter((i) => i.produto_id === item.produto_id).reduce((s, i) => s + i.quantidade, 0)}</span>
+                                    </div>
+                                    {itens.filter((i) => i.produto_id === item.produto_id).reduce((s, i) => s + i.quantidade, 0) > (item.estoque_atual ?? 0) && (
+                                      <p className="text-xs text-error font-medium">Quantidade acima do estoque disponível</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-1 border border-border rounded-lg bg-bg-main w-fit">
+                              <button
+                                type="button"
+                                onClick={() => atualizarItemVenda(index, Math.max(1, item.quantidade - 1))}
+                                className="p-1.5 rounded-l-md text-text-muted hover:text-text-main hover:bg-bg-elevated transition-colors"
+                                aria-label="Diminuir quantidade"
+                              >
+                                <span className="material-symbols-outlined text-lg">remove</span>
+                              </button>
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.quantidade}
+                                onChange={(e) =>
+                                  atualizarItemVenda(index, Math.max(1, parseInt(e.target.value, 10) || 1))
+                                }
+                                className="w-12 text-center py-1.5 border-0 bg-transparent text-text-main [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                aria-label="Quantidade"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => atualizarItemVenda(index, item.quantidade + 1)}
+                                className="p-1.5 rounded-r-md text-text-muted hover:text-text-main hover:bg-bg-elevated transition-colors"
+                                aria-label="Aumentar quantidade"
+                              >
+                                <span className="material-symbols-outlined text-lg">add</span>
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex flex-col gap-1">
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={item.preco_unitario || ''}
+                                onChange={(e) => atualizarPrecoUnitario(index, parseFloat(e.target.value) || 0)}
+                                className="w-28 px-2 py-1.5 border border-border rounded bg-bg-main text-text-main text-sm font-medium"
+                                aria-label="Valor unitário"
+                              />
+                              {item.preco_cadastrado != null && item.preco_unitario !== item.preco_cadastrado && (
+                                <span className="text-xs text-primary font-medium" title="Valor alterado em relação ao cadastro do produto">Preço alterado manualmente</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3 text-right font-medium">
+                            {formatCurrency(subtotalItem(item))}
+                          </td>
+                          <td className="p-3">
+                            <button
+                              type="button"
+                              onClick={() => removerItem(index)}
+                              className="text-error hover:bg-badge-erro p-2 rounded transition-colors"
+                              title="Remover item"
+                            >
+                              <span className="material-symbols-outlined text-lg">delete</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
 
@@ -1155,111 +1246,178 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
               {servicosErro && (
                 <p className="text-error text-sm mb-2 font-medium">{servicosErro}</p>
               )}
-              <div className="flex flex-wrap items-end gap-2 mb-2">
-                <div className="flex-1 min-w-[200px]">
-                  <div className="flex flex-wrap gap-2">
-                    <div className="flex-1 min-w-[180px]">
-                      <SearchableSelect
-                        options={servicosCadastrados.map((s) => ({ value: s.id, label: s.nome }))}
-                        value={servicoSelecionadoId}
-                        onChange={setServicoSelecionadoId}
-                        placeholder="Buscar serviços cadastrados..."
-                        emptyMessage="Nenhum serviço cadastrado"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={adicionarServicoCadastrado}
-                      disabled={!servicoSelecionadoId}
-                      className="px-3 py-2 rounded-lg bg-primary text-text-on-primary text-sm font-medium disabled:opacity-50 flex items-center gap-1 transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-lg">add</span>
-                      Adicionar serviço cadastrado
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setServicos((prev) => [...prev, { descricao: '', quantidade: 1, valor_unitario: 0 }])}
-                      className="px-3 py-2 rounded-lg border-2 border-dashed border-border bg-bg-elevated text-text-main text-sm font-medium flex items-center gap-1 hover:border-primary/50 hover:bg-bg-card transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-lg">edit</span>
-                      Lançar Serviço Manual
-                    </button>
-                  </div>
+              <div className="space-y-3 mb-2">
+                <div className="min-w-0">
+                  <SearchableSelect
+                    options={servicosCadastrados.map((s) => ({ value: s.id, label: s.nome }))}
+                    value={servicoSelecionadoId}
+                    onChange={setServicoSelecionadoId}
+                    placeholder="Buscar serviços cadastrados..."
+                    emptyMessage="Nenhum serviço cadastrado"
+                  />
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={adicionarServicoCadastrado}
+                    disabled={!servicoSelecionadoId}
+                    className="flex-1 px-4 py-3 min-h-[48px] rounded-lg bg-primary text-text-on-primary text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2 transition-colors touch-manipulation"
+                  >
+                    <span className="material-symbols-outlined text-lg">add</span>
+                    Adicionar serviço cadastrado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setServicos((prev) => [...prev, { descricao: '', quantidade: 1, valor_unitario: 0 }])}
+                    className="flex-1 px-4 py-3 min-h-[48px] rounded-lg border-2 border-dashed border-border bg-bg-elevated text-text-main text-sm font-medium flex items-center justify-center gap-2 hover:border-primary/50 hover:bg-bg-card transition-colors touch-manipulation"
+                  >
+                    <span className="material-symbols-outlined text-lg">edit</span>
+                    Serviço manual
+                  </button>
                 </div>
               </div>
               {servicos.length === 0 ? (
                 <p className="text-sm text-text-muted py-2">Nenhum serviço. Use &quot;Adicionar serviço cadastrado&quot; ou &quot;Serviço manual&quot; para incluir.</p>
               ) : (
-                <div className={`border rounded-lg overflow-hidden ${servicosErro ? 'border-error' : 'border-border'}`}>
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-bg-elevated text-text-muted">
-                      <tr>
-                        <th className="p-3 font-medium">Serviço</th>
-                        <th className="p-3 font-medium w-20">Qtd</th>
-                        <th className="p-3 font-medium w-28">Valor unit.</th>
-                        <th className="p-3 font-medium w-28 text-right">Subtotal</th>
-                        <th className="p-3 w-12" aria-label="Remover" />
-                      </tr>
-                    </thead>
-                    <tbody className="text-text-main divide-y divide-border">
-                      {servicos.map((s, idx) => (
-                        <tr key={idx} className="hover:bg-bg-elevated/50">
-                          <td className="p-3">
-                            <div className="flex flex-col gap-0.5">
-                              <input
-                                type="text"
-                                value={s.descricao}
-                                onChange={(e) => setServicos((prev) => prev.map((x, i) => (i === idx ? { ...x, descricao: e.target.value } : x)))}
-                                placeholder="Ex.: Mão de obra, Diagnóstico"
-                                className="w-full px-2 py-1.5 border border-border rounded bg-bg-main text-text-main text-sm"
-                              />
-                              {s.is_percentage && (
-                                <span className="text-xs text-primary">Serviço calculado automaticamente</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            <input
-                              type="number"
-                              min={1}
-                              value={s.quantidade}
-                              onChange={(e) => setServicos((prev) => prev.map((x, i) => (i === idx ? { ...x, quantidade: parseInt(e.target.value, 10) || 1 } : x)))}
-                              className="w-16 px-2 py-1.5 border border-border rounded bg-bg-main text-text-main"
-                            />
-                          </td>
-                          <td className="p-3">
-                            {s.is_percentage ? (
-                              <span className="text-sm text-text-muted">—</span>
-                            ) : (
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={s.valor_unitario || ''}
-                                onChange={(e) => setServicos((prev) => prev.map((x, i) => (i === idx ? { ...x, valor_unitario: parseFloat(e.target.value) || 0 } : x)))}
-                                placeholder="0"
-                                className="w-24 px-2 py-1.5 border border-border rounded bg-bg-main text-text-main"
-                              />
-                            )}
-                          </td>
-                          <td className="p-3 text-right font-medium">
-                            {formatCurrency(s.quantidade * resolveServicoValorUnitario(s, idx, servicos, itens.reduce((a, i) => a + Number(i.preco_unitario) * Number(i.quantidade), 0)))}
-                          </td>
-                          <td className="p-3">
+                <>
+                  <div className="md:hidden space-y-3">
+                    {servicos.map((s, idx) => {
+                      const subPecas = itens.reduce((a, i) => a + Number(i.preco_unitario) * Number(i.quantidade), 0);
+                      const sub = s.quantidade * resolveServicoValorUnitario(s, idx, servicos, subPecas);
+                      return (
+                        <div key={`sm-srv-${idx}`} className={`rounded-xl border p-4 space-y-3 bg-bg-main ${servicosErro ? 'border-error' : 'border-border'}`}>
+                          <div className="flex justify-between gap-2">
+                            <span className="text-xs font-medium text-text-muted uppercase">Serviço {idx + 1}</span>
                             <button
                               type="button"
                               onClick={() => setServicos((prev) => prev.filter((_, i) => i !== idx))}
-                              className="text-error hover:bg-badge-erro p-2 rounded"
+                              className="text-error hover:bg-badge-erro/20 p-2 min-w-[44px] min-h-[44px] rounded-lg touch-manipulation"
                               title="Remover"
                             >
                               <span className="material-symbols-outlined text-lg">delete</span>
                             </button>
-                          </td>
+                          </div>
+                          <div>
+                            <label className="text-xs text-text-muted mb-1 block">Descrição</label>
+                            <input
+                              type="text"
+                              value={s.descricao}
+                              onChange={(e) => setServicos((prev) => prev.map((x, i) => (i === idx ? { ...x, descricao: e.target.value } : x)))}
+                              placeholder="Ex.: Mão de obra, Diagnóstico"
+                              className="w-full min-h-[44px] px-3 py-2 border border-border rounded-lg bg-bg-main text-text-main text-base"
+                            />
+                            {s.is_percentage && <span className="text-xs text-primary mt-1 block">Calculado automaticamente</span>}
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs text-text-muted mb-1 block">Qtd</label>
+                              <input
+                                type="number"
+                                min={1}
+                                value={s.quantidade}
+                                onChange={(e) => setServicos((prev) => prev.map((x, i) => (i === idx ? { ...x, quantidade: parseInt(e.target.value, 10) || 1 } : x)))}
+                                className="w-full min-h-[44px] px-3 py-2 border border-border rounded-lg bg-bg-main text-text-main"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-text-muted mb-1 block">Valor unit.</label>
+                              {s.is_percentage ? (
+                                <span className="flex min-h-[44px] items-center text-text-muted">—</span>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={s.valor_unitario || ''}
+                                  onChange={(e) => setServicos((prev) => prev.map((x, i) => (i === idx ? { ...x, valor_unitario: parseFloat(e.target.value) || 0 } : x)))}
+                                  placeholder="0"
+                                  className="w-full min-h-[44px] px-3 py-2 border border-border rounded-lg bg-bg-main text-text-main"
+                                />
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex justify-between border-t border-border pt-2">
+                            <span className="text-sm text-text-muted">Subtotal</span>
+                            <span className="font-semibold text-text-main">{formatCurrency(sub)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className={`hidden md:block border rounded-lg overflow-hidden ${servicosErro ? 'border-error' : 'border-border'}`}>
+                    <table className="w-full text-left text-sm min-w-[560px]">
+                      <thead className="bg-bg-elevated text-text-muted">
+                        <tr>
+                          <th className="p-3 font-medium">Serviço</th>
+                          <th className="p-3 font-medium w-20">Qtd</th>
+                          <th className="p-3 font-medium w-28">Valor unit.</th>
+                          <th className="p-3 font-medium w-28 text-right">Subtotal</th>
+                          <th className="p-3 w-12" aria-label="Remover" />
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="text-text-main divide-y divide-border">
+                        {servicos.map((s, idx) => (
+                          <tr key={idx} className="hover:bg-bg-elevated/50">
+                            <td className="p-3">
+                              <div className="flex flex-col gap-0.5">
+                                <input
+                                  type="text"
+                                  value={s.descricao}
+                                  onChange={(e) => setServicos((prev) => prev.map((x, i) => (i === idx ? { ...x, descricao: e.target.value } : x)))}
+                                  placeholder="Ex.: Mão de obra, Diagnóstico"
+                                  className="w-full px-2 py-1.5 border border-border rounded bg-bg-main text-text-main text-sm"
+                                />
+                                {s.is_percentage && (
+                                  <span className="text-xs text-primary">Serviço calculado automaticamente</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <input
+                                type="number"
+                                min={1}
+                                value={s.quantidade}
+                                onChange={(e) => setServicos((prev) => prev.map((x, i) => (i === idx ? { ...x, quantidade: parseInt(e.target.value, 10) || 1 } : x)))}
+                                className="w-16 px-2 py-1.5 border border-border rounded bg-bg-main text-text-main"
+                              />
+                            </td>
+                            <td className="p-3">
+                              {s.is_percentage ? (
+                                <span className="text-sm text-text-muted">—</span>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={s.valor_unitario || ''}
+                                  onChange={(e) => setServicos((prev) => prev.map((x, i) => (i === idx ? { ...x, valor_unitario: parseFloat(e.target.value) || 0 } : x)))}
+                                  placeholder="0"
+                                  className="w-24 px-2 py-1.5 border border-border rounded bg-bg-main text-text-main"
+                                />
+                              )}
+                            </td>
+                            <td className="p-3 text-right font-medium">
+                              {formatCurrency(
+                                s.quantidade *
+                                  resolveServicoValorUnitario(s, idx, servicos, itens.reduce((a, i) => a + Number(i.preco_unitario) * Number(i.quantidade), 0))
+                              )}
+                            </td>
+                            <td className="p-3">
+                              <button
+                                type="button"
+                                onClick={() => setServicos((prev) => prev.filter((_, i) => i !== idx))}
+                                className="text-error hover:bg-badge-erro p-2 rounded"
+                                title="Remover"
+                              >
+                                <span className="material-symbols-outlined text-lg">delete</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -1442,7 +1600,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
               </div>
               {!isQuote && !isOs && (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <h4 className="text-sm font-bold text-text-main uppercase tracking-wide">Pagamentos</h4>
                     <button
                       type="button"
@@ -1471,7 +1629,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                           }
                         ]);
                       }}
-                      className="px-3 py-1.5 rounded-lg border border-border bg-bg-card text-text-main hover:bg-bg-elevated text-sm font-medium flex items-center gap-1"
+                      className="w-full sm:w-auto justify-center px-4 py-3 min-h-[48px] rounded-lg border border-border bg-bg-card text-text-main hover:bg-bg-elevated text-sm font-medium flex items-center gap-2 touch-manipulation"
                       disabled={pagamentosExcedemTotal || restante <= 0.0001}
                       title="Adicionar pagamento"
                     >
@@ -1481,8 +1639,8 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                   </div>
 
                   {pagamentos.length === 1 && restante > 0.0001 && (
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm text-text-muted">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm text-text-muted flex-1">
                         Sugestão: adicionar pagamento 2 com o restante ({formatCurrency(restante)}).
                       </p>
                       <button
@@ -1501,7 +1659,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                             }
                           ]);
                         }}
-                        className="px-3 py-1.5 rounded-lg border border-border bg-bg-card text-text-main hover:bg-bg-elevated text-sm font-medium flex items-center gap-1"
+                        className="w-full sm:w-auto justify-center px-4 py-3 min-h-[48px] rounded-lg border border-border bg-bg-card text-text-main hover:bg-bg-elevated text-sm font-medium flex items-center gap-2 touch-manipulation shrink-0"
                         title="Adicionar pagamento 2 sugerido"
                       >
                         <span className="material-symbols-outlined text-base">add</span>
@@ -1546,9 +1704,9 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                     ) : (
                       <div className="space-y-2">
                         {pagamentos.map((p, idx) => (
-                          <div key={`${p.id ?? idx}-${idx}`} className="flex flex-col gap-2 border border-border rounded-lg p-2 bg-bg-main">
-                            <div className="flex flex-wrap items-end gap-2">
-                              <div className="min-w-[200px] flex-1">
+                          <div key={`${p.id ?? idx}-${idx}`} className="flex flex-col gap-3 border border-border rounded-xl p-3 bg-bg-main">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                              <div className="w-full sm:min-w-[200px] sm:flex-1">
                                 <label className="block text-xs font-medium text-text-muted mb-1">Tipo</label>
                                 <SearchableSelect
                                   label=""
@@ -1578,7 +1736,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                                   emptyMessage="Nenhum tipo encontrado"
                                 />
                               </div>
-                              <div className="w-32">
+                              <div className="w-full sm:w-36">
                                 <label className="block text-xs font-medium text-text-muted mb-1">Valor</label>
                                 <input
                                   type="number"
@@ -1595,11 +1753,11 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                                       })
                                     );
                                   }}
-                                  className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-bg-main text-text-main"
+                                  className="w-full min-h-[44px] px-3 py-2.5 text-base sm:text-sm border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-bg-main text-text-main"
                                 />
                               </div>
                               {p.tipo_pagamento === 'credito' && (
-                                <div className="w-28">
+                                <div className="w-full sm:w-32">
                                   <label className="block text-xs font-medium text-text-muted mb-1">Parcelas</label>
                                   <input
                                     type="number"
@@ -1609,7 +1767,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                                       const v = e.target.value === '' ? null : Math.max(1, Math.floor(Number(e.target.value)));
                                       setPagamentos((prev) => prev.map((x, i) => (i === idx ? { ...x, parcelas: v } : x)));
                                     }}
-                                    className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-bg-main text-text-main"
+                                    className="w-full min-h-[44px] px-3 py-2.5 text-base sm:text-sm border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-bg-main text-text-main"
                                   />
                                 </div>
                               )}
@@ -1619,7 +1777,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                                 onClick={() => {
                                   setPagamentos((prev) => prev.filter((_, i) => i !== idx));
                                 }}
-                                className="p-2 rounded-lg text-error hover:bg-badge-erro/20"
+                                className="self-end sm:self-center p-3 min-w-[44px] min-h-[44px] rounded-lg text-error hover:bg-badge-erro/20 touch-manipulation"
                                 title="Remover pagamento"
                               >
                                 <span className="material-symbols-outlined text-base">delete</span>
@@ -1681,11 +1839,11 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                   <span className="text-2xl font-bold text-primary">{formatCurrency(totalFinal)}</span>
                 </div>
               </div>
-              <div className="flex flex-col gap-2 pt-2">
+              <div className="flex flex-col gap-2 pt-2 max-lg:sticky max-lg:bottom-0 max-lg:z-20 max-lg:-mx-4 max-lg:px-4 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-lg:pt-3 max-lg:bg-bg-elevated/98 max-lg:backdrop-blur-sm max-lg:border-t max-lg:border-border max-lg:shadow-[0_-8px_24px_rgba(0,0,0,0.12)]">
                 <button
                   type="submit"
                   disabled={isSubmitting || (!isQuote && !isOs && pagamentosExcedemTotal)}
-                  className="w-full bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed min-h-[48px] transition-colors"
+                  className="w-full bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed min-h-[48px] transition-colors touch-manipulation"
                 >
                   {isSubmitting ? (
                     <>
@@ -1709,7 +1867,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                   type="button"
                   onClick={onClose}
                   disabled={isSubmitting}
-                  className="w-full px-4 py-2 border border-border rounded-lg text-text-main hover:bg-bg-elevated disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                  className="w-full px-4 py-3 min-h-[48px] border border-border rounded-lg text-text-main hover:bg-bg-elevated disabled:opacity-50 disabled:pointer-events-none transition-colors touch-manipulation"
                 >
                   Cancelar operação
                 </button>
@@ -1720,7 +1878,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
         </form>
 
         {/* Rodapé: Data, Hora, Operador */}
-        <footer className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-t border-border bg-bg-elevated/50 text-sm text-text-muted">
+        <footer className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-2 px-4 sm:px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-3 border-t border-border bg-bg-elevated/50 text-sm text-text-muted shrink-0">
           <div className="flex flex-wrap items-center gap-4">
             <span className="flex items-center gap-1.5" title="Data">
               <span className="material-symbols-outlined text-lg">calendar_today</span>

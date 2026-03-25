@@ -14,7 +14,7 @@ import { useBusinessAreas } from '../contexts/BusinessAreaContext';
 const SEARCH_DEBOUNCE_MS = 300;
 
 type FiltroTipo = 'todos' | 'vendas' | 'orcamentos' | 'ordens_servico';
-type FiltroStatus = 'todos' | 'PAGO' | 'PENDENTE' | 'FECHADA' | 'CANCELADO';
+type FiltroStatus = 'todos' | 'PAGO' | 'PENDENTE' | 'PARCIAL' | 'FECHADA' | 'CANCELADO';
 
 function getUltimos30Dias(): { inicio: string; fim: string } {
   const fim = new Date();
@@ -50,6 +50,55 @@ interface VendasListResponse {
   totalPages: number;
   page: number;
   pageSize: number;
+}
+
+function getVendaListDisplay(venda: Venda) {
+  const status = venda.status || 'PENDENTE';
+  const isQuote = venda.tipo === 'quote';
+  const isOs = venda.tipo === 'service_order';
+  const statusLabel = isOs
+    ? venda.os_status === 'CONVERTIDA_EM_VENDA'
+      ? 'Convertida'
+      : venda.os_status === 'CANCELADA'
+        ? 'Cancelada'
+        : venda.os_status === 'CONCLUIDA'
+          ? 'Concluída'
+          : venda.os_status === 'EM_EXECUCAO'
+            ? 'Em execução'
+            : 'Aberta'
+    : isQuote
+      ? status === 'ORCAMENTO'
+        ? 'Orçamento'
+        : status === 'CANCELADO'
+          ? 'Cancelado'
+          : String(status)
+      : status === 'PAGO'
+        ? 'Pago'
+        : status === 'PARCIAL'
+          ? 'Parcial'
+          : status === 'FECHADA'
+            ? 'Fechada'
+            : 'Pendente';
+  const statusClass = isOs
+    ? venda.os_status === 'CANCELADA'
+      ? 'bg-text-muted/20 text-text-muted'
+      : venda.os_status === 'CONVERTIDA_EM_VENDA'
+        ? 'bg-text-muted/20 text-text-muted'
+        : 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
+    : isQuote
+      ? status === 'CANCELADO'
+        ? 'bg-text-muted/20 text-text-muted'
+        : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+      : status === 'PAGO'
+        ? 'bg-badge-pago text-badge-pago-text'
+        : status === 'PARCIAL'
+          ? 'bg-badge-pendente text-badge-pendente-text'
+          : status === 'FECHADA'
+            ? 'bg-text-muted/20 text-text-muted'
+            : 'bg-badge-pendente text-badge-pendente-text';
+  const canSelect = !isQuote && !isOs && (status === 'PENDENTE' || status === 'PARCIAL' || status === 'PAGO');
+  const codeDisplay = isOs ? venda.os_code ?? '—' : venda.sale_code ?? '—';
+  return { statusLabel, statusClass, canSelect, isQuote, isOs, codeDisplay };
 }
 
 export default function Vendas() {
@@ -277,23 +326,23 @@ export default function Vendas() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-text-main mb-1 sm:mb-2">{getModuleLabel('vendas')}</h1>
+          <h1 className="text-xl sm:text-3xl font-bold text-text-main mb-1 sm:mb-2">{getModuleLabel('vendas')}</h1>
           <p className="text-sm sm:text-base text-text-muted">Registre e acompanhe suas vendas</p>
         </div>
         <button
           onClick={() => setModalOpen(true)}
-          className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 sm:px-5 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 min-h-[44px] touch-manipulation shrink-0"
+          className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3.5 sm:py-2.5 rounded-xl flex items-center justify-center gap-2 min-h-[48px] w-full sm:w-auto touch-manipulation shrink-0 text-base sm:text-sm shadow-sm"
         >
-          <span className="material-symbols-outlined">add</span>
+          <span className="material-symbols-outlined text-xl">add</span>
           Nova Venda
         </button>
       </div>
 
       <div className="bg-bg-card rounded-xl border border-border shadow-sm p-4 sm:p-5">
         <div className="flex flex-col lg:flex-row lg:items-end gap-4 flex-wrap">
-          <div className="min-w-[200px] max-w-md flex-1 lg:min-w-[220px] order-1">
+          <div className="min-w-0 w-full max-w-md flex-1 lg:min-w-[220px] order-1">
             <label htmlFor="vendas-pesquisa" className="block text-sm font-medium text-text-main mb-1">
               Pesquisar
             </label>
@@ -305,7 +354,7 @@ export default function Vendas() {
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Código, cliente ou telefone..."
-                className="w-full rounded-lg border border-border bg-bg-elevated pl-10 pr-10 py-2.5 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="w-full rounded-lg border border-border bg-bg-elevated pl-10 pr-10 py-3 min-h-[48px] text-base sm:text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20"
                 aria-label="Pesquisar vendas"
               />
             {searchInput.length > 0 && (
@@ -320,19 +369,21 @@ export default function Vendas() {
             )}
             </div>
           </div>
-          <div className="order-2 flex flex-col gap-2">
-            <div className="flex flex-wrap gap-1">
+          <div className="order-2 flex flex-col gap-3 min-w-0 w-full lg:w-auto">
+            <div>
+              <span className="block text-xs font-medium text-text-muted mb-1.5">Tipo</span>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-touch">
               {[
                 { value: 'todos' as const, label: 'Todos' },
                 { value: 'vendas' as const, label: 'Vendas' },
                 { value: 'orcamentos' as const, label: 'Orçamentos' },
-                { value: 'ordens_servico' as const, label: 'Ordens de serviço' }
+                { value: 'ordens_servico' as const, label: 'OS' }
               ].map(({ value, label }) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setFiltroTipo(value)}
-                  className={`px-2 py-1 text-xs font-medium rounded border transition-colors ${
+                  className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors shrink-0 min-h-[44px] touch-manipulation ${
                     filtroTipo === value
                       ? 'bg-primary text-[var(--color-text-on-primary)] border-primary'
                       : 'border-border bg-bg-elevated text-text-muted hover:text-text-main hover:bg-bg-card'
@@ -341,12 +392,16 @@ export default function Vendas() {
                   {label}
                 </button>
               ))}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div>
+              <span className="block text-xs font-medium text-text-muted mb-1.5">Status</span>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-touch">
               {[
                 { value: 'todos' as const, label: 'Todos' },
                 { value: 'PAGO' as const, label: 'Pagos' },
                 { value: 'PENDENTE' as const, label: 'Pendentes' },
+                { value: 'PARCIAL' as const, label: 'Parciais' },
                 { value: 'FECHADA' as const, label: 'Faturados' },
                 { value: 'CANCELADO' as const, label: 'Cancelados' }
               ].map(({ value, label }) => (
@@ -354,7 +409,7 @@ export default function Vendas() {
                   key={value}
                   type="button"
                   onClick={() => setFiltroStatus(value)}
-                  className={`px-2 py-1 text-xs font-medium rounded border transition-colors ${
+                  className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors shrink-0 min-h-[44px] touch-manipulation ${
                     filtroStatus === value
                       ? 'bg-primary text-[var(--color-text-on-primary)] border-primary'
                       : 'border-border bg-bg-elevated text-text-muted hover:text-text-main hover:bg-bg-card'
@@ -363,6 +418,7 @@ export default function Vendas() {
                   {label}
                 </button>
               ))}
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 min-w-0 flex-1 order-3">
@@ -390,15 +446,15 @@ export default function Vendas() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-sm">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 text-sm">
         <span className="text-text-muted">Período:</span>
         <span className="px-2.5 py-1 rounded-lg bg-bg-elevated border border-border text-text-main">
           {formatDate(dataInicial)} – {formatDate(dataFinal)}
         </span>
         <span className="text-text-muted">Filtro:</span>
-        <span className="px-2.5 py-1 rounded-lg bg-bg-elevated border border-border text-text-main">
+        <span className="px-2.5 py-1 rounded-lg bg-bg-elevated border border-border text-text-main break-words">
           {filtroTipo === 'todos' ? 'Todos' : filtroTipo === 'vendas' ? 'Vendas' : filtroTipo === 'orcamentos' ? 'Orçamentos' : 'Ordens de serviço'}
-          {filtroStatus !== 'todos' && ` · ${filtroStatus === 'PAGO' ? 'Pagos' : filtroStatus === 'PENDENTE' ? 'Pendentes' : filtroStatus === 'FECHADA' ? 'Faturados' : 'Cancelados'}`}
+          {filtroStatus !== 'todos' && ` · ${filtroStatus === 'PAGO' ? 'Pagos' : filtroStatus === 'PENDENTE' ? 'Pendentes' : filtroStatus === 'PARCIAL' ? 'Parciais' : filtroStatus === 'FECHADA' ? 'Faturados' : 'Cancelados'}`}
         </span>
         <span className="text-text-muted">Resultados:</span>
         <span className="px-2.5 py-1 rounded-lg bg-bg-elevated border border-border font-semibold text-text-main">
@@ -446,15 +502,16 @@ export default function Vendas() {
       ) : (
         <>
         {selectedIds.size > 0 && (
-          <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl border border-border bg-bg-elevated text-text-main">
-            <span className="text-sm font-medium">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 px-4 py-3 rounded-xl border border-border bg-bg-elevated text-text-main">
+            <span className="text-sm font-medium text-center sm:text-left">
               {selectedIds.size} selecionado(s)
             </span>
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <button
               type="button"
               onClick={handleAbrirFaturarModal}
               disabled={faturandoLote || excluindoLote}
-              className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+              className="bg-primary hover:bg-primary-hover text-text-on-primary font-bold px-4 py-3 sm:py-2 rounded-xl text-sm disabled:opacity-50 min-h-[48px] touch-manipulation"
             >
               Faturar Selecionados
             </button>
@@ -462,23 +519,85 @@ export default function Vendas() {
               type="button"
               onClick={confirmExcluirLote}
               disabled={excluindoLote || faturandoLote}
-              className="px-3 py-2 rounded-lg border border-border bg-bg-card text-error hover:bg-badge-erro text-sm disabled:opacity-50"
+              className="px-4 py-3 sm:py-2 rounded-xl border border-border bg-bg-card text-error hover:bg-badge-erro text-sm disabled:opacity-50 min-h-[48px] touch-manipulation"
             >
               {excluindoLote ? 'Excluindo…' : 'Excluir selecionados'}
             </button>
             <button
               type="button"
               onClick={() => setSelectedIds(new Set())}
-              className="px-3 py-2 rounded-lg border border-border bg-bg-card text-text-muted hover:bg-bg-elevated text-sm"
+              className="px-4 py-3 sm:py-2 rounded-xl border border-border bg-bg-card text-text-muted hover:bg-bg-elevated text-sm min-h-[48px] touch-manipulation"
             >
               Limpar seleção
             </button>
+            </div>
           </div>
         )}
         <div className="bg-bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <div className="inline-block min-w-full align-middle px-4 sm:px-0">
-          <table className="w-full min-w-[560px]">
+          {/* Mobile: cards */}
+          <div className="md:hidden divide-y divide-border">
+            {vendas.map((venda) => {
+              const { statusLabel, statusClass, canSelect, isQuote, isOs, codeDisplay } = getVendaListDisplay(venda);
+              return (
+                <article key={venda.id} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-sm font-semibold text-text-main tabular-nums">{codeDisplay}</p>
+                      <p className="text-xs text-text-muted mt-0.5">{formatDateTime(venda.createdAt)}</p>
+                      {isQuote && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 mt-1 inline-block">Orçamento</span>
+                      )}
+                      {isOs && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400 mt-1 inline-block">OS</span>
+                      )}
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(venda.id)}
+                      onChange={() => toggleSelection(venda.id)}
+                      disabled={!canSelect}
+                      className="mt-1 rounded border-border bg-bg-card text-primary focus:ring-primary/20 disabled:opacity-50 w-5 h-5 shrink-0"
+                      aria-label={canSelect ? `Selecionar ${codeDisplay}` : 'Não selecionável'}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs text-text-muted uppercase tracking-wide">Cliente</p>
+                    <p className="font-semibold text-text-main text-base leading-snug break-words">{venda.cliente.nome}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs text-text-muted">Total</p>
+                      <p className="text-lg font-bold text-text-main">{formatCurrency(Number(venda.total))}</p>
+                    </div>
+                    <span className={`text-xs px-2.5 py-1.5 rounded-lg ${statusClass}`}>{statusLabel}</span>
+                  </div>
+                  {!isQuote && !isOs && (
+                    <p className="text-sm text-text-muted">
+                      <span className="text-text-muted">Pagamento: </span>
+                      {venda.forma_pagamento ?? '—'}
+                    </p>
+                  )}
+                  {venda.business_area && (
+                    <div className="pt-1">
+                      <AreaBadge name={venda.business_area.name} color={venda.business_area.color} />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleVerDetalhe(venda)}
+                    className="w-full py-3 rounded-xl border border-border bg-bg-elevated text-text-main font-medium text-sm min-h-[48px] touch-manipulation hover:bg-bg-card"
+                  >
+                    Ver detalhes
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+
+          {/* Desktop: tabela */}
+          <div className="hidden md:block overflow-x-auto">
+            <div className="inline-block min-w-full align-middle">
+          <table className="w-full min-w-[640px]">
             <thead className="bg-bg-elevated border-b border-border">
               <tr>
                 <th className="w-10 px-2 py-3 sm:py-4 text-center">
@@ -516,32 +635,7 @@ export default function Vendas() {
             </thead>
             <tbody className="divide-y divide-border">
               {vendas.map((venda) => {
-                const status = venda.status || 'PENDENTE';
-                const isQuote = venda.tipo === 'quote';
-                const isOs = venda.tipo === 'service_order';
-                const statusLabel = isOs
-                  ? (venda.os_status === 'CONVERTIDA_EM_VENDA' ? 'Convertida' : venda.os_status === 'CANCELADA' ? 'Cancelada' : venda.os_status === 'CONCLUIDA' ? 'Concluída' : venda.os_status === 'EM_EXECUCAO' ? 'Em execução' : 'Aberta')
-                  : isQuote
-                    ? (status === 'ORCAMENTO' ? 'Orçamento' : status === 'CANCELADO' ? 'Cancelado' : status)
-                    : status === 'PAGO'
-                      ? 'Pago'
-                      : status === 'PARCIAL'
-                        ? 'Parcial'
-                        : status === 'FECHADA'
-                          ? 'Fechada'
-                          : 'Pendente';
-                const statusClass = isOs
-                  ? venda.os_status === 'CANCELADA' ? 'bg-text-muted/20 text-text-muted' : venda.os_status === 'CONVERTIDA_EM_VENDA' ? 'bg-text-muted/20 text-text-muted' : 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
-                  : isQuote
-                    ? status === 'CANCELADO' ? 'bg-text-muted/20 text-text-muted' : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
-                    : status === 'PAGO'
-                      ? 'bg-badge-pago text-badge-pago-text'
-                      : status === 'PARCIAL'
-                        ? 'bg-badge-pendente text-badge-pendente-text'
-                        : status === 'FECHADA'
-                          ? 'bg-text-muted/20 text-text-muted'
-                          : 'bg-badge-pendente text-badge-pendente-text';
-                const canSelect = !isQuote && !isOs && (status === 'PENDENTE' || status === 'PARCIAL' || status === 'PAGO');
+                const { statusLabel, statusClass, canSelect, isQuote, isOs, codeDisplay } = getVendaListDisplay(venda);
                 return (
                   <tr key={venda.id} className="hover:bg-bg-elevated">
                     <td className="w-10 px-2 py-3 sm:py-4 text-center">
@@ -551,11 +645,11 @@ export default function Vendas() {
                         onChange={() => toggleSelection(venda.id)}
                         disabled={!canSelect}
                         className="rounded border-border bg-bg-card text-primary focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                        aria-label={canSelect ? `Selecionar ${venda.sale_code ?? venda.id}` : 'Pedido já faturado'}
+                        aria-label={canSelect ? `Selecionar ${codeDisplay}` : 'Pedido já faturado'}
                       />
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4 text-text-muted text-sm font-mono tabular-nums">
-                      <span className="block">{isOs ? (venda.os_code ?? '—') : (venda.sale_code ?? '—')}</span>
+                      <span className="block">{codeDisplay}</span>
                       {isQuote && (
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 mt-0.5 inline-block">Orçamento</span>
                       )}
@@ -594,17 +688,17 @@ export default function Vendas() {
           </table>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6 border-t border-border bg-bg-elevated/50">
-            <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-between gap-4 px-4 py-3 sm:px-6 border-t border-border bg-bg-elevated/50">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4">
               <span className="text-sm text-text-muted">
                 Mostrando {rangeStart}–{rangeEnd} de {totalItems}
               </span>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-text-muted">Itens por página:</span>
+                <span className="text-sm text-text-muted shrink-0">Por página:</span>
                 <select
                   value={pageSize}
                   onChange={(e) => handlePageSizeChange(Number(e.target.value) as PageSize)}
-                  className="rounded-lg border border-border bg-bg-card px-3 py-1.5 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="rounded-lg border border-border bg-bg-card px-3 py-2.5 min-h-[44px] text-base sm:text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-primary/20"
                   aria-label="Itens por página"
                 >
                   {PAGE_SIZE_OPTIONS.map((n) => (
@@ -615,12 +709,12 @@ export default function Vendas() {
                 </select>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="px-3 py-1.5 rounded-lg border border-border bg-bg-card text-text-main text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bg-elevated"
+                className="px-4 py-2.5 min-h-[44px] rounded-lg border border-border bg-bg-card text-text-main text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bg-elevated touch-manipulation"
               >
                 Anterior
               </button>
@@ -631,7 +725,7 @@ export default function Vendas() {
                 type="button"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="px-3 py-1.5 rounded-lg border border-border bg-bg-card text-text-main text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bg-elevated"
+                className="px-4 py-2.5 min-h-[44px] rounded-lg border border-border bg-bg-card text-text-main text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bg-elevated touch-manipulation"
               >
                 Próxima
               </button>

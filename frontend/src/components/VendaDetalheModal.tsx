@@ -292,9 +292,9 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
 
   return (
     <ModalPortal>
-      <div className="aurix-modal-overlay fixed inset-0 flex items-center justify-center p-4 overflow-y-auto" style={{ backgroundColor: 'var(--color-overlay)' }}>
-        <div className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-2xl w-full my-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-4 sm:p-6 border-b border-border flex items-center justify-between shrink-0">
+      <div className="aurix-modal-overlay fixed inset-0 flex items-stretch md:items-center justify-center p-0 md:p-4 overflow-y-auto overscroll-contain touch-manipulation" style={{ backgroundColor: 'var(--color-overlay)' }}>
+        <div className="bg-bg-elevated border-0 md:border border-border-soft md:rounded-2xl rounded-none shadow-xl max-w-2xl w-full min-h-[100dvh] md:min-h-0 md:max-h-[90vh] overflow-y-auto my-0 md:my-4 safe-area-pad flex flex-col">
+        <div className="sticky top-0 z-20 p-4 sm:p-6 border-b border-border flex items-center justify-between shrink-0 bg-bg-elevated">
           <h2 className="text-lg sm:text-xl font-bold text-text-main">{isOs ? 'Detalhes da Ordem de Serviço' : isQuote ? 'Detalhes do Orçamento' : 'Detalhes da Venda'}</h2>
           <button
             type="button"
@@ -306,8 +306,8 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
           </button>
         </div>
 
-        <div className="p-4 sm:p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="p-4 sm:p-6 space-y-4 flex-1 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             {(venda.sale_code || venda.os_code) && (
               <div className="col-span-2">
                 <span className="text-text-muted block">{isOs ? 'Número da OS' : 'Código'}</span>

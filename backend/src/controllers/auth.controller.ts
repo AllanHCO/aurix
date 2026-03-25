@@ -1,11 +1,9 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { AppError } from '../middleware/errorHandler';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const registerSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -46,6 +44,19 @@ export const register = async (req: Request, res: Response) => {
       nome: true,
       createdAt: true
     }
+  });
+
+  await prisma.companySettings.upsert({
+    where: { usuario_id: usuario.id },
+    create: {
+      usuario_id: usuario.id,
+      dias_atencao: 30,
+      dias_inativo: 45,
+      personalizacao_json: {
+        onboarding_nicho_concluido: false
+      } as object
+    },
+    update: {}
   });
 
   // Gerar token (exige JWT_SECRET em produção)

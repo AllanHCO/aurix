@@ -10,6 +10,12 @@ export interface ModuloBase {
 
 export interface PersonalizacaoPayload {
   modo: string;
+  /** true = primeiro acesso de nicho já concluído; false = deve exibir tela de nicho */
+  onboarding_nicho_concluido?: boolean;
+  /** Identificador do nicho escolhido (ex.: barbearia) */
+  nicho_negocio_id?: string;
+  /** Label exibível (ex.: Barbearia) */
+  nicho_negocio_label?: string;
   modulos: {
     clientes: ModuloBase & {
       ativar_dados_adicionais: boolean;

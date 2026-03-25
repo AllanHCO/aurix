@@ -15,6 +15,9 @@ interface ModuloBase {
 
 interface PersonalizacaoPayload {
   modo: ModoPreset;
+  onboarding_nicho_concluido?: boolean;
+  nicho_negocio_id?: string;
+  nicho_negocio_label?: string;
   modulos: {
     clientes: ModuloBase & Record<string, unknown>;
     produtos: ModuloBase & Record<string, unknown>;
@@ -166,6 +169,13 @@ export default function PersonalizacaoSistema() {
       {/* Preset de nicho */}
       <section className="rounded-xl border border-border bg-bg-card shadow-sm p-6">
         <h2 className="text-lg font-semibold text-text-main mb-3">Preset de nicho</h2>
+        {data.nicho_negocio_label && (
+          <p className="text-sm text-text-main mb-2">
+            Tipo de negócio informado no primeiro acesso:{' '}
+            <span className="font-medium">{data.nicho_negocio_label}</span>
+            <span className="text-text-muted"> (você pode mudar o preset abaixo a qualquer momento)</span>
+          </p>
+        )}
         <p className="text-sm text-text-muted mb-4">Escolha um perfil para aplicar nomes e opções sugeridas. Depois você pode ajustar e salvar.</p>
         <select
           value={data.modo}

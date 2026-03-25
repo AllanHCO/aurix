@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { usePersonalizacao, type ModuleKey } from '../contexts/PersonalizacaoContext';
 import { api } from '../services/api';
@@ -25,7 +25,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
-  const { getModuleLabel, isModuleEnabled } = usePersonalizacao();
+  const { getModuleLabel, isModuleEnabled, config: persConfig, loading: persLoading } = usePersonalizacao();
   useBusinessAreas();
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -98,6 +98,18 @@ export default function Layout() {
     }, 300);
     return () => clearTimeout(t);
   }, [searchQuery]);
+
+  if (persLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-bg-main">
+        <p className="text-text-muted">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (persConfig?.onboarding_nicho_concluido === false) {
+    return <Navigate to="/onboarding/nicho" replace />;
+  }
 
   const goTo = (path: string) => {
     navigate(path);
@@ -189,18 +201,19 @@ export default function Layout() {
         </header>
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0">
-          <div className="sticky top-0 z-30 flex items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 py-2 bg-[var(--color-bg-main)] border-b border-[var(--color-border)] shrink-0">
+          <div className="sticky top-0 z-30 flex flex-col gap-2 px-4 sm:px-6 lg:px-8 py-2 bg-[var(--color-bg-main)] border-b border-[var(--color-border)] shrink-0">
             {!isConfigActive ? (
               <>
-                <div className="flex-1 min-w-0 flex justify-center">
-                  <div className="relative w-full max-w-[520px] mx-2 sm:mx-4" ref={searchRef}>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 w-full min-w-0">
+                <div className="flex-1 min-w-0 w-full flex justify-center">
+                  <div className="relative w-full max-w-[520px] mx-0 sm:mx-4" ref={searchRef}>
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] text-lg pointer-events-none z-10">search</span>
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Buscar pedidos, clientes, telefone..."
-                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] pl-10 pr-10 py-1.5 text-sm text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] pl-10 pr-10 py-2.5 sm:py-1.5 min-h-[44px] text-sm text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-primary/20"
                     aria-label="Busca global"
                   />
                   {searchLoading && (
@@ -256,7 +269,7 @@ export default function Layout() {
                   </div>
                 </div>
                 <div className="flex-shrink-0 flex justify-end items-center gap-2 min-w-0">
-                  <div className="hidden sm:block min-w-[180px]">
+                  <div className="hidden md:block min-w-[180px]">
                     <AreaFilterSelect showLabel={false} />
                   </div>
                   <ThemeToggle />
@@ -265,7 +278,7 @@ export default function Layout() {
                     <button
                       type="button"
                       onClick={() => setUserMenuOpen((o) => !o)}
-                      className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm hover:bg-primary/20 transition-colors"
+                      className="w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm hover:bg-primary/20 transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 touch-manipulation"
                       aria-label="Menu do usuário"
                     >
                       {user?.nome?.[0] || user?.email[0].toUpperCase()}
@@ -288,19 +301,27 @@ export default function Layout() {
                     )}
                   </div>
                 </div>
+                </div>
+                <div className="md:hidden w-full min-w-0">
+                  <AreaFilterSelect showLabel />
+                </div>
               </>
             ) : (
-              <div className="flex-1 flex justify-end items-center gap-2">
-                <div className="hidden sm:block min-w-[180px]">
+              <div className="flex flex-col md:flex-row flex-1 md:justify-end items-stretch md:items-center gap-2 w-full">
+                <div className="hidden md:block min-w-[180px]">
                   <AreaFilterSelect showLabel={false} />
                 </div>
+                <div className="md:hidden w-full">
+                  <AreaFilterSelect showLabel />
+                </div>
+                <div className="flex justify-end items-center gap-2">
                 <ThemeToggle />
                 {showNotificationBell && <NotificationBell />}
                 <div className="relative" ref={userMenuRef}>
                   <button
                     type="button"
                     onClick={() => setUserMenuOpen((o) => !o)}
-                    className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm hover:bg-primary/20 transition-colors"
+                    className="w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm hover:bg-primary/20 transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 touch-manipulation"
                     aria-label="Menu do usuário"
                   >
                     {user?.nome?.[0] || user?.email[0].toUpperCase()}
@@ -321,6 +342,7 @@ export default function Layout() {
                       </button>
                     </div>
                   )}
+                </div>
                 </div>
               </div>
             )}

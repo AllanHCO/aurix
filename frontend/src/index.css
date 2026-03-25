@@ -246,3 +246,27 @@ tbody tr:hover td.table-actions-col {
   inset: 0 !important;
   z-index: 1 !important;
 }
+
+/* Filtros / chips: scroll horizontal suave sem barra grossa */
+.scrollbar-touch {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.scrollbar-touch::-webkit-scrollbar {
+  height: 4px;
+}
+.scrollbar-touch::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+/* Lista mobile: evita zoom iOS em foco duplo com inputs 16px já no @media acima */
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* Modais fullscreen no mobile: respeita notch / home indicator */
+.safe-area-pad {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}

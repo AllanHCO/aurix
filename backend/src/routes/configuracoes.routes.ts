@@ -7,7 +7,9 @@ import {
   getPersonalizacao,
   putPersonalizacao,
   postPersonalizacaoResetar,
-  getPersonalizacaoPreset
+  getPersonalizacaoPreset,
+  getNichosNegocio,
+  postOnboardingNicho
 } from '../controllers/personalizacao.controller';
 import {
   getPdfBranding,
@@ -30,6 +32,8 @@ router.get('/personalizacao', getPersonalizacao);
 router.put('/personalizacao', putPersonalizacao);
 router.post('/personalizacao/resetar', postPersonalizacaoResetar);
 router.get('/personalizacao/preset', getPersonalizacaoPreset);
+router.post('/personalizacao/onboarding-nicho', postOnboardingNicho);
+router.get('/nichos-negocio', getNichosNegocio);
 
 // PDF / documentos — marca visual (OS; futuro pedido)
 router.get('/documentos/pdf-branding', getPdfBranding);

@@ -151,23 +151,23 @@ export default function SelecaoProdutosModal({
 
   return (
     <ModalPortal>
-      <div className="aurix-modal-overlay fixed inset-0 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--color-overlay)' }}>
-        <div className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
-        <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
-          <div>
+      <div className="aurix-modal-overlay fixed inset-0 flex items-stretch md:items-center justify-center p-0 md:p-4 overflow-y-auto overscroll-contain touch-manipulation" style={{ backgroundColor: 'var(--color-overlay)' }}>
+        <div className="bg-bg-elevated border-0 md:border border-border-soft md:rounded-2xl rounded-none shadow-xl w-full max-w-5xl min-h-[100dvh] md:min-h-0 md:max-h-[90vh] flex flex-col safe-area-pad">
+        <div className="sticky top-0 z-20 p-4 border-b border-border flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between shrink-0 bg-bg-elevated">
+          <div className="min-w-0">
             <h2 className="text-xl font-bold text-text-main">Seleção de Produtos</h2>
             <p className="text-sm text-text-muted mt-0.5">
               Configure o pedido e adicione itens ao fluxo de venda atual
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="px-3 py-1.5 rounded-lg bg-primary/15 text-primary font-medium text-sm">
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end shrink-0">
+            <span className="px-3 py-2 min-h-[44px] flex items-center rounded-lg bg-primary/15 text-primary font-medium text-sm">
               {totalItens} {totalItens === 1 ? 'item' : 'itens'} no carrinho
             </span>
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-lg text-text-muted hover:text-text-main hover:bg-bg-elevated"
+              className="p-2.5 min-w-[44px] min-h-[44px] rounded-lg text-text-muted hover:text-text-main hover:bg-bg-elevated touch-manipulation"
               aria-label="Fechar"
             >
               <span className="material-symbols-outlined">close</span>
@@ -175,9 +175,9 @@ export default function SelecaoProdutosModal({
           </div>
         </div>
 
-        <div className="p-4 space-y-4 flex-1 min-h-0 flex flex-col">
+        <div className="p-4 space-y-4 flex-1 min-h-0 flex flex-col pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="flex flex-wrap gap-2 items-center">
-            <div className="flex-1 min-w-[200px] relative">
+            <div className="flex-1 min-w-0 relative">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-lg pointer-events-none">
                 search
               </span>
@@ -186,7 +186,7 @@ export default function SelecaoProdutosModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Pesquisar por nome, SKU ou código de barras..."
-                className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg bg-input-bg text-text-main placeholder:text-text-muted focus:ring-2 focus:ring-primary outline-none"
+                className="w-full pl-10 pr-4 py-3 min-h-[48px] text-base border border-border rounded-lg bg-input-bg text-text-main placeholder:text-text-muted focus:ring-2 focus:ring-primary outline-none"
               />
             </div>
           </div>
@@ -204,11 +204,11 @@ export default function SelecaoProdutosModal({
                 </button>
               )}
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex gap-2 overflow-x-auto scrollbar-touch flex-nowrap pb-1 -mx-1 px-1">
               <button
                 type="button"
                 onClick={() => setCategoriasSelecionadas([])}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                className={`shrink-0 rounded-full px-4 py-2.5 min-h-[44px] text-sm font-medium transition-colors touch-manipulation ${
                   categoriasSelecionadas.length === 0
                     ? 'bg-primary text-text-on-primary'
                     : 'bg-bg-elevated text-text-main hover:bg-bg-card border border-border'
@@ -222,7 +222,7 @@ export default function SelecaoProdutosModal({
                     key={c.id}
                     type="button"
                     onClick={() => toggleCategoria(c.id)}
-                    className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`shrink-0 rounded-full px-4 py-2.5 min-h-[44px] text-sm font-medium transition-colors touch-manipulation ${
                       categoriasSelecionadas.includes(c.id)
                         ? 'bg-primary text-text-on-primary'
                         : 'bg-bg-elevated text-text-main hover:bg-bg-card border border-border'
@@ -235,31 +235,14 @@ export default function SelecaoProdutosModal({
           </div>
 
           <div className="flex-1 min-h-0 overflow-auto border border-border rounded-lg">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-bg-elevated text-text-muted sticky top-0 z-10">
-                <tr>
-                  <th className="p-3 font-medium">Produto</th>
-                  <th className="p-3 font-medium w-28">Preço unit.</th>
-                  <th className="p-3 font-medium w-24">Estoque</th>
-                  <th className="p-3 font-medium w-32">Quantidade</th>
-                  <th className="p-3 font-medium w-28">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="text-text-main divide-y divide-border">
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-text-muted">
-                      Carregando...
-                    </td>
-                  </tr>
-                ) : listaProdutosFiltrados.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-text-muted">
-                      Nenhum produto encontrado
-                    </td>
-                  </tr>
-                ) : (
-                  listaProdutosFiltrados.map((p) => {
+            {loading ? (
+              <p className="p-8 text-center text-text-muted">Carregando...</p>
+            ) : listaProdutosFiltrados.length === 0 ? (
+              <p className="p-8 text-center text-text-muted">Nenhum produto encontrado</p>
+            ) : (
+              <>
+                <div className="md:hidden space-y-3 p-3">
+                  {listaProdutosFiltrados.map((p) => {
                     const { quantidade } = getRowState(p.id);
                     const reservadoNaVenda = itensDaVenda
                       .filter((item) => item.produto_id === p.id)
@@ -268,78 +251,152 @@ export default function SelecaoProdutosModal({
                     const disponivel = isStockAvailable(estoqueDisponivel);
                     const adicionado = reservadoNaVenda > 0;
                     return (
-                      <tr
-                        key={p.id}
-                        className={`transition-all duration-200 hover:bg-bg-elevated/50 ${
-                          adicionado ? 'ring-1 ring-inset ring-mint/60' : ''
-                        }`}
+                      <div
+                        key={`m-${p.id}`}
+                        className={`rounded-xl border p-4 space-y-3 bg-bg-main ${adicionado ? 'border-primary/40 ring-1 ring-primary/30' : 'border-border'}`}
                       >
-                        <td className="p-3 font-medium">{p.nome}</td>
-                        <td className="p-3">{formatCurrency(p.preco)}</td>
-                        <td className="p-3">
-                          <div className="flex flex-col gap-0.5">
-                            <StockStatusBadge
-                              estoque={estoqueDisponivel}
-                              estoqueMinimo={p.estoque_minimo ?? 0}
-                            />
-                            {reservadoNaVenda > 0 && (
-                              <span className="text-[11px] text-text-muted">
-                                Reservado nesta venda: {reservadoNaVenda}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              min="1"
-                              max={estoqueDisponivel || 1}
-                              value={quantidade}
-                              onChange={(e) =>
-                                setRowStateFor(p.id, {
-                                  quantidade: parseInt(e.target.value, 10) || 1
-                                })
-                              }
-                              disabled={!disponivel}
-                              className="w-14 px-2 py-1 border border-border rounded bg-input-bg text-text-main disabled:opacity-50"
-                            />
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <button
-                            type="button"
-                            onClick={() => disponivel && handleAdicionar(p)}
-                            disabled={!disponivel}
-                            className={
-                              disponivel
-                                ? 'bg-primary hover:bg-primary-hover text-text-on-primary px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 focus:ring-0 focus:outline-none h-[26px] min-w-[4.5rem]'
-                                : 'bg-bg-elevated text-text-muted cursor-not-allowed px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 focus:ring-0 focus:outline-none h-[26px] min-w-[4.5rem]'
+                        <div>
+                          <p className="font-medium text-text-main">{p.nome}</p>
+                          <p className="text-lg font-semibold text-primary mt-1">{formatCurrency(p.preco)}</p>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <StockStatusBadge estoque={estoqueDisponivel} estoqueMinimo={p.estoque_minimo ?? 0} />
+                          {reservadoNaVenda > 0 && (
+                            <span className="text-xs text-text-muted">Reservado nesta venda: {reservadoNaVenda}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <label className="text-sm text-text-muted shrink-0">Qtd</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={estoqueDisponivel || 1}
+                            value={quantidade}
+                            onChange={(e) =>
+                              setRowStateFor(p.id, {
+                                quantidade: parseInt(e.target.value, 10) || 1
+                              })
                             }
-                          >
-                            {disponivel ? (
-                              <>
-                                <span className="material-symbols-outlined text-sm">add</span>
-                                Adicionar
-                              </>
-                            ) : (
-                              'Indisponível'
-                            )}
-                          </button>
-                        </td>
-                      </tr>
+                            disabled={!disponivel}
+                            className="w-24 min-h-[44px] px-3 py-2 border border-border rounded-lg bg-input-bg text-text-main text-base disabled:opacity-50"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => disponivel && handleAdicionar(p)}
+                          disabled={!disponivel}
+                          className={
+                            disponivel
+                              ? 'w-full min-h-[48px] rounded-lg bg-primary hover:bg-primary-hover text-text-on-primary font-semibold flex items-center justify-center gap-2 touch-manipulation'
+                              : 'w-full min-h-[48px] rounded-lg bg-bg-elevated text-text-muted cursor-not-allowed font-medium'
+                          }
+                        >
+                          {disponivel ? (
+                            <>
+                              <span className="material-symbols-outlined">add</span>
+                              Adicionar ao pedido
+                            </>
+                          ) : (
+                            'Indisponível'
+                          )}
+                        </button>
+                      </div>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
+                  })}
+                </div>
+                <table className="hidden md:table w-full text-left text-sm">
+                  <thead className="bg-bg-elevated text-text-muted sticky top-0 z-10">
+                    <tr>
+                      <th className="p-3 font-medium">Produto</th>
+                      <th className="p-3 font-medium w-28">Preço unit.</th>
+                      <th className="p-3 font-medium w-24">Estoque</th>
+                      <th className="p-3 font-medium w-32">Quantidade</th>
+                      <th className="p-3 font-medium w-28">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-text-main divide-y divide-border">
+                    {listaProdutosFiltrados.map((p) => {
+                      const { quantidade } = getRowState(p.id);
+                      const reservadoNaVenda = itensDaVenda
+                        .filter((item) => item.produto_id === p.id)
+                        .reduce((sum, item) => sum + item.quantidade, 0);
+                      const estoqueDisponivel = Math.max(0, (p.estoque_atual ?? 0) - reservadoNaVenda);
+                      const disponivel = isStockAvailable(estoqueDisponivel);
+                      const adicionado = reservadoNaVenda > 0;
+                      return (
+                        <tr
+                          key={p.id}
+                          className={`transition-all duration-200 hover:bg-bg-elevated/50 ${
+                            adicionado ? 'ring-1 ring-inset ring-mint/60' : ''
+                          }`}
+                        >
+                          <td className="p-3 font-medium">{p.nome}</td>
+                          <td className="p-3">{formatCurrency(p.preco)}</td>
+                          <td className="p-3">
+                            <div className="flex flex-col gap-0.5">
+                              <StockStatusBadge
+                                estoque={estoqueDisponivel}
+                                estoqueMinimo={p.estoque_minimo ?? 0}
+                              />
+                              {reservadoNaVenda > 0 && (
+                                <span className="text-[11px] text-text-muted">
+                                  Reservado nesta venda: {reservadoNaVenda}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min="1"
+                                max={estoqueDisponivel || 1}
+                                value={quantidade}
+                                onChange={(e) =>
+                                  setRowStateFor(p.id, {
+                                    quantidade: parseInt(e.target.value, 10) || 1
+                                  })
+                                }
+                                disabled={!disponivel}
+                                className="w-14 px-2 py-1 border border-border rounded bg-input-bg text-text-main disabled:opacity-50"
+                              />
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <button
+                              type="button"
+                              onClick={() => disponivel && handleAdicionar(p)}
+                              disabled={!disponivel}
+                              className={
+                                disponivel
+                                  ? 'bg-primary hover:bg-primary-hover text-text-on-primary px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 focus:ring-0 focus:outline-none h-[26px] min-w-[4.5rem]'
+                                  : 'bg-bg-elevated text-text-muted cursor-not-allowed px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 focus:ring-0 focus:outline-none h-[26px] min-w-[4.5rem]'
+                              }
+                            >
+                              {disponivel ? (
+                                <>
+                                  <span className="material-symbols-outlined text-sm">add</span>
+                                  Adicionar
+                                </>
+                              ) : (
+                                'Indisponível'
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </>
+            )}
           </div>
 
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-stretch sm:justify-end pt-2 max-lg:sticky max-lg:bottom-0 max-lg:z-10 max-lg:bg-bg-elevated max-lg:-mx-4 max-lg:px-4 max-lg:pb-2 max-lg:pt-2 max-lg:border-t max-lg:border-border">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-text-on-primary font-semibold rounded-lg"
+              className="w-full sm:w-auto px-6 py-3 min-h-[48px] bg-primary hover:bg-primary-hover text-text-on-primary font-semibold rounded-lg touch-manipulation"
             >
               Finalizar Seleção
             </button>

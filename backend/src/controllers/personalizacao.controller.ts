@@ -9,6 +9,23 @@ import {
   type ModoPreset
 } from '../services/personalizacao.service';
 import { mergeDocumentBranding } from '../services/document-branding.service';
+import { getNichoDef, listNichosForApi } from '../services/nicho-negocio.service';
+
+function metaFromStoredJson(raw: Record<string, unknown> | null | undefined) {
+  return {
+    onboarding_nicho_concluido: raw?.onboarding_nicho_concluido !== false,
+    nicho_negocio_id: typeof raw?.nicho_negocio_id === 'string' ? raw.nicho_negocio_id : undefined,
+    nicho_negocio_label: typeof raw?.nicho_negocio_label === 'string' ? raw.nicho_negocio_label : undefined
+  };
+}
+
+function preservedPersonalizacaoMeta(existingJson: Record<string, unknown> | null) {
+  return {
+    onboarding_nicho_concluido: existingJson?.onboarding_nicho_concluido,
+    nicho_negocio_id: existingJson?.nicho_negocio_id,
+    nicho_negocio_label: existingJson?.nicho_negocio_label
+  };
+}
 
 const modos: ModoPreset[] = ['padrao', 'barbearia', 'mecanica', 'assistencia_tecnica', 'estetica', 'personalizado'];
 
@@ -101,10 +118,12 @@ async function getOrCreateSettings(userId: string) {
 export const getPersonalizacao = async (req: AuthRequest, res: Response) => {
   const userId = req.userId!;
   const settings = await getOrCreateSettings(userId);
-  const raw = settings.personalizacao_json as PersonalizacaoPayload | null | undefined;
+  const rawObj = settings.personalizacao_json as Record<string, unknown> | null | undefined;
+  const raw = rawObj as PersonalizacaoPayload | null | undefined;
   const defaultConfig = getDefaultPersonalizacao();
+  const meta = metaFromStoredJson(rawObj);
   if (!raw || typeof raw !== 'object' || !raw.modulos) {
-    return res.json(defaultConfig);
+    return res.json({ ...defaultConfig, ...meta });
   }
   const merged: PersonalizacaoPayload = {
     modo: modos.includes((raw.modo as ModoPreset)) ? (raw.modo as ModoPreset) : 'padrao',
@@ -113,7 +132,7 @@ export const getPersonalizacao = async (req: AuthRequest, res: Response) => {
       ...(raw.modulos && typeof raw.modulos === 'object' ? raw.modulos : {})
     }
   };
-  return res.json(merged);
+  return res.json({ ...merged, ...meta });
 };
 
 /** PUT /configuracoes/personalizacao */
@@ -123,11 +142,13 @@ export const putPersonalizacao = async (req: AuthRequest, res: Response) => {
   const settings = await getOrCreateSettings(userId);
   const existingJson = (settings.personalizacao_json as Record<string, unknown> | null) || {};
   const preservedBranding = mergeDocumentBranding(existingJson.document_branding);
+  const preservedMeta = preservedPersonalizacaoMeta(existingJson);
   await prisma.companySettings.update({
     where: { usuario_id: userId },
     data: {
       personalizacao_json: {
         ...body,
+        ...preservedMeta,
         document_branding: preservedBranding
       } as object
     }
@@ -142,11 +163,13 @@ export const postPersonalizacaoResetar = async (req: AuthRequest, res: Response)
   const settings = await getOrCreateSettings(userId);
   const existingJson = (settings.personalizacao_json as Record<string, unknown> | null) || {};
   const preservedBranding = mergeDocumentBranding(existingJson.document_branding);
+  const preservedMeta = preservedPersonalizacaoMeta(existingJson);
   await prisma.companySettings.update({
     where: { usuario_id: userId },
     data: {
       personalizacao_json: {
         ...defaultConfig,
+        ...preservedMeta,
         document_branding: preservedBranding
       } as object
     }
@@ -162,4 +185,57 @@ export const getPersonalizacaoPreset = async (req: AuthRequest, res: Response) =
   }
   const config = getPreset(modo as ModoPreset);
   return res.json(config);
+};
+
+/** GET /configuracoes/nichos-negocio — opções para o primeiro acesso (labels amigáveis) */
+export const getNichosNegocio = async (_req: AuthRequest, res: Response) => {
+  return res.json({ nichos: listNichosForApi() });
+};
+
+const onboardingNichoSchema = z.object({
+  nichoId: z.string().min(1, 'Selecione um tipo de negócio')
+});
+
+/** POST /configuracoes/personalizacao/onboarding-nicho — primeiro acesso: aplica preset e libera o sistema */
+export const postOnboardingNicho = async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const { nichoId } = onboardingNichoSchema.parse(req.body);
+  const def = getNichoDef(nichoId);
+  if (!def) {
+    return res.status(400).json({ error: 'Tipo de negócio inválido.' });
+  }
+  const settings = await getOrCreateSettings(userId);
+  const existingJson = (settings.personalizacao_json as Record<string, unknown> | null) || {};
+  if (existingJson.onboarding_nicho_concluido === true) {
+    return res.json({
+      success: true,
+      message: 'Personalização já estava configurada.',
+      alreadyDone: true,
+      data: metaFromStoredJson(existingJson)
+    });
+  }
+  const preservedBranding = mergeDocumentBranding(existingJson.document_branding);
+  const presetConfig = getPreset(def.modo);
+  await prisma.companySettings.update({
+    where: { usuario_id: userId },
+    data: {
+      personalizacao_json: {
+        ...presetConfig,
+        onboarding_nicho_concluido: true,
+        nicho_negocio_id: def.id,
+        nicho_negocio_label: def.label,
+        document_branding: preservedBranding
+      } as object
+    }
+  });
+  return res.json({
+    success: true,
+    message: 'Personalização aplicada.',
+    data: {
+      ...presetConfig,
+      onboarding_nicho_concluido: true,
+      nicho_negocio_id: def.id,
+      nicho_negocio_label: def.label
+    }
+  });
 };
