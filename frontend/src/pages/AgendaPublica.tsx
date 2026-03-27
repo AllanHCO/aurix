@@ -63,8 +63,6 @@ export default function AgendaPublica() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [sucesso, setSucesso] = useState<{
-    whatsappUrl?: string;
-    whatsapp_url?: string;
     data?: string;
     hora_inicio?: string;
     mensagem?: string;
@@ -194,21 +192,17 @@ export default function AgendaPublica() {
         { headers: { 'Idempotency-Key': idempotencyKey } }
       );
       const data = res.data as {
-        whatsappUrl?: string;
-        whatsapp_url?: string;
         mensagem?: string;
         message?: string;
         agendamento?: { data?: string; hora_inicio?: string };
       };
       const ag = data.agendamento;
       setSucesso({
-        whatsappUrl: data.whatsappUrl ?? data.whatsapp_url,
-        whatsapp_url: data.whatsapp_url ?? data.whatsappUrl,
         data: ag?.data ?? dataEscolhida,
         hora_inicio: ag?.hora_inicio ?? horaEscolhida,
         mensagem: data.mensagem ?? data.message
       });
-      toast.success(data.mensagem ?? data.message ?? 'Agendamento solicitado!');
+      toast.success(data.mensagem ?? data.message ?? 'Agendamento feito!');
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { error?: string } } };
       toast.error(ax.response?.data?.error || 'Erro ao agendar');
@@ -276,29 +270,18 @@ export default function AgendaPublica() {
   }
 
   if (sucesso) {
-    const whatsappUrl = sucesso.whatsappUrl ?? sucesso.whatsapp_url;
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-main p-4" style={wrapperStyle}>
         <div className="bg-bg-card rounded-xl border border-border shadow-lg p-8 max-w-md w-full text-center">
           <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 text-[var(--color-text-on-primary)]" style={{ backgroundColor: brandColor }}>
             <span className="material-symbols-outlined text-3xl">check</span>
           </div>
-          <h1 className="text-xl font-bold text-text-main mb-2">Agendamento solicitado!</h1>
+          <h1 className="text-xl font-bold text-text-main mb-2">Agendamento feito!</h1>
           <p className="text-text-muted text-sm mb-4">
             {sucesso.data && sucesso.hora_inicio && (
               <> {new Date(sucesso.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })} às {sucesso.hora_inicio} </>
             )}
           </p>
-          {whatsappUrl && (
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-success hover:bg-success/90 text-text-on-primary font-medium px-5 py-3 rounded-lg"
-            >
-              Enviar via WhatsApp
-            </a>
-          )}
         </div>
       </div>
     );

@@ -146,25 +146,19 @@ export const createAgendamento = async (req: Request, res: Response) => {
   };
   const agendamento = await createAgendamentoPublic(user.id, payload, idempotencyKey || null);
 
-  const tel = agendamento.telefone_cliente.replace(/\D/g, '');
-  const msg = `Olá ${agendamento.nome_cliente}, seu agendamento foi solicitado para ${agendamento.data.toISOString().slice(0, 10)} às ${agendamento.hora_inicio}. Aguarde confirmação.`;
-  const whatsappUrl = `https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`;
-
   const response = {
     ok: true,
     agendamentoId: agendamento.id,
     status: agendamento.status,
-    mensagem: 'Agendamento solicitado com sucesso!',
-    whatsappUrl: whatsappUrl,
-    message: 'Agendamento solicitado com sucesso!',
+    mensagem: 'Agendamento feito com sucesso!',
+    message: 'Agendamento feito com sucesso!',
     agendamento: {
       id: agendamento.id,
       data: agendamento.data.toISOString().slice(0, 10),
       hora_inicio: agendamento.hora_inicio,
       hora_fim: agendamento.hora_fim,
       status: agendamento.status
-    },
-    whatsapp_url: whatsappUrl
+    }
   };
 
   if (idempotencyKey) {

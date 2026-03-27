@@ -386,6 +386,9 @@ export default function Agendamentos() {
                 <span className="flex items-center gap-1.5 text-text-muted">
                   <span className="w-2 h-2 rounded-full bg-success" /> Confirmado
                 </span>
+                <span className="flex items-center gap-1.5 text-text-muted">
+                  <span className="w-2 h-2 rounded-full bg-badge-erro" /> Cancelado
+                </span>
               </div>
               <div className="grid grid-cols-7 gap-1">
                 {['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'].map((d) => (
@@ -426,7 +429,15 @@ export default function Agendamentos() {
                               setModalCliente(a);
                             }}
                             className={`truncate text-[10px] px-1 py-0.5 rounded w-full text-left hover:opacity-90 ${
-                              a.no_show ? 'bg-badge-erro/80 text-badge-erro-text' : a.checkin_at ? 'bg-success/20 text-success' : a.status === 'CONFIRMADO' ? 'bg-badge-pago text-badge-pago-text' : 'bg-badge-pendente text-badge-pendente-text'
+                              a.no_show
+                                ? 'bg-badge-erro/80 text-badge-erro-text'
+                                : a.status === 'CANCELADO'
+                                  ? 'bg-badge-erro text-badge-erro-text'
+                                  : a.checkin_at
+                                    ? 'bg-success/20 text-success'
+                                    : a.status === 'CONFIRMADO'
+                                      ? 'bg-badge-pago text-badge-pago-text'
+                                      : 'bg-badge-pendente text-badge-pendente-text'
                             }`}
                             title={`${a.nome_cliente} - ${a.hora_inicio}`}
                           >

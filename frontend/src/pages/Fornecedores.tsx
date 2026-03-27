@@ -142,6 +142,7 @@ export default function Fornecedores() {
 
 function AbaLista() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [cidadesDisponiveis, setCidadesDisponiveis] = useState<string[]>([]);
   const [categories, setCategories] = useState<SupplierCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -163,17 +164,28 @@ function AbaLista() {
   const loadSuppliers = useCallback(() => {
     setLoading(true);
     setError(null);
-    const params: Record<string, string> = {};
-    if (search.trim()) params.search = search.trim();
-    if (filtroCategoria) params.category_id = filtroCategoria;
-    if (filtroCidade.trim()) params.city = filtroCidade.trim();
-    if (filtroAtivo === 'true' || filtroAtivo === 'false') params.is_active = filtroAtivo;
-    api
-      .get<Supplier[]>('/fornecedores', { params })
-      .then((r) => setSuppliers(Array.isArray(r.data) ? r.data : []))
+    const baseParams: Record<string, string> = {};
+    if (search.trim()) baseParams.search = search.trim();
+    if (filtroCategoria) baseParams.category_id = filtroCategoria;
+    if (filtroAtivo === 'true' || filtroAtivo === 'false') baseParams.is_active = filtroAtivo;
+    const paramsComCidade: Record<string, string> = { ...baseParams };
+    if (filtroCidade.trim()) paramsComCidade.city = filtroCidade.trim();
+
+    Promise.all([
+      api.get<Supplier[]>('/fornecedores', { params: paramsComCidade }),
+      api.get<Supplier[]>('/fornecedores', { params: baseParams })
+    ])
+      .then(([listaFiltradaRes, listaSemCidadeRes]) => {
+        const listaFiltrada = Array.isArray(listaFiltradaRes.data) ? listaFiltradaRes.data : [];
+        const listaSemCidade = Array.isArray(listaSemCidadeRes.data) ? listaSemCidadeRes.data : [];
+        setSuppliers(listaFiltrada);
+        const cidades = [...new Set(listaSemCidade.map((s) => s.city?.trim()).filter((c): c is string => Boolean(c)))].sort();
+        setCidadesDisponiveis(cidades);
+      })
       .catch((err) => {
         setError(err.response?.data?.error || 'Erro ao carregar fornecedores');
         setSuppliers([]);
+        setCidadesDisponiveis([]);
       })
       .finally(() => setLoading(false));
   }, [search, filtroCategoria, filtroCidade, filtroAtivo]);
@@ -230,8 +242,6 @@ function AbaLista() {
     }
   };
 
-  const cidadesUnicas = [...new Set(suppliers.map((s) => s.city).filter(Boolean))].sort() as string[];
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -253,7 +263,7 @@ function AbaLista() {
           className="min-w-[160px]"
         />
         <SearchableSelect
-          options={cidadesUnicas.map((c) => ({ value: c, label: c }))}
+          options={cidadesDisponiveis.map((c) => ({ value: c, label: c }))}
           value={filtroCidade}
           onChange={setFiltroCidade}
           placeholder="Todas as cidades"
