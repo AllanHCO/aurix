@@ -56,7 +56,8 @@ const putSchema = z.object({
   logo_band_style: z.enum(['highlight', 'compact']).optional(),
   /** [-1, 1] enquadramento cover; valores legados em pt (-18..18) aceitos e normalizados */
   logo_offset_x: z.number().min(-18).max(18).optional(),
-  logo_offset_y: z.number().min(-18).max(18).optional()
+  logo_offset_y: z.number().min(-18).max(18).optional(),
+  logo_zoom: z.number().min(1).max(3).optional()
 });
 
 /** PUT /configuracoes/documentos/pdf-branding */

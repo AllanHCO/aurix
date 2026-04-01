@@ -27,6 +27,8 @@ export interface DocumentBranding {
    */
   logo_offset_x: number;
   logo_offset_y: number;
+  /** Zoom extra sobre o “cover” base (1 = só cobrir a faixa; até 3 = mais zoom / mais corte). */
+  logo_zoom: number;
 }
 
 /** Altura fixa do banner no PDF (pontos). Destacada ~100pt, compacta ~80pt (faixa ~80–140px em tela). */
@@ -46,7 +48,8 @@ export function getDefaultDocumentBranding(): DocumentBranding {
     logo_size: 'medium',
     logo_band_style: 'highlight',
     logo_offset_x: 0,
-    logo_offset_y: 0
+    logo_offset_y: 0,
+    logo_zoom: 1
   };
 }
 
@@ -70,8 +73,14 @@ export function mergeDocumentBranding(raw: unknown): DocumentBranding {
     logo_size: size === 'small' || size === 'medium' || size === 'large' ? size : d.logo_size,
     logo_band_style: bandStyle,
     logo_offset_x: normalizePan(o.logo_offset_x, d.logo_offset_x),
-    logo_offset_y: normalizePan(o.logo_offset_y, d.logo_offset_y)
+    logo_offset_y: normalizePan(o.logo_offset_y, d.logo_offset_y),
+    logo_zoom: normalizeZoom(o.logo_zoom, d.logo_zoom)
   };
+}
+
+function normalizeZoom(raw: unknown, fallback: number): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return fallback;
+  return Math.max(1, Math.min(3, Math.round(raw * 100) / 100));
 }
 
 /** Converte pan salvo: [-1,1] ou legado em pt (~-18..18) → [-1, 1] */

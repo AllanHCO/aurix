@@ -55,8 +55,7 @@ function ensureSpace(doc: PDFKit.PDFDocument, marginBottom: number, pageBottom: 
 }
 
 /**
- * Banner full-width: escala tipo CSS background-size: cover + posição (pan em [-1,1]).
- * Recorte com clip; sem distorção.
+ * Banner full-width: cover × zoom + posição (pan em [-1,1]). Recorte com clip; sem distorção.
  */
 async function drawOsLogoBannerCover(
   doc: PDFKit.PDFDocument,
@@ -66,7 +65,8 @@ async function drawOsLogoBannerCover(
   bandW: number,
   bandH: number,
   panX: number,
-  panY: number
+  panY: number,
+  zoom: number
 ): Promise<void> {
   let meta: { width?: number; height?: number };
   try {
@@ -76,7 +76,8 @@ async function drawOsLogoBannerCover(
   }
   const iw = meta.width || 1;
   const ih = meta.height || 1;
-  const scale = Math.max(bandW / iw, bandH / ih);
+  const z = Number.isFinite(zoom) && zoom >= 1 ? Math.min(zoom, 3) : 1;
+  const scale = Math.max(bandW / iw, bandH / ih) * z;
   const dw = iw * scale;
   const dh = ih * scale;
   const cx = bandX + (bandW - dw) / 2 + panX * ((dw - bandW) / 2);
@@ -224,7 +225,8 @@ export async function gerarOsPdf(req: AuthRequest, res: Response): Promise<void>
       pageWidth,
       bannerHeight,
       documentBranding.logo_offset_x,
-      documentBranding.logo_offset_y
+      documentBranding.logo_offset_y,
+      documentBranding.logo_zoom
     );
     doc.lineWidth(BORDA_LEVE);
     doc.strokeColor('#cccccc');
