@@ -27,7 +27,7 @@ function clampZoom(n: number): number {
   return Math.max(1, Math.min(3, Math.round(n * 100) / 100));
 }
 
-/** Mesma matemática do PDF: cover × zoom + pan em [-1,1] */
+/** Idêntico ao backend/PDF: cover × zoom + pan em [-1,1] */
 function computeOsBannerLayout(
   bandW: number,
   bandH: number,
@@ -55,10 +55,21 @@ export default function ConfiguracaoDocumentosPdf() {
   const [logoBlobUrl, setLogoBlobUrl] = useState<string | null>(null);
 
   const bannerRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ panX: number; panY: number; cx: number; cy: number } | null>(null);
-  const zoomRef = useRef(1);
+  const draftRef = useRef<DocumentBrandingState | null>(null);
+  const naturalRef = useRef<{ w: number; h: number } | null>(null);
+  const dragActiveRef = useRef(false);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+
   const [boxSize, setBoxSize] = useState({ w: 0, h: 0 });
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    naturalRef.current = naturalSize;
+  }, [naturalSize]);
 
   const normalize = useCallback((raw: Record<string, unknown>): DocumentBrandingState => {
     const band = raw.logo_band_style;
@@ -138,13 +149,13 @@ export default function ConfiguracaoDocumentosPdf() {
   useEffect(() => {
     const el = bannerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
+    const measure = () => {
       const r = el.getBoundingClientRect();
       setBoxSize({ w: r.width, h: r.height });
-    });
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    const r = el.getBoundingClientRect();
-    setBoxSize({ w: r.width, h: r.height });
+    measure();
     return () => ro.disconnect();
   }, [draft?.logo_path, draft?.logo_band_style]);
 
@@ -157,10 +168,6 @@ export default function ConfiguracaoDocumentosPdf() {
       branding.logo_zoom !== draft.logo_zoom
     );
   }, [branding, draft]);
-
-  useEffect(() => {
-    if (draft) zoomRef.current = draft.logo_zoom;
-  }, [draft?.logo_zoom]);
 
   const saveLayout = async () => {
     if (!draft) return;
@@ -229,40 +236,60 @@ export default function ConfiguracaoDocumentosPdf() {
     }
   };
 
+  /** Arraste: px → Δpan com a mesma derivada do layout (imagem acompanha o dedo/mouse). */
+  const applyDragDelta = useCallback((dx: number, dy: number) => {
+    const el = bannerRef.current;
+    const d = draftRef.current;
+    const nat = naturalRef.current;
+    if (!el || !d || !nat) return;
+    const { width: bw, height: bh } = el.getBoundingClientRect();
+    if (bw <= 0 || bh <= 0) return;
+    const { dw, dh } = computeOsBannerLayout(bw, bh, nat.w, nat.h, d.logo_offset_x, d.logo_offset_y, d.logo_zoom);
+    const denomX = dw - bw;
+    const denomY = dh - bh;
+    let dPanX = 0;
+    let dPanY = 0;
+    if (Math.abs(denomX) > 0.5) dPanX = (dx * 2) / denomX;
+    if (Math.abs(denomY) > 0.5) dPanY = (dy * 2) / denomY;
+    setDraft((prev) =>
+      prev
+        ? {
+            ...prev,
+            logo_offset_x: clampPan(prev.logo_offset_x + dPanX),
+            logo_offset_y: clampPan(prev.logo_offset_y + dPanY)
+          }
+        : prev
+    );
+  }, []);
+
   const onBannerPointerDown = (e: React.PointerEvent) => {
-    if (!draft?.logo_path) return;
+    if (!draftRef.current?.logo_path) return;
     e.preventDefault();
+    e.stopPropagation();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = {
-      panX: draft.logo_offset_x,
-      panY: draft.logo_offset_y,
-      cx: e.clientX,
-      cy: e.clientY
-    };
+    dragActiveRef.current = true;
+    lastPointerRef.current = { x: e.clientX, y: e.clientY };
   };
 
   const onBannerPointerMove = (e: React.PointerEvent) => {
-    if (!dragRef.current || !bannerRef.current) return;
-    const { width, height } = bannerRef.current.getBoundingClientRect();
-    const z = zoomRef.current >= 1 ? zoomRef.current : 1;
-    const sensX = Math.max(width * 0.35, 80) / z;
-    const sensY = Math.max(height * 0.35, 60) / z;
-    const dx = e.clientX - dragRef.current.cx;
-    const dy = e.clientY - dragRef.current.cy;
-    const nx = clampPan(dragRef.current.panX - dx / sensX);
-    const ny = clampPan(dragRef.current.panY - dy / sensY);
-    setDraft((d) => (d ? { ...d, logo_offset_x: nx, logo_offset_y: ny } : d));
+    if (!dragActiveRef.current || !lastPointerRef.current) return;
+    const last = lastPointerRef.current;
+    const dx = e.clientX - last.x;
+    const dy = e.clientY - last.y;
+    lastPointerRef.current = { x: e.clientX, y: e.clientY };
+    applyDragDelta(dx, dy);
   };
 
-  const onBannerPointerUp = (e: React.PointerEvent) => {
-    if (dragRef.current) {
+  const endDrag = (e: React.PointerEvent) => {
+    if (dragActiveRef.current) {
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
       } catch {
         /* ignore */
       }
     }
-    dragRef.current = null;
+    dragActiveRef.current = false;
+    lastPointerRef.current = null;
   };
 
   const centerPan = () => {
@@ -305,17 +332,18 @@ export default function ConfiguracaoDocumentosPdf() {
         Documentos — PDF
       </h1>
       <p className="text-text-muted text-sm leading-relaxed">
-        A imagem será usada como um <strong className="text-text-main">banner no topo</strong> do PDF da Ordem de Serviço.
-        Ela é ajustada automaticamente para <strong className="text-text-main">preencher a área</strong> (modo capa, sem
-        distorcer), com parte do recorte fora da faixa. Use <strong className="text-text-main">arraste</strong>, os{' '}
-        <strong className="text-text-main">deslizadores</strong> e o <strong className="text-text-main">zoom</strong> para
-        posicionar o enquadramento — o preview abaixo segue a mesma lógica do PDF.
+        A imagem será usada como um <strong className="text-text-main">banner no topo do PDF</strong>. Ela será
+        ajustada para <strong className="text-text-main">preencher toda a largura</strong> (modo capa: pode cortar
+        bordas, sem distorcer). Use o <strong className="text-text-main">arraste</strong> e o{' '}
+        <strong className="text-text-main">zoom</strong> para posicionar corretamente. O preview abaixo usa a mesma
+        matemática do PDF.
       </p>
 
       <section className="rounded-xl border border-border bg-bg-card shadow-sm p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-text-main">Banner da Ordem de Serviço</h2>
+        <h2 className="text-lg font-semibold text-text-main">Editor de banner — Ordem de Serviço</h2>
         <p className="text-sm text-text-muted">
-          Envie PNG, JPG ou WEBP (até 2 MB). Escolha a altura da faixa, ajuste zoom e posição e salve.
+          PNG, JPG ou WEBP até 2 MB. Modo da faixa (altura), zoom e posição são salvos no servidor com a imagem (
+          <code className="text-xs bg-bg-main px-1 rounded">logo_path</code>).
         </p>
 
         <div className="flex flex-wrap gap-3 items-center">
@@ -337,7 +365,7 @@ export default function ConfiguracaoDocumentosPdf() {
         </div>
 
         <div className="space-y-3">
-          <p className="text-sm font-medium text-text-main">Altura da faixa no PDF</p>
+          <p className="text-sm font-medium text-text-main">Altura da faixa (modo)</p>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -348,7 +376,7 @@ export default function ConfiguracaoDocumentosPdf() {
                   : 'border-border text-text-muted hover:border-primary/40'
               }`}
             >
-              Destacada (~108 pt)
+              Destacada
             </button>
             <button
               type="button"
@@ -359,13 +387,13 @@ export default function ConfiguracaoDocumentosPdf() {
                   : 'border-border text-text-muted hover:border-primary/40'
               }`}
             >
-              Compacta (~80 pt)
+              Compacta
             </button>
           </div>
         </div>
 
         <div>
-          <label className="block text-sm text-text-muted mb-1">Zoom (amplia o recorte sobre o capa base)</label>
+          <label className="block text-sm text-text-muted mb-1">Zoom (1× a 3×)</label>
           <input
             type="range"
             min={1}
@@ -375,66 +403,69 @@ export default function ConfiguracaoDocumentosPdf() {
             onChange={(e) => setDraft((d) => (d ? { ...d, logo_zoom: clampZoom(Number(e.target.value)) } : d))}
             className="w-full max-w-md"
           />
-          <p className="text-xs text-text-muted mt-1">{draft.logo_zoom.toFixed(2)}× (1× = só cobrir a faixa; maior = mais zoom)</p>
+          <p className="text-xs text-text-muted mt-1">
+            {draft.logo_zoom.toFixed(2)}× — aumente o zoom se o pan ficar pouco sensível.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-text-muted mb-1">Posição horizontal (pan)</label>
+            <label className="block text-sm text-text-muted mb-1">Posição horizontal</label>
             <input
               type="range"
               min={-1}
               max={1}
-              step={0.01}
+              step={0.005}
               value={draft.logo_offset_x}
               onChange={(e) =>
                 setDraft((d) => (d ? { ...d, logo_offset_x: clampPan(Number(e.target.value)) } : d))
               }
               className="w-full"
             />
-            <p className="text-xs text-text-muted mt-1">{draft.logo_offset_x.toFixed(2)}</p>
+            <p className="text-xs text-text-muted mt-1 font-mono">{draft.logo_offset_x.toFixed(3)}</p>
           </div>
           <div>
-            <label className="block text-sm text-text-muted mb-1">Posição vertical (pan)</label>
+            <label className="block text-sm text-text-muted mb-1">Posição vertical</label>
             <input
               type="range"
               min={-1}
               max={1}
-              step={0.01}
+              step={0.005}
               value={draft.logo_offset_y}
               onChange={(e) =>
                 setDraft((d) => (d ? { ...d, logo_offset_y: clampPan(Number(e.target.value)) } : d))
               }
               className="w-full"
             />
-            <p className="text-xs text-text-muted mt-1">{draft.logo_offset_y.toFixed(2)}</p>
+            <p className="text-xs text-text-muted mt-1 font-mono">{draft.logo_offset_y.toFixed(3)}</p>
           </div>
         </div>
 
         <div>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <p className="text-sm font-medium text-text-main">Preview (igual ao PDF)</p>
+            <p className="text-sm font-medium text-text-main">Preview (mesma lógica do PDF)</p>
             {hasLogo && (
               <button
                 type="button"
                 onClick={centerPan}
                 className="text-sm rounded-lg border border-border px-3 py-1.5 text-text-main hover:bg-bg-main"
               >
-                Centralizar posição
+                Centralizar imagem
               </button>
             )}
           </div>
-          <div className="rounded-lg border-2 border-border bg-white overflow-hidden shadow-inner">
+          <div className="rounded-lg border-2 border-border bg-white overflow-hidden shadow-inner w-full min-w-0">
             {hasLogo && (
               <div
                 ref={bannerRef}
-                role="presentation"
-                className="relative w-full overflow-hidden bg-[#f0f0f0] touch-none select-none cursor-grab active:cursor-grabbing"
+                role="region"
+                aria-label="Preview do banner: arraste para posicionar"
+                className="relative w-full min-w-0 overflow-hidden bg-[#e8e8e8] touch-none select-none cursor-grab active:cursor-grabbing"
                 style={{ height: bannerH }}
                 onPointerDown={onBannerPointerDown}
                 onPointerMove={onBannerPointerMove}
-                onPointerUp={onBannerPointerUp}
-                onPointerCancel={onBannerPointerUp}
+                onPointerUp={endDrag}
+                onPointerCancel={endDrag}
               >
                 {logoBlobUrl && (
                   <>
@@ -443,7 +474,7 @@ export default function ConfiguracaoDocumentosPdf() {
                       alt=""
                       draggable={false}
                       decoding="async"
-                      className="absolute pointer-events-none select-none max-w-none"
+                      className="absolute pointer-events-none select-none max-w-none block"
                       onLoad={(e) => {
                         const im = e.currentTarget;
                         setNaturalSize({ w: im.naturalWidth, h: im.naturalHeight });
@@ -467,18 +498,18 @@ export default function ConfiguracaoDocumentosPdf() {
                     />
                     {!layout && (
                       <span className="absolute inset-0 flex items-center justify-center text-xs text-text-muted pointer-events-none">
-                        {!naturalSize ? 'Carregando imagem…' : 'Ajustando preview…'}
+                        {!naturalSize ? 'Carregando…' : 'Preparando preview…'}
                       </span>
                     )}
                   </>
                 )}
-                <span className="absolute bottom-1 right-1 rounded bg-black/50 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">
-                  Arraste para ajustar
+                <span className="absolute bottom-1 right-1 rounded bg-black/55 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">
+                  Arraste · capa + corte
                 </span>
               </div>
             )}
             <div
-              className={`flex items-center justify-between gap-2 px-3 border-t border-border ${hasLogo ? '' : 'py-2'}`}
+              className={`flex items-center justify-between gap-2 px-3 border-t border-border bg-white ${hasLogo ? '' : 'py-2'}`}
               style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}
             >
               <span className="text-sm font-bold text-black shrink-0">ORDEM DE SERVIÇO</span>
@@ -486,7 +517,7 @@ export default function ConfiguracaoDocumentosPdf() {
             </div>
             {!hasLogo && (
               <div className="px-3 py-2 text-[11px] text-text-muted border-t border-transparent">
-                Sem imagem: o PDF mostra só o título e o número — sem faixa.
+                Sem imagem: o PDF mostra só o título e o número.
               </div>
             )}
           </div>
