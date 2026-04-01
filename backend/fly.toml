@@ -1,6 +1,12 @@
 # Fly.io - Backend Aurix em São Paulo (gru)
 # Use: fly launch (já com este arquivo) ou fly deploy
 # Região: gru = São Paulo, Brasil
+#
+# Obrigatório (secrets — NÃO colocar aspas no valor):
+#   fly secrets set DATABASE_URL="postgresql://postgres.PROJETO:SENHA@aws-0-REGIAO.pooler.supabase.com:6543/postgres"
+#   fly secrets set JWT_SECRET="(32+ caracteres)"
+#   fly secrets set FRONTEND_URL="https://seu-frontend.vercel.app"
+# Copie a URI do Supabase: Transaction pooling (6543), usuário postgres.ref — igual ao .env.local de dev.
 
 app = "aurix-backend"
 

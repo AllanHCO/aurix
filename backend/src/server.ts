@@ -36,14 +36,6 @@ import financeiroRoutes from './routes/financeiro.routes';
 import fornecedoresRoutes from './routes/fornecedores.routes';
 import devRoutes from './routes/dev.routes';
 
-// Render/Supabase e outros Postgres remotos exigem SSL. Não alterar URL local (localhost).
-const dbUrl = process.env.DATABASE_URL || '';
-const isRemoteDb = /supabase\.(co|com)|render\.com|fly\.(io|dev)|neon\.tech|amazonaws\.com/i.test(dbUrl);
-if (dbUrl && isRemoteDb && !dbUrl.includes('sslmode=')) {
-  const sep = dbUrl.includes('?') ? '&' : '?';
-  process.env.DATABASE_URL = dbUrl + sep + 'sslmode=require';
-}
-
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -143,7 +135,8 @@ app.get('/health/db', async (req, res) => {
     return res.status(503).json({
       database: 'error',
       message: e?.message || String(e),
-      hint: 'Adicione ?sslmode=require no final da DATABASE_URL no Render (Supabase).'
+      hint:
+        'Confira DATABASE_URL no Fly/Render (Transaction pooling 6543, sem aspas no secret). O servidor injeta sslmode, pgbouncer e connection_limit. Comando: fly secrets list'
     });
   }
 });

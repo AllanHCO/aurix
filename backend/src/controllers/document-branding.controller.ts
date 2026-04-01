@@ -54,6 +54,7 @@ const putSchema = z.object({
   logo_alignment: z.enum(['left', 'center', 'right']).optional(),
   logo_size: z.enum(['small', 'medium', 'large']).optional(),
   logo_band_style: z.enum(['highlight', 'compact']).optional(),
+  /** [-1, 1] enquadramento cover; valores legados em pt (-18..18) aceitos e normalizados */
   logo_offset_x: z.number().min(-18).max(18).optional(),
   logo_offset_y: z.number().min(-18).max(18).optional()
 });
@@ -64,13 +65,13 @@ export async function putPdfBranding(req: AuthRequest, res: Response): Promise<v
   const body = putSchema.parse(req.body);
   const settings = await getOrCreateSettings(userId);
   const current = mergeDocumentBranding(readPersonalizacaoJson(settings).document_branding);
-  const next: DocumentBranding = {
+  const merged = mergeDocumentBranding({
     ...current,
     ...body,
     logo_path: current.logo_path
-  };
-  await persistDocumentBranding(userId, next);
-  res.json({ success: true, data: next });
+  } as unknown);
+  await persistDocumentBranding(userId, merged);
+  res.json({ success: true, data: merged });
 }
 
 /** POST /configuracoes/documentos/pdf-branding/logo — multipart field "file" */
@@ -85,7 +86,7 @@ export async function postPdfBrandingLogo(req: AuthRequest, res: Response): Prom
   try {
     await sharp(file.buffer)
       .rotate()
-      .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+      .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 88, mozjpeg: true })
       .toFile(outPath);
   } catch (e: any) {

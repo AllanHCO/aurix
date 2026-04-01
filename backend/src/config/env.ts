@@ -59,11 +59,14 @@ export function validateEnvAndBlockIfUnsafe(): void {
   const dbUrl = process.env.DATABASE_URL?.trim();
   const jwtSecret = process.env.JWT_SECRET?.trim();
   const frontendUrl = process.env.FRONTEND_URL?.trim();
+  const allowRemoteDevDatabase =
+    process.env.ALLOW_REMOTE_DEV_DATABASE?.trim() === '1' ||
+    process.env.ALLOW_REMOTE_DEV_DATABASE?.trim()?.toLowerCase() === 'true';
 
   const errors: string[] = [];
 
   if (isNonProduction) {
-    if (looksLikeProductionDatabaseUrl(dbUrl)) {
+    if (looksLikeProductionDatabaseUrl(dbUrl) && !allowRemoteDevDatabase) {
       errors.push(
         `DATABASE_URL parece ser de PRODUÇÃO (${dbUrl?.slice(0, 50)}...). ` +
           `Ambiente local/staging deve usar banco local ou projeto de desenvolvimento (ex.: postgresql://...@localhost:5432/aurix_dev).`
@@ -107,6 +110,12 @@ export function validateEnvAndBlockIfUnsafe(): void {
     ].join('\n');
     console.error(msg);
     process.exit(1);
+  }
+
+  if (isNonProduction && looksLikeProductionDatabaseUrl(dbUrl) && allowRemoteDevDatabase) {
+    console.warn(
+      '[AMBIENTE] ALLOW_REMOTE_DEV_DATABASE ativo: usando DATABASE_URL remoto em ambiente de desenvolvimento.'
+    );
   }
 }
 

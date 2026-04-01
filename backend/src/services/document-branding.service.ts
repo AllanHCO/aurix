@@ -21,14 +21,22 @@ export interface DocumentBranding {
   logo_size: LogoSizePreset;
   /** Destacada = faixa mais alta; compacta = faixa menor */
   logo_band_style: LogoBandStyle;
-  /** Ajuste fino em pontos PDF (~1 pt ≈ 1/72 pol) */
+  /**
+   * Enquadramento horizontal/vertical no modo “cover” (como background-position), em [-1, 1].
+   * 0 = centralizado; ±1 = extremos. Valores antigos em pt (~-18..18) são convertidos ao ler.
+   */
   logo_offset_x: number;
   logo_offset_y: number;
 }
 
-/** Altura máxima do conteúdo da logo dentro da faixa (pontos) */
+/** Altura fixa do banner no PDF (pontos). Destacada ~100pt, compacta ~80pt (faixa ~80–140px em tela). */
+export function getLogoBannerHeightPt(style: LogoBandStyle): number {
+  return style === 'compact' ? 80 : 108;
+}
+
+/** @deprecated use getLogoBannerHeightPt — mantido para qualquer import legado */
 export function getLogoBandContentMaxHeight(style: LogoBandStyle): number {
-  return style === 'compact' ? 34 : 52;
+  return getLogoBannerHeightPt(style);
 }
 
 export function getDefaultDocumentBranding(): DocumentBranding {
@@ -61,13 +69,16 @@ export function mergeDocumentBranding(raw: unknown): DocumentBranding {
     logo_alignment: align === 'left' || align === 'center' || align === 'right' ? align : d.logo_alignment,
     logo_size: size === 'small' || size === 'medium' || size === 'large' ? size : d.logo_size,
     logo_band_style: bandStyle,
-    logo_offset_x: typeof o.logo_offset_x === 'number' && Number.isFinite(o.logo_offset_x) ? clampOffset(o.logo_offset_x) : d.logo_offset_x,
-    logo_offset_y: typeof o.logo_offset_y === 'number' && Number.isFinite(o.logo_offset_y) ? clampOffset(o.logo_offset_y) : d.logo_offset_y
+    logo_offset_x: normalizePan(o.logo_offset_x, d.logo_offset_x),
+    logo_offset_y: normalizePan(o.logo_offset_y, d.logo_offset_y)
   };
 }
 
-function clampOffset(n: number): number {
-  return Math.max(-18, Math.min(18, Math.round(n)));
+/** Converte pan salvo: [-1,1] ou legado em pt (~-18..18) → [-1, 1] */
+export function normalizePan(raw: unknown, fallback: number): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return fallback;
+  if (Math.abs(raw) <= 1.0001) return Math.max(-1, Math.min(1, raw));
+  return Math.max(-1, Math.min(1, raw / 18));
 }
 
 export function absolutePathFromRelative(relativePath: string): string {

@@ -8,7 +8,7 @@ import { prisma } from '../lib/prisma';
 import {
   mergeDocumentBranding,
   absolutePathFromRelative,
-  getLogoBandContentMaxHeight,
+  getLogoBannerHeightPt,
   type DocumentBranding
 } from '../services/document-branding.service';
 
@@ -54,15 +54,19 @@ function ensureSpace(doc: PDFKit.PDFDocument, marginBottom: number, pageBottom: 
   }
 }
 
-/** Logo centralizada na faixa, contain em largura × altura máxima, sem deformar */
-async function drawOsLogoInBand(
+/**
+ * Banner full-width: escala tipo CSS background-size: cover + posição (pan em [-1,1]).
+ * Recorte com clip; sem distorção.
+ */
+async function drawOsLogoBannerCover(
   doc: PDFKit.PDFDocument,
   fullPath: string,
   bandX: number,
   bandY: number,
   bandW: number,
-  maxH: number,
-  branding: DocumentBranding
+  bandH: number,
+  panX: number,
+  panY: number
 ): Promise<void> {
   let meta: { width?: number; height?: number };
   try {
@@ -72,17 +76,22 @@ async function drawOsLogoInBand(
   }
   const iw = meta.width || 1;
   const ih = meta.height || 1;
-  const scale = Math.min(bandW / iw, maxH / ih, 1);
+  const scale = Math.max(bandW / iw, bandH / ih);
   const dw = iw * scale;
   const dh = ih * scale;
-  let imgX = bandX + (bandW - dw) / 2 + branding.logo_offset_x;
-  let imgY = bandY + (maxH - dh) / 2 + branding.logo_offset_y;
-  imgX = Math.max(bandX, Math.min(imgX, bandX + bandW - dw));
-  imgY = Math.max(bandY, Math.min(imgY, bandY + maxH - dh));
+  const cx = bandX + (bandW - dw) / 2 + panX * ((dw - bandW) / 2);
+  const cy = bandY + (bandH - dh) / 2 + panY * ((dh - bandH) / 2);
   try {
-    doc.image(fullPath, imgX, imgY, { width: dw, height: dh });
+    doc.save();
+    doc.rect(bandX, bandY, bandW, bandH).clip();
+    doc.image(fullPath, cx, cy, { width: dw, height: dh });
+    doc.restore();
   } catch {
-    /* fallback: cabeçalho segue sem imagem */
+    try {
+      doc.restore();
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -192,46 +201,45 @@ export async function gerarOsPdf(req: AuthRequest, res: Response): Promise<void>
 
   doc.strokeColor('#000000');
 
-  // ---------- 1) Cabeçalho: linha 1 (título + Nº OS) | linha 2 opcional (faixa full-width da logo) ----------
+  // ---------- 1) Cabeçalho: 1º bloco = banner full-width (logo cover); 2º = título + Nº OS ----------
   const row1H = 24;
   const hasLogo = !!logoFullPath;
-  const bandPadX = 8;
-  const bandPadY = hasLogo ? (documentBranding.logo_band_style === 'compact' ? 5 : 7) : 0;
-  const contentMaxH = hasLogo ? getLogoBandContentMaxHeight(documentBranding.logo_band_style) : 0;
-  const bandH = hasLogo ? bandPadY + contentMaxH + bandPadY : 0;
-  const dividerAfterH = hasLogo ? 1 : 0;
+  const bannerHeight = hasLogo ? getLogoBannerHeightPt(documentBranding.logo_band_style) : 0;
   const headerBottomPad = 6;
-  const headerTotalH = row1H + (hasLogo ? dividerAfterH + bandH : 4) + headerBottomPad;
-
   const headerY0 = marginTop;
-  doc.lineWidth(BORDA_GROSSA);
-  doc.rect(marginLeft, headerY0, pageWidth, headerTotalH).stroke();
+  const row1Y = headerY0 + bannerHeight;
+  const headerTotalH = bannerHeight + row1H + headerBottomPad;
 
-  const row1TextY = headerY0 + 6;
+  doc.strokeColor('#000000');
+
+  if (hasLogo && logoFullPath) {
+    doc.save();
+    doc.fillColor('#f4f4f4').rect(marginLeft, headerY0, pageWidth, bannerHeight).fill();
+    doc.restore();
+    await drawOsLogoBannerCover(
+      doc,
+      logoFullPath,
+      marginLeft,
+      headerY0,
+      pageWidth,
+      bannerHeight,
+      documentBranding.logo_offset_x,
+      documentBranding.logo_offset_y
+    );
+    doc.lineWidth(BORDA_LEVE);
+    doc.strokeColor('#cccccc');
+    doc.moveTo(marginLeft, row1Y).lineTo(marginLeft + pageWidth, row1Y).stroke();
+    doc.strokeColor('#000000');
+  }
+
+  const row1TextY = row1Y + 6;
   doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000');
   doc.text('ORDEM DE SERVIÇO', marginLeft + 6, row1TextY, { width: pageWidth * 0.58, align: 'left' });
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
   doc.text(`Nº OS: ${osCode}`, marginLeft, row1TextY, { width: pageWidth - 10, align: 'right' });
 
-  if (hasLogo && logoFullPath) {
-    const bandY = headerY0 + row1H + 1;
-    doc.lineWidth(BORDA_LEVE);
-    doc.strokeColor('#cccccc');
-    doc.moveTo(marginLeft, bandY).lineTo(marginLeft + pageWidth, bandY).stroke();
-    doc.strokeColor('#000000');
-
-    const bandBoxY = bandY + 1;
-    doc.save();
-    doc.fillColor('#f4f4f4').rect(marginLeft, bandBoxY, pageWidth, bandH).fill();
-    doc.restore();
-
-    const innerX = marginLeft + bandPadX;
-    const innerW = pageWidth - bandPadX * 2;
-    const innerY = bandBoxY + bandPadY;
-    await drawOsLogoInBand(doc, logoFullPath, innerX, innerY, innerW, contentMaxH, documentBranding);
-    doc.lineWidth(BORDA_GROSSA);
-    doc.strokeColor('#000000');
-  }
+  doc.lineWidth(BORDA_GROSSA);
+  doc.rect(marginLeft, headerY0, pageWidth, headerTotalH).stroke();
 
   // ---------- 2) Bloco cliente/veículo: bordas leves nos campos, borda grossa fechando ----------
   let y = marginTop + headerTotalH + 6;

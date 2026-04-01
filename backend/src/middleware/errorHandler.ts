@@ -44,9 +44,19 @@ export const errorHandler = (
   // Dica para erros de conexão com banco (comum no Render + Supabase)
   const isDbError =
     err.name === 'PrismaClientInitializationError' ||
-    /can't reach database|can not reach|connection|ECONNREFUSED|ETIMEDOUT/i.test(msg);
+    /can't reach database|can not reach|ECONNREFUSED|ETIMEDOUT|server has closed the connection/i.test(
+      msg,
+    );
+  const isUnreachable = /can't reach database server/i.test(msg);
+  const isAuth = /authentication failed|password authentication failed|credentials are not valid/i.test(
+    msg,
+  );
   const hint = isDbError
-    ? 'DATABASE_URL no Render: adicione ?sslmode=require no final da URL (ex.: .../postgres?sslmode=require). Teste: GET /health/db'
+    ? isUnreachable
+      ? 'Conexão direta db.*.supabase.co costuma ser só IPv6. No Supabase: Database → Connection string → modo Transaction pooling (host pooler, porta 6543, usuário postgres.<project_ref>). Cole em DATABASE_URL no Render; o backend acrescenta sslmode e pgbouncer. Teste: GET /health/db'
+      : isAuth
+        ? 'Verifique usuário e senha na DATABASE_URL (mesma URI do Supabase que funciona em dev). No Render: Environment → DATABASE_URL (sem aspas a mais).'
+        : 'No Render: copie a mesma DATABASE_URL de dev (Supabase Transaction pooling, porta 6543). O servidor não deve carregar .env.production com override — variáveis vêm do painel. Teste: GET /health/db'
     : undefined;
 
   const isDev = process.env.NODE_ENV !== 'production';
