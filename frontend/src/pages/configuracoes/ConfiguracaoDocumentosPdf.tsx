@@ -331,6 +331,14 @@ export default function ConfiguracaoDocumentosPdf() {
         <span className="material-symbols-outlined text-primary">description</span>
         Documentos — PDF
       </h1>
+      <p className="text-xs text-text-muted mb-2 flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center rounded-full bg-primary/15 text-primary px-2.5 py-0.5 font-medium">
+          Editor de banner v2.1
+        </span>
+        <span>
+          Se esta etiqueta não aparecer, o site ainda está em cache — use Ctrl+Shift+R ou abra em aba anônima.
+        </span>
+      </p>
       <p className="text-text-muted text-sm leading-relaxed">
         A imagem será usada como um <strong className="text-text-main">banner no topo do PDF</strong>. Ela será
         ajustada para <strong className="text-text-main">preencher toda a largura</strong> (modo capa: pode cortar
