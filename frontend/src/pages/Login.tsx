@@ -76,7 +76,11 @@ export default function Login() {
               <input
                 type="email"
                 {...register('email')}
-                className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
+                className={`w-full px-4 py-3 rounded-lg outline-none min-h-[44px] touch-manipulation ${
+                  errors.email
+                    ? 'border-2 border-error focus:ring-2 focus:ring-error/20 focus:border-error'
+                    : 'border border-border focus:ring-2 focus:ring-primary focus:border-primary'
+                }`}
                 placeholder="seu@email.com"
               />
               {errors.email && (
@@ -91,7 +95,11 @@ export default function Login() {
               <input
                 type="password"
                 {...register('senha')}
-                className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none min-h-[44px] touch-manipulation"
+                className={`w-full px-4 py-3 rounded-lg outline-none min-h-[44px] touch-manipulation ${
+                  errors.senha
+                    ? 'border-2 border-error focus:ring-2 focus:ring-error/20 focus:border-error'
+                    : 'border border-border focus:ring-2 focus:ring-primary focus:border-primary'
+                }`}
                 placeholder="••••••"
               />
               {errors.senha && (

@@ -35,6 +35,7 @@ import empresasRoutes from './routes/empresas.routes';
 import financeiroRoutes from './routes/financeiro.routes';
 import fornecedoresRoutes from './routes/fornecedores.routes';
 import devRoutes from './routes/dev.routes';
+import googleCalendarIntegrationRoutes from './routes/googleCalendarIntegration.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -78,9 +79,18 @@ app.get('/api-docs.json', (req, res) => res.json(swaggerDocument));
 // Em produção, servir frontend estático (Fly/Render tudo-em-um)
 const publicPath = path.join(__dirname, 'public');
 if (process.env.NODE_ENV === 'production' && fs.existsSync(publicPath)) {
-  app.use(express.static(publicPath));
+  app.use(
+    express.static(publicPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+      },
+    }),
+  );
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(publicPath, 'index.html'));
   });
 } else {
@@ -159,6 +169,7 @@ app.use('/api/empresas', empresasRoutes);
 app.use('/api/financeiro', financeiroRoutes);
 app.use('/api/fornecedores', fornecedoresRoutes);
 app.use('/api/dev', devRoutes);
+app.use('/api/integrations/google-calendar', googleCalendarIntegrationRoutes);
 app.use('/api/public/agenda', agendaPublicRoutes);
 
 // Error handler

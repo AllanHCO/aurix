@@ -35,10 +35,25 @@ export const errorHandler = (
   }
 
   const msg = err.message || '';
+  const prismaCode = (err as { code?: string }).code;
   console.error('[500]', msg);
   if (process.env.NODE_ENV !== 'production') {
     console.error('Stack:', err.stack);
     if ((err as any).meta) console.error('Prisma meta:', (err as any).meta);
+  }
+
+  // Tabelas da migration ainda não aplicadas (ex.: ficha do cliente)
+  const isMissingDbTable =
+    prismaCode === 'P2021' || /does not exist in the current database/i.test(msg);
+  if (isMissingDbTable) {
+    const isDev = process.env.NODE_ENV !== 'production';
+    return res.status(503).json({
+      error:
+        'Banco de dados desatualizado: faltam tabelas. No diretório backend, com DATABASE_URL válida, execute: npx prisma migrate deploy',
+      statusCode: 503,
+      code: 'MIGRATION_REQUIRED',
+      ...(isDev && msg && { details: msg })
+    });
   }
 
   // Dica para erros de conexão com banco (comum no Render + Supabase)

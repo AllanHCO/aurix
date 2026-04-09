@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,7 +11,8 @@ import { useAuth } from '../contexts/AuthContext';
 import SelecaoProdutosModal, { type ItemVenda } from './SelecaoProdutosModal';
 import type { ClientExtraItem } from './ClienteExtraItemModal';
 import SearchableSelect from './SearchableSelect';
-import ModalPortal from './ModalPortal';
+import ModalPortal, { MODAL_PORTAL_Z } from './ModalPortal';
+import ClienteFichaModal from './ClienteFichaModal';
 import { useBusinessAreas } from '../contexts/BusinessAreaContext';
 
 const CLIENTE_DEBOUNCE_MS = 300;
@@ -117,9 +119,16 @@ function tipoPagamentoToFormaPag(t: PaymentTipo): string {
   }
 }
 
+/** Número finito para cálculos (input number vazio com valueAsNumber → NaN no RHF). */
+function finiteOr(value: unknown, fallback = 0): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 /** Calcula percentual de desconto/acréscimo a partir do valor em R$ e do subtotal (aceita negativo = acréscimo). */
 function descontoPercentualFromValor(descontoValor: number, subtotal: number): number {
-  if (subtotal <= 0) return 0;
+  if (subtotal <= 0 || !Number.isFinite(descontoValor)) return 0;
   return Math.min(100, Math.max(-100, (descontoValor / subtotal) * 100));
 }
 
@@ -141,13 +150,16 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
   const isEdit = Boolean(vendaId && venda);
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID?.() ?? `venda-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const comboboxRef = useRef<HTMLDivElement>(null);
+  const clienteTriggerRef = useRef<HTMLDivElement>(null);
   const [itens, setItens] = useState<ItemVenda[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSelecaoProdutos, setShowSelecaoProdutos] = useState(false);
+  const [fichaClienteOpen, setFichaClienteOpen] = useState(false);
 
-  const { getModuleConfig } = usePersonalizacao();
+  const { getModuleConfig, config: personalizacaoConfig } = usePersonalizacao();
   const clientesConfig = getModuleConfig('clientes');
+  const fichaComplementarEnabled = clientesConfig.ativar_ficha_complementar_cliente ?? false;
   const vendasConfig = getModuleConfig('vendas');
   const permitirOrcamentos = vendasConfig.permitir_orcamentos ?? false;
   const permitirOrdemServico = vendasConfig.permitir_ordem_servico ?? false;
@@ -166,6 +178,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
   const [clienteSearch, setClienteSearch] = useState('');
   const [clienteDebounced, setClienteDebounced] = useState('');
   const [clienteDropdownOpen, setClienteDropdownOpen] = useState(false);
+  const [clientePanelPos, setClientePanelPos] = useState<{ top: number; left: number; width: number; maxH: number } | null>(null);
   const [clienteOptions, setClienteOptions] = useState<Cliente[]>([]);
   const [clienteOptionsLoading, setClienteOptionsLoading] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
@@ -174,13 +187,9 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
   const [agendamentoInfo, setAgendamentoInfo] = useState<AgendamentoInfo | null>(null);
   const [observacaoSugerida, setObservacaoSugerida] = useState<string>('');
   const [businessAreaId, setBusinessAreaId] = useState<string | null>(null);
-  const [anexosVenda, setAnexosVenda] = useState<{ id: string; nome_original: string; mime_type?: string | null; tamanho?: number | null }[]>([]);
-  const [loadingAnexos, setLoadingAnexos] = useState(false);
-  const [uploadingAnexo, setUploadingAnexo] = useState(false);
   const [pagamentos, setPagamentos] = useState<PaymentDraft[]>([]);
   const [loadingPagamentos, setLoadingPagamentos] = useState(false);
   const [pagamentosErro, setPagamentosErro] = useState<string | null>(null);
-  const inputAnexoRef = useRef<HTMLInputElement>(null);
 
   const { areas: businessAreas, selectedAreaId, enabled: businessAreasEnabled } = useBusinessAreas();
   const { user } = useAuth();
@@ -214,25 +223,11 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
     }
   });
 
-  const descontoPercentual = watch('desconto_percentual') ?? 0;
+  const descontoPercentual = finiteOr(watch('desconto_percentual'), 0);
 
   useEffect(() => {
     loadData();
   }, [initialClienteId, initialAgendamentoId]);
-
-  useEffect(() => {
-    if (!vendaId) {
-      setAnexosVenda([]);
-      return;
-    }
-    let cancelled = false;
-    setLoadingAnexos(true);
-    api.get<{ id: string; nome_original: string; mime_type?: string | null; tamanho?: number | null }[]>(`/vendas/${vendaId}/anexos`)
-      .then((res) => { if (!cancelled) setAnexosVenda(res.data ?? []); })
-      .catch(() => { if (!cancelled) setAnexosVenda([]); })
-      .finally(() => { if (!cancelled) setLoadingAnexos(false); });
-    return () => { cancelled = true; };
-  }, [vendaId]);
 
   useEffect(() => {
     if (!vendaId || !venda || venda.tipo !== 'sale') {
@@ -301,7 +296,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
       const subtotalServicos = servicosIniciais.reduce((acc, s) => acc + Number(s.valor_unitario) * Number(s.quantidade), 0);
       const subtotalGeral = subtotalPecas + subtotalServicos;
 
-      const percentual = descontoPercentualFromValor(Number(venda.desconto) || 0, subtotalGeral);
+      const percentual = descontoPercentualFromValor(finiteOr(venda.desconto, 0), subtotalGeral);
       const statusForForm =
         venda.status === 'FECHADA' || venda.status === 'ORCAMENTO' || venda.status === 'CANCELADO'
           ? 'PAGO'
@@ -330,6 +325,21 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
       setOsAgradecimento((venda as VendaParaEdicao).os_agradecimento ?? '');
     }
   }, [loading, venda, reset]);
+
+  /** Nova OS: textos padrão de Configurações → Vendas (só se o usuário ainda não preencheu) */
+  const aplicarTextosPadraoOs = useCallback(() => {
+    if (vendaId || venda) return;
+    const v = getModuleConfig('vendas');
+    const g = (v.os_texto_garantia_padrao ?? '').trim();
+    const a = (v.os_mensagem_agradecimento_padrao ?? '').trim();
+    setTextoGarantia((prev) => (prev.trim() === '' ? g : prev));
+    setOsAgradecimento((prev) => (prev.trim() === '' ? a : prev));
+  }, [vendaId, venda, getModuleConfig]);
+
+  useEffect(() => {
+    if (tipoRegistro !== 'service_order') return;
+    aplicarTextosPadraoOs();
+  }, [tipoRegistro, aplicarTextosPadraoOs, personalizacaoConfig]);
 
   const loadData = async () => {
     setLoading(true);
@@ -415,6 +425,34 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
     fetchClienteOptions(clienteDebounced);
   }, [clienteDropdownOpen, clienteDebounced, fetchClienteOptions]);
 
+  const updateClientePanelPosition = useCallback(() => {
+    const el = clienteTriggerRef.current;
+    if (!el || !clienteDropdownOpen) return;
+    const r = el.getBoundingClientRect();
+    const top = r.bottom + 4;
+    const maxH = Math.min(240, Math.max(80, window.innerHeight - top - 12));
+    setClientePanelPos({ top, left: r.left, width: r.width, maxH });
+  }, [clienteDropdownOpen]);
+
+  useLayoutEffect(() => {
+    if (!clienteDropdownOpen) {
+      setClientePanelPos(null);
+      return;
+    }
+    updateClientePanelPosition();
+  }, [clienteDropdownOpen, updateClientePanelPosition]);
+
+  useEffect(() => {
+    if (!clienteDropdownOpen) return;
+    const onScrollResize = () => updateClientePanelPosition();
+    window.addEventListener('scroll', onScrollResize, true);
+    window.addEventListener('resize', onScrollResize);
+    return () => {
+      window.removeEventListener('scroll', onScrollResize, true);
+      window.removeEventListener('resize', onScrollResize);
+    };
+  }, [clienteDropdownOpen, updateClientePanelPosition]);
+
   useEffect(() => {
     api
       .get<{ id: string; nome: string; preco: number; pricing_type?: string; percentage_value?: number; percentage_base?: string }[]>('/produtos', {
@@ -468,9 +506,10 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (comboboxRef.current && !comboboxRef.current.contains(e.target as Node)) {
-        setClienteDropdownOpen(false);
-      }
+      const t = e.target as Node;
+      if (comboboxRef.current?.contains(t)) return;
+      if ((t as HTMLElement).closest?.('[data-venda-cliente-panel]')) return;
+      setClienteDropdownOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -547,9 +586,9 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
   const subtotalItens = Math.round(itens.reduce((acc, item) => acc + item.preco_unitario * item.quantidade, 0) * 100) / 100;
   const subtotalServicos = servicos.length === 0 ? 0 : Math.round(servicos.reduce((acc, s, idx) => acc + s.quantidade * resolveServicoValorUnitario(s, idx, servicos, subtotalItens), 0) * 100) / 100;
   const subtotalGeral = subtotalItens + subtotalServicos;
-  const descontoPct = Math.max(-100, Math.min(100, Number(descontoPercentual) ?? 0));
-  const valorDesconto = Math.round(subtotalGeral * (descontoPct / 100) * 100) / 100;
-  const totalFinal = Math.round((subtotalGeral - valorDesconto) * 100) / 100;
+  const descontoPct = Math.max(-100, Math.min(100, descontoPercentual));
+  const valorDesconto = Math.round(finiteOr(subtotalGeral, 0) * (descontoPct / 100) * 100) / 100;
+  const totalFinal = Math.round((finiteOr(subtotalGeral, 0) - valorDesconto) * 100) / 100;
 
   const totalPago = Math.round(pagamentos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0) * 100) / 100;
   const restante = Math.round((totalFinal - totalPago) * 100) / 100;
@@ -695,7 +734,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
       try {
         const vendaData: Record<string, unknown> = {
           cliente_id: data.cliente_id,
-          desconto_percentual: Math.min(100, Math.max(-100, Number(data.desconto_percentual) ?? 0)),
+          desconto_percentual: Math.min(100, Math.max(-100, finiteOr(data.desconto_percentual, 0))),
           status: isQuote ? 'ORCAMENTO' : (data.status || 'PENDENTE'),
           itens: payloadItens
         };
@@ -737,7 +776,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
     const vendaData: Record<string, unknown> = {
       tipo: tipoRegistro,
       cliente_id: data.cliente_id,
-      desconto_percentual: Math.min(100, Math.max(-100, Number(data.desconto_percentual) ?? 0)),
+      desconto_percentual: Math.min(100, Math.max(-100, finiteOr(data.desconto_percentual, 0))),
       status: isQuote ? 'ORCAMENTO' : (data.status || 'PENDENTE'),
       itens: payloadItens
     };
@@ -830,57 +869,80 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
               </button>
             </div>
 
-            {/* Tabs */}
-            {(permitirOrcamentos || permitirOrdemServico) && !isEdit && (
-              <nav className="flex gap-0 mt-4 border-b border-border -mb-px overflow-x-auto scrollbar-touch flex-nowrap" role="tablist">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={tipoRegistro === 'sale'}
-                  onClick={() => setTipoRegistro('sale')}
-                  className={`shrink-0 whitespace-nowrap px-4 py-3 min-h-[48px] text-sm font-medium transition-colors border-b-2 flex items-center gap-2 touch-manipulation ${
-                    tipoRegistro === 'sale'
-                      ? 'border-primary text-primary font-bold'
-                      : 'border-transparent text-text-muted hover:text-text-main'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">shopping_cart</span>
-                  Venda Direta
-                </button>
-                {permitirOrcamentos && (
+            {/* Tabs + ficha do cliente (à direita, mesma altura) */}
+            {(fichaComplementarEnabled && selectedCliente) ||
+            ((permitirOrcamentos || permitirOrdemServico) && !isEdit) ? (
+              <div className="mt-4 flex flex-wrap items-end justify-between gap-x-3 gap-y-2 border-b border-border -mb-px">
+                {(permitirOrcamentos || permitirOrdemServico) && !isEdit ? (
+                  <nav
+                    className="flex gap-0 overflow-x-auto scrollbar-touch flex-nowrap flex-1 min-w-0 -mb-px"
+                    role="tablist"
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={tipoRegistro === 'sale'}
+                      onClick={() => setTipoRegistro('sale')}
+                      className={`shrink-0 whitespace-nowrap px-4 py-3 min-h-[48px] text-sm font-medium transition-colors border-b-2 flex items-center gap-2 touch-manipulation ${
+                        tipoRegistro === 'sale'
+                          ? 'border-primary text-primary font-bold'
+                          : 'border-transparent text-text-muted hover:text-text-main'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-lg">shopping_cart</span>
+                      Venda Direta
+                    </button>
+                    {permitirOrcamentos && (
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={tipoRegistro === 'quote'}
+                        onClick={() => setTipoRegistro('quote')}
+                        className={`shrink-0 whitespace-nowrap px-4 py-3 min-h-[48px] text-sm font-medium transition-colors border-b-2 flex items-center gap-2 touch-manipulation ${
+                          tipoRegistro === 'quote'
+                            ? 'border-primary text-primary font-bold'
+                            : 'border-transparent text-text-muted hover:text-text-main'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-lg">description</span>
+                        Orçamento
+                      </button>
+                    )}
+                    {permitirOrdemServico && (
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={tipoRegistro === 'service_order'}
+                        onClick={() => {
+                          setTipoRegistro('service_order');
+                          aplicarTextosPadraoOs();
+                        }}
+                        className={`shrink-0 whitespace-nowrap px-4 py-3 min-h-[48px] text-sm font-medium transition-colors border-b-2 flex items-center gap-2 touch-manipulation ${
+                          tipoRegistro === 'service_order'
+                            ? 'border-primary text-primary font-bold'
+                            : 'border-transparent text-text-muted hover:text-text-main'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-lg">build</span>
+                        Ordem de Serviço
+                      </button>
+                    )}
+                  </nav>
+                ) : (
+                  <div className="flex-1 min-h-[48px] min-w-0" aria-hidden="true" />
+                )}
+                {fichaComplementarEnabled && selectedCliente && (
                   <button
                     type="button"
-                    role="tab"
-                    aria-selected={tipoRegistro === 'quote'}
-                    onClick={() => setTipoRegistro('quote')}
-                    className={`shrink-0 whitespace-nowrap px-4 py-3 min-h-[48px] text-sm font-medium transition-colors border-b-2 flex items-center gap-2 touch-manipulation ${
-                      tipoRegistro === 'quote'
-                        ? 'border-primary text-primary font-bold'
-                        : 'border-transparent text-text-muted hover:text-text-main'
-                    }`}
+                    onClick={() => setFichaClienteOpen(true)}
+                    className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary hover:bg-primary-hover text-text-on-primary text-sm font-semibold px-3 py-2 min-h-[40px] shadow-sm transition-colors touch-manipulation mb-px self-end sm:self-auto"
                   >
-                    <span className="material-symbols-outlined text-lg">description</span>
-                    Orçamento
+                    <span className="material-symbols-outlined text-base">assignment_ind</span>
+                    <span className="whitespace-nowrap">Ficha do cliente</span>
                   </button>
                 )}
-                {permitirOrdemServico && (
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={tipoRegistro === 'service_order'}
-                    onClick={() => setTipoRegistro('service_order')}
-                    className={`shrink-0 whitespace-nowrap px-4 py-3 min-h-[48px] text-sm font-medium transition-colors border-b-2 flex items-center gap-2 touch-manipulation ${
-                      tipoRegistro === 'service_order'
-                        ? 'border-primary text-primary font-bold'
-                        : 'border-transparent text-text-muted hover:text-text-main'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-lg">build</span>
-                    Ordem de Serviço
-                  </button>
-                )}
-              </nav>
-            )}
+              </div>
+            ) : null}
             {permitirOrcamentos && tipoRegistro === 'quote' && (
               <p className="text-sm text-primary mt-3 bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
                 Este registro será salvo como orçamento e poderá ser convertido em venda depois.
@@ -898,81 +960,103 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
               {/* Coluna esquerda - scroll */}
               <div className="lg:col-span-2 overflow-y-auto p-4 sm:p-6 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div ref={comboboxRef} className="relative sm:col-span-2 lg:col-span-1">
+            <div className="relative sm:col-span-2 lg:col-span-1 flex flex-col gap-2">
+            <div ref={comboboxRef} className="relative w-full">
               <label htmlFor="venda-cliente" className="block text-xs font-semibold text-text-muted uppercase tracking-wide mb-1">
                 Cliente *
               </label>
-              <input
-                id="venda-cliente"
-                type="text"
-                value={selectedCliente ? selectedCliente.nome : clienteSearch}
-                onChange={handleClienteInputChange}
-                onFocus={handleClienteInputFocus}
-                onKeyDown={handleClienteKeyDown}
-                placeholder="Pesquisar cliente por nome ou CPF..."
-                autoComplete="off"
-                className={`w-full pl-4 pr-10 py-3 border rounded-lg bg-bg-main text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 min-h-[44px] touch-manipulation transition-shadow ${
-                  errors.cliente_id ? 'border-error focus:ring-error/20' : 'border-border focus:ring-primary/20'
+              <div
+                ref={clienteTriggerRef}
+                className={`rounded-lg border bg-bg-main overflow-hidden transition-shadow ${
+                  errors.cliente_id ? 'border-error' : clienteDropdownOpen ? 'border-primary ring-2 ring-primary/20' : 'border-border'
                 }`}
-                aria-label="Buscar cliente"
-                aria-expanded={clienteDropdownOpen}
-                aria-haspopup="listbox"
-                aria-autocomplete="list"
-              />
-            {selectedCliente && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCliente(null);
-                  setValue('cliente_id', '');
-                  setClienteSearch('');
-                  setClienteDropdownOpen(true);
-                }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-text-muted hover:bg-bg-card hover:text-text-main"
-                aria-label="Limpar cliente"
               >
-                <span className="material-symbols-outlined text-lg">close</span>
-              </button>
-            )}
-            {clienteDropdownOpen && (
-              <ul
-                role="listbox"
-                className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-auto rounded-lg border border-border bg-bg-elevated shadow-lg py-1"
-              >
-                {clienteOptionsLoading ? (
-                  <li className="px-4 py-3 text-sm text-text-muted">Buscando...</li>
-                ) : clienteOptions.length === 0 ? (
-                  <li className="px-4 py-3 text-sm text-text-muted">
-                    {clienteDebounced ? 'Nenhum cliente encontrado' : 'Digite para buscar'}
-                  </li>
-                ) : (
-                  clienteOptions.map((c) => (
-                    <li
-                      key={c.id}
-                      role="option"
-                      tabIndex={-1}
-                      onClick={() => handleSelectCliente(c)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          handleSelectCliente(c);
-                        }
+                <div className="relative flex items-center min-h-[44px]">
+                  <input
+                    id="venda-cliente"
+                    type="text"
+                    value={selectedCliente ? selectedCliente.nome : clienteSearch}
+                    onChange={handleClienteInputChange}
+                    onFocus={handleClienteInputFocus}
+                    onKeyDown={handleClienteKeyDown}
+                    placeholder="Pesquisar cliente por nome ou CPF..."
+                    autoComplete="off"
+                    className="flex-1 min-w-0 pl-4 pr-10 py-3 bg-transparent border-0 text-text-main placeholder:text-text-muted focus:outline-none focus:ring-0 min-h-[44px] touch-manipulation"
+                    aria-label="Buscar cliente"
+                    aria-expanded={clienteDropdownOpen}
+                    aria-haspopup="listbox"
+                    aria-autocomplete="list"
+                  />
+                  {selectedCliente && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCliente(null);
+                        setValue('cliente_id', '');
+                        setClienteSearch('');
+                        setClienteDropdownOpen(true);
                       }}
-                      className="px-4 py-2.5 cursor-pointer hover:bg-bg-card focus:bg-bg-card focus:outline-none border-b border-border last:border-b-0"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-text-muted hover:bg-bg-card hover:text-text-main"
+                      aria-label="Limpar cliente"
                     >
-                      <span className="block font-medium text-text-main">{c.nome}</span>
-                      {c.telefone && (
-                        <span className="block text-xs text-text-muted mt-0.5">{c.telefone}</span>
-                      )}
-                    </li>
-                  ))
+                      <span className="material-symbols-outlined text-lg">close</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+              {clienteDropdownOpen &&
+                clientePanelPos &&
+                typeof document !== 'undefined' &&
+                createPortal(
+                  <ul
+                    data-venda-cliente-panel
+                    role="listbox"
+                    className="fixed rounded-lg border border-border overflow-y-auto overscroll-contain bg-bg-elevated shadow-xl"
+                    style={{
+                      top: clientePanelPos.top,
+                      left: clientePanelPos.left,
+                      width: clientePanelPos.width,
+                      maxHeight: clientePanelPos.maxH,
+                      zIndex: MODAL_PORTAL_Z
+                    }}
+                  >
+                    {clienteOptionsLoading ? (
+                      <li className="px-4 py-3 text-sm text-text-muted">Buscando...</li>
+                    ) : clienteOptions.length === 0 ? (
+                      <li className="px-4 py-3 text-sm text-text-muted">
+                        {clienteDebounced ? 'Nenhum cliente encontrado' : 'Digite para buscar'}
+                      </li>
+                    ) : (
+                      clienteOptions.map((c) => (
+                        <li
+                          key={c.id}
+                          role="option"
+                          tabIndex={-1}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => handleSelectCliente(c)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleSelectCliente(c);
+                            }
+                          }}
+                          className="px-4 py-2.5 cursor-pointer hover:bg-bg-card focus:bg-bg-card focus:outline-none border-b border-border last:border-b-0"
+                        >
+                          <span className="block font-medium text-text-main">{c.nome}</span>
+                          {c.telefone && (
+                            <span className="block text-xs text-text-muted mt-0.5">{c.telefone}</span>
+                          )}
+                        </li>
+                      ))
+                    )}
+                  </ul>,
+                  document.body
                 )}
-              </ul>
-            )}
             <input type="hidden" {...register('cliente_id')} />
               {errors.cliente_id && (
                 <p className="text-error text-sm mt-1">{errors.cliente_id.message}</p>
               )}
+            </div>
             </div>
             {businessAreas.length > 0 && (
               <div className="lg:col-span-1">
@@ -1026,10 +1110,10 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
               <button
                 type="button"
                 onClick={() => setShowSelecaoProdutos(true)}
-                className="bg-primary hover:bg-primary-hover text-text-on-primary text-sm font-semibold px-4 py-3 min-h-[48px] rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm w-full sm:w-auto touch-manipulation"
+                className="bg-primary hover:bg-primary-hover text-text-on-primary text-sm font-semibold px-3 py-2 min-h-[40px] rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm w-full sm:w-auto touch-manipulation"
                 title="F2"
               >
-                <span className="material-symbols-outlined">add</span>
+                <span className="material-symbols-outlined text-base">add</span>
                 Adicionar Produtos
               </button>
             </div>
@@ -1261,17 +1345,17 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                     type="button"
                     onClick={adicionarServicoCadastrado}
                     disabled={!servicoSelecionadoId}
-                    className="flex-1 px-4 py-3 min-h-[48px] rounded-lg bg-primary text-text-on-primary text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2 transition-colors touch-manipulation"
+                    className="flex-1 px-3 py-2 min-h-[40px] rounded-lg bg-primary text-text-on-primary text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-1.5 transition-colors touch-manipulation"
                   >
-                    <span className="material-symbols-outlined text-lg">add</span>
+                    <span className="material-symbols-outlined text-base">add</span>
                     Adicionar serviço cadastrado
                   </button>
                   <button
                     type="button"
                     onClick={() => setServicos((prev) => [...prev, { descricao: '', quantidade: 1, valor_unitario: 0 }])}
-                    className="flex-1 px-4 py-3 min-h-[48px] rounded-lg border-2 border-dashed border-border bg-bg-elevated text-text-main text-sm font-medium flex items-center justify-center gap-2 hover:border-primary/50 hover:bg-bg-card transition-colors touch-manipulation"
+                    className="flex-1 px-3 py-2 min-h-[40px] rounded-lg border-2 border-dashed border-border bg-bg-elevated text-text-main text-sm font-medium flex items-center justify-center gap-1.5 hover:border-primary/50 hover:bg-bg-card transition-colors touch-manipulation"
                   >
-                    <span className="material-symbols-outlined text-lg">edit</span>
+                    <span className="material-symbols-outlined text-base">edit</span>
                     Serviço manual
                   </button>
                 </div>
@@ -1439,7 +1523,7 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                 <textarea
                   value={textoGarantia}
                   onChange={(e) => setTextoGarantia(e.target.value)}
-                  placeholder="Opcional. Em branco, o PDF usará o texto padrão de garantia de 3 meses."
+                  placeholder="Preenchido com o texto de Configurações → Vendas (editável). Em branco no pedido, o PDF pode usar o texto legal padrão de 3 meses."
                   rows={2}
                   className="w-full rounded-lg border border-border bg-bg-main px-3 py-2 text-text-main placeholder:text-text-muted resize-y"
                 />
@@ -1449,114 +1533,13 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                 <textarea
                   value={osAgradecimento}
                   onChange={(e) => setOsAgradecimento(e.target.value)}
-                  placeholder="Ex.: Agradecemos a confiança em nosso trabalho."
+                  placeholder="Preenchido com a mensagem de Configurações → Vendas (editável)."
                   rows={2}
                   className="w-full rounded-lg border border-border bg-bg-main px-3 py-2 text-text-main placeholder:text-text-muted resize-y"
                 />
               </div>
             </>
           )}
-
-          <div>
-            <h3 className="text-sm font-bold text-text-main uppercase tracking-wide mb-2">Anexos do pedido</h3>
-            {!isEdit && (
-              <p className="text-sm text-text-muted">Anexos podem ser adicionados após salvar o pedido (PDF, JPG, PNG ou WEBP).</p>
-            )}
-          {isEdit && vendaId && (
-              loadingAnexos ? (
-                <p className="text-sm text-text-muted">Carregando anexos…</p>
-              ) : (
-                <>
-                  <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <input
-                      ref={inputAnexoRef}
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file || !vendaId) return;
-                        setUploadingAnexo(true);
-                        try {
-                          const formData = new FormData();
-                          formData.append('file', file);
-                          await api.post(`/vendas/${vendaId}/anexos`, formData, {
-                            headers: { 'Content-Type': 'multipart/form-data' }
-                          });
-                          const res = await api.get<{ id: string; nome_original: string }[]>(`/vendas/${vendaId}/anexos`);
-                          setAnexosVenda(res.data ?? []);
-                          toast.success('Anexo adicionado');
-                        } catch (err: any) {
-                          toast.error(err.response?.data?.error || 'Erro ao enviar anexo');
-                        } finally {
-                          setUploadingAnexo(false);
-                          e.target.value = '';
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={uploadingAnexo}
-                      onClick={() => inputAnexoRef.current?.click()}
-                      className="px-3 py-2 rounded-lg border border-border bg-bg-elevated text-text-main text-sm font-medium flex items-center gap-1 hover:bg-bg-card transition-colors disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-lg">attach_file</span>
-                      Adicionar anexo
-                    </button>
-                    <span className="text-xs text-text-muted">PDF, JPG, PNG ou WEBP. Máx. 10 MB.</span>
-                  </div>
-                  {anexosVenda.length > 0 && (
-                    <ul className="border border-border rounded-lg divide-y divide-border">
-                      {anexosVenda.map((a) => (
-                        <li key={a.id} className="flex items-center justify-between gap-2 p-2">
-                          <span className="text-sm text-text-main truncate" title={a.nome_original}>{a.nome_original}</span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                try {
-                                  const res = await api.get(`/vendas/${vendaId}/anexos/${a.id}/download`, { responseType: 'blob' });
-                                  const url = URL.createObjectURL(res.data as Blob);
-                                  const link = document.createElement('a');
-                                  link.href = url;
-                                  link.download = a.nome_original;
-                                  link.click();
-                                  URL.revokeObjectURL(url);
-                                } catch {
-                                  toast.error('Erro ao baixar anexo');
-                                }
-                              }}
-                              className="p-1.5 rounded text-text-muted hover:bg-bg-elevated"
-                              title="Baixar"
-                            >
-                              <span className="material-symbols-outlined text-lg">download</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (!window.confirm('Remover este anexo?')) return;
-                                try {
-                                  await api.delete(`/vendas/${vendaId}/anexos/${a.id}`);
-                                  setAnexosVenda((prev) => prev.filter((x) => x.id !== a.id));
-                                  toast.success('Anexo removido');
-                                } catch (err: any) {
-                                  toast.error(err.response?.data?.error || 'Erro ao remover');
-                                }
-                              }}
-                              className="p-1.5 rounded text-error hover:bg-badge-erro"
-                              title="Remover"
-                            >
-                              <span className="material-symbols-outlined text-lg">delete</span>
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )
-            )}
-          </div>
 
           </div>
 
@@ -1863,14 +1846,6 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
                     </>
                   )}
                 </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  disabled={isSubmitting}
-                  className="w-full px-4 py-3 min-h-[48px] border border-border rounded-lg text-text-main hover:bg-bg-elevated disabled:opacity-50 disabled:pointer-events-none transition-colors touch-manipulation"
-                >
-                  Cancelar operação
-                </button>
               </div>
             </div>
           </div>
@@ -1895,6 +1870,15 @@ export default function VendaModal({ onClose, vendaId, venda, initialClienteId, 
           </span>
         </footer>
       </div>
+
+      {fichaComplementarEnabled && selectedCliente && (
+        <ClienteFichaModal
+          open={fichaClienteOpen}
+          onClose={() => setFichaClienteOpen(false)}
+          clienteId={selectedCliente.id}
+          clienteNome={selectedCliente.nome}
+        />
+      )}
 
       <SelecaoProdutosModal
         open={showSelecaoProdutos}

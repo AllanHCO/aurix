@@ -73,9 +73,20 @@ export default function ConfiguracaoMarketing() {
           msg_whatsapp_lembrete_agenda: msgLembreteAgenda.trim() || null
         }
       });
-      const persRes = await api.get<{ modulos: PersonalizacaoModulos }>('/configuracoes/personalizacao');
-      const next = { ...persRes.data, modulos: { ...persRes.data.modulos, marketing: { ...persRes.data.modulos.marketing, mostrar_clientes_inativos: mostrarClientesInativos, mostrar_receita_em_risco: mostrarReceitaEmRisco, mostrar_recuperacao_clientes: mostrarRecuperacaoClientes } } };
-      await api.put('/configuracoes/personalizacao', next);
+      const persRes = await api.get<{ modo: string; modulos: PersonalizacaoModulos }>('/configuracoes/personalizacao');
+      const { modo, modulos } = persRes.data;
+      await api.put('/configuracoes/personalizacao', {
+        modo,
+        modulos: {
+          ...modulos,
+          marketing: {
+            ...modulos.marketing,
+            mostrar_clientes_inativos: mostrarClientesInativos,
+            mostrar_receita_em_risco: mostrarReceitaEmRisco,
+            mostrar_recuperacao_clientes: mostrarRecuperacaoClientes
+          }
+        }
+      });
       toast.success('Configurações salvas.');
       load();
     } catch (e: any) {

@@ -67,6 +67,8 @@ export default function AgendaPublica() {
     hora_inicio?: string;
     mensagem?: string;
   } | null>(null);
+  /** Erros de validação inline (borda vermelha), sem toast */
+  const [fieldErrors, setFieldErrors] = useState({ dataHora: false, nome: false, telefone: false });
 
   useEffect(() => {
     if (!slug) return;
@@ -165,14 +167,40 @@ export default function AgendaPublica() {
     setHoraEscolhida('');
   };
 
+  useEffect(() => {
+    if (dataEscolhida && horaEscolhida) {
+      setFieldErrors((p) => (p.dataHora ? { ...p, dataHora: false } : p));
+    }
+  }, [dataEscolhida, horaEscolhida]);
+
+  useEffect(() => {
+    if (nome.trim().length >= 2) setFieldErrors((p) => (p.nome ? { ...p, nome: false } : p));
+  }, [nome]);
+
+  useEffect(() => {
+    if (telefone.replace(/\D/g, '').length >= 10) setFieldErrors((p) => (p.telefone ? { ...p, telefone: false } : p));
+  }, [telefone]);
+
+  const cardBase = 'rounded-xl bg-bg-card shadow-sm';
+  const cardBorderOk = 'border border-border';
+  const cardBorderErr = 'border-2 border-error ring-2 ring-error/25';
+  const inputBase = 'w-full px-4 py-2 rounded-lg bg-input-bg text-text-main outline-none transition-colors';
+  const inputOk = 'border border-border focus:ring-2 focus:ring-primary/20 focus:border-primary';
+  const inputErr = 'border-2 border-error focus:ring-2 focus:ring-error/20 focus:border-error';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const nomeTrim = nome.trim();
     const telDigits = telefone.replace(/\D/g, '');
-    if (!slug || !dataEscolhida || !horaEscolhida || nomeTrim.length < 2 || telDigits.length < 10) {
-      toast.error('Preencha nome (mín. 2 caracteres), telefone (mín. 10 dígitos), data e horário.');
+    const errDataHora = !dataEscolhida || !horaEscolhida;
+    const errNome = nomeTrim.length < 2;
+    const errTel = telDigits.length < 10;
+    if (errDataHora || errNome || errTel) {
+      setFieldErrors({ dataHora: errDataHora, nome: errNome, telefone: errTel });
       return;
     }
+    setFieldErrors({ dataHora: false, nome: false, telefone: false });
+    if (!slug) return;
     if (observacao.trim().length > OBSERVACAO_MAX) {
       toast.error(`Observação deve ter no máximo ${OBSERVACAO_MAX} caracteres.`);
       return;
@@ -228,10 +256,6 @@ export default function AgendaPublica() {
   const dataPorExtenso = dataEscolhida
     ? new Date(dataEscolhida + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
     : '';
-  const podeConfirmar = Boolean(
-    dataEscolhida && horaEscolhida && nome.trim().length >= 2 && telefone.replace(/\D/g, '').length >= 10
-  );
-
   const primeiroDiaSemana = new Date(ano, mes - 1, 1).getDay();
   const ultimoDia = new Date(ano, mes, 0).getDate();
   const celulasCalendario = useMemo(() => {
@@ -314,7 +338,7 @@ export default function AgendaPublica() {
         <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Coluna esquerda: Calendário mensal */}
           <div className="lg:col-span-1">
-            <div className="rounded-xl border border-border bg-bg-card shadow-sm overflow-hidden">
+            <div className={`${cardBase} overflow-hidden ${fieldErrors.dataHora ? cardBorderErr : cardBorderOk}`}>
               <h2 className="text-lg font-semibold text-text-main p-4 pb-2">Selecione a Data</h2>
               <div className="flex items-center justify-between px-4 pb-3">
                 <button
@@ -407,11 +431,14 @@ export default function AgendaPublica() {
           {/* Coluna direita: Horários, Resumo, Form, CTA */}
           <div className="lg:col-span-2 space-y-4">
             {/* Horários disponíveis */}
-            <div className="rounded-xl border border-border bg-bg-card shadow-sm p-4">
+            <div className={`${cardBase} p-4 ${fieldErrors.dataHora ? cardBorderErr : cardBorderOk}`}>
               <h2 className="text-lg font-semibold text-text-main mb-2 flex items-center gap-2">
                 <span className="material-symbols-outlined text-xl">schedule</span>
                 Horários disponíveis
               </h2>
+              {fieldErrors.dataHora && (
+                <p className="text-error text-sm mb-2">Selecione a data no calendário e um horário abaixo.</p>
+              )}
               {!dataEscolhida ? (
                 <p className="text-text-muted text-sm">Selecione um dia no calendário.</p>
               ) : loadingHorarios ? (
@@ -476,11 +503,13 @@ export default function AgendaPublica() {
                     type="text"
                     value={nome}
                     onChange={(e) => setNome(e.target.value)}
-                    minLength={2}
-                    required
                     placeholder="Seu nome"
-                    className="w-full px-4 py-2 border border-border rounded-lg bg-input-bg text-text-main"
+                    className={`${inputBase} ${fieldErrors.nome ? inputErr : inputOk}`}
+                    aria-invalid={fieldErrors.nome}
                   />
+                  {fieldErrors.nome && (
+                    <p className="text-error text-sm mt-1">Informe seu nome (mínimo 2 caracteres).</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-main mb-1">Telefone / WhatsApp *</label>
@@ -490,10 +519,13 @@ export default function AgendaPublica() {
                     autoComplete="tel"
                     value={telefone}
                     onChange={(e) => setTelefone(e.target.value.replace(/\D/g, ''))}
-                    required
                     placeholder="11999999999"
-                    className="w-full px-4 py-2 border border-border rounded-lg bg-input-bg text-text-main"
+                    className={`${inputBase} ${fieldErrors.telefone ? inputErr : inputOk}`}
+                    aria-invalid={fieldErrors.telefone}
                   />
+                  {fieldErrors.telefone && (
+                    <p className="text-error text-sm mt-1">Informe o telefone com DDD (mínimo 10 dígitos).</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-main mb-1">Observação (opcional)</label>
@@ -512,7 +544,7 @@ export default function AgendaPublica() {
 
             <button
               type="submit"
-              disabled={submitting || !podeConfirmar}
+              disabled={submitting}
               className="w-full font-bold py-4 rounded-xl disabled:opacity-50 text-text-on-primary flex items-center justify-center gap-2 text-lg"
               style={{ backgroundColor: brandColor }}
             >

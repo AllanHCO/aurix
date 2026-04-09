@@ -94,7 +94,8 @@ export default function PersonalizacaoSistema() {
     if (!data) return;
     try {
       setSaving(true);
-      await api.put('/configuracoes/personalizacao', data);
+      /** Corpo só modo + modulos: o GET inclui meta de onboarding/nicho que o PUT não valida (o servidor preserva meta no banco). */
+      await api.put('/configuracoes/personalizacao', { modo: data.modo, modulos: data.modulos });
       toast.success('Personalização salva com sucesso.');
       setPreviewOpen(false);
       load();

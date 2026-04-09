@@ -16,6 +16,10 @@ interface Agendamento {
   status: string;
   checkin_at?: string | null;
   no_show?: boolean;
+  google_event_id?: string | null;
+  google_sync_status?: string | null;
+  google_sync_error?: string | null;
+  google_last_sync_at?: string | null;
 }
 
 type TabView = 'MENSAL' | 'SEMANAL' | 'DIÁRIO';
@@ -658,6 +662,22 @@ function ModalDetalheCliente({ agendamento, onClose, formatPhone, phoneForWhatsA
         <p className="text-text-main text-sm mb-4 whitespace-pre-wrap">
           {agendamento.observacao?.trim() || 'Sem observação'}
         </p>
+        {(agendamento.google_sync_status === 'error' || agendamento.google_event_id) && (
+          <p
+            className={`text-xs mb-4 ${agendamento.google_sync_status === 'error' ? 'text-amber-700 dark:text-amber-400' : 'text-text-muted'}`}
+          >
+            {agendamento.google_sync_status === 'error' ? (
+              <>Google Agenda: falha na sincronização. {agendamento.google_sync_error?.trim() || 'Tente reconectar em Configurações.'}</>
+            ) : (
+              <>
+                Sincronizado com Google Agenda
+                {agendamento.google_last_sync_at
+                  ? ` · ${new Date(agendamento.google_last_sync_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
+                  : ''}
+              </>
+            )}
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -734,6 +754,7 @@ function ModalNovoAgendamento({ diaInicial, onClose, onSuccess, submitting, setS
   const [nome_cliente, setNomeCliente] = useState('');
   const [telefone_cliente, setTelefoneCliente] = useState('');
   const [observacao, setObservacao] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({ dataHora: false, nome: false, telefone: false });
 
   useEffect(() => {
     if (diaInicial && !data) setData(diaInicial);
@@ -758,24 +779,42 @@ function ModalNovoAgendamento({ diaInicial, onClose, onSuccess, submitting, setS
       .finally(() => setLoadingHorarios(false));
   }, [data]);
 
+  useEffect(() => {
+    if (data && hora_inicio) setFieldErrors((p) => (p.dataHora ? { ...p, dataHora: false } : p));
+  }, [data, hora_inicio]);
+
+  useEffect(() => {
+    if (nome_cliente.trim().length >= 2) setFieldErrors((p) => (p.nome ? { ...p, nome: false } : p));
+  }, [nome_cliente]);
+
+  useEffect(() => {
+    if (telefone_cliente.replace(/\D/g, '').length >= 10) setFieldErrors((p) => (p.telefone ? { ...p, telefone: false } : p));
+  }, [telefone_cliente]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
-    if (!data || !hora_inicio || !nome_cliente.trim() || !telefone_cliente.trim()) {
-      toast.error('Preencha data, horário, nome e telefone.');
+    if (loadingHorarios) {
+      setFieldErrors({ dataHora: true, nome: false, telefone: false });
       return;
     }
-    if (telefone_cliente.replace(/\D/g, '').length < 10) {
-      toast.error('Telefone deve ter pelo menos 10 dígitos.');
+    const nomeTrim = nome_cliente.trim();
+    const telDigits = telefone_cliente.replace(/\D/g, '');
+    const errDataHora = !data || !hora_inicio;
+    const errNome = nomeTrim.length < 2;
+    const errTel = telDigits.length < 10;
+    if (errDataHora || errNome || errTel) {
+      setFieldErrors({ dataHora: errDataHora, nome: errNome, telefone: errTel });
       return;
     }
+    setFieldErrors({ dataHora: false, nome: false, telefone: false });
     setSubmitting(true);
     try {
       await api.post('/agendamentos', {
         data,
         hora_inicio,
-        nome_cliente: nome_cliente.trim(),
-        telefone_cliente: telefone_cliente.replace(/\D/g, '').trim(),
+        nome_cliente: nomeTrim,
+        telefone_cliente: telDigits,
         observacao: observacao.trim() || undefined
       });
       onSuccess();
@@ -786,6 +825,13 @@ function ModalNovoAgendamento({ diaInicial, onClose, onSuccess, submitting, setS
       setSubmitting(false);
     }
   };
+
+  const inputOk =
+    'w-full px-3 py-2 rounded-lg border border-input-border bg-input-bg text-text-main outline-none transition-colors focus:ring-2 focus:ring-primary/20 focus:border-primary';
+  const inputErr =
+    'w-full px-3 py-2 rounded-lg border-2 border-error bg-input-bg text-text-main outline-none transition-colors focus:ring-2 focus:ring-error/20 focus:border-error';
+  const horaSlotErr =
+    fieldErrors.dataHora && data && (!hora_inicio || loadingHorarios);
 
   return (
     <ModalPortal>
@@ -800,59 +846,82 @@ function ModalNovoAgendamento({ diaInicial, onClose, onSuccess, submitting, setS
             <label className="block text-sm font-medium text-text-muted mb-1">Data</label>
             <input
               type="date"
-              required
               value={data}
               onChange={(e) => setData(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-input-border bg-input-bg text-text-main"
+              className={fieldErrors.dataHora && !data ? inputErr : inputOk}
+              aria-invalid={fieldErrors.dataHora && !data}
             />
+            {fieldErrors.dataHora && !data && (
+              <p className="text-error text-sm mt-1">Selecione a data.</p>
+            )}
           </div>
-          <div>
+          <div
+            className={
+              horaSlotErr ? 'rounded-xl border-2 border-error ring-2 ring-error/20 p-3 -m-1' : ''
+            }
+          >
             <label className="block text-sm font-medium text-text-muted mb-1">Horário disponível</label>
             {!data ? (
               <p className="text-sm text-text-muted">Selecione a data primeiro.</p>
             ) : loadingHorarios ? (
-              <p className="text-sm text-text-muted">Carregando horários...</p>
+              <p className="text-sm text-text-muted">
+                {fieldErrors.dataHora ? (
+                  <span className="text-error">Aguarde o carregamento dos horários.</span>
+                ) : (
+                  'Carregando horários...'
+                )}
+              </p>
             ) : horariosDisponiveis.length === 0 ? (
               <p className="text-sm text-text-muted">Nenhum horário disponível neste dia (bloqueios ou fora do período).</p>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {horariosDisponiveis.map((h) => (
-                  <button
-                    key={h.hora_inicio}
-                    type="button"
-                    onClick={() => setHoraInicio(h.hora_inicio)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                      hora_inicio === h.hora_inicio
-                        ? 'bg-primary text-text-on-primary'
-                        : 'bg-bg-elevated text-text-main border border-border hover:border-primary/30'
-                    }`}
-                  >
-                    {h.hora_inicio}
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {horariosDisponiveis.map((h) => (
+                    <button
+                      key={h.hora_inicio}
+                      type="button"
+                      onClick={() => setHoraInicio(h.hora_inicio)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                        hora_inicio === h.hora_inicio
+                          ? 'bg-primary text-text-on-primary'
+                          : 'bg-bg-elevated text-text-main border border-border hover:border-primary/30'
+                      }`}
+                    >
+                      {h.hora_inicio}
+                    </button>
+                  ))}
+                </div>
+                {fieldErrors.dataHora && !hora_inicio && (
+                  <p className="text-error text-sm mt-2">Selecione um horário disponível.</p>
+                )}
+              </>
             )}
           </div>
           <div>
             <label className="block text-sm font-medium text-text-muted mb-1">Nome do cliente</label>
             <input
               type="text"
-              required
-              minLength={2}
               value={nome_cliente}
               onChange={(e) => setNomeCliente(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-input-border bg-input-bg text-text-main"
+              className={fieldErrors.nome ? inputErr : inputOk}
+              aria-invalid={fieldErrors.nome}
             />
+            {fieldErrors.nome && (
+              <p className="text-error text-sm mt-1">Informe o nome (mínimo 2 caracteres).</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-text-muted mb-1">Telefone</label>
             <input
               type="tel"
-              required
               value={telefone_cliente}
               onChange={(e) => setTelefoneCliente(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-input-border bg-input-bg text-text-main"
+              className={fieldErrors.telefone ? inputErr : inputOk}
+              aria-invalid={fieldErrors.telefone}
             />
+            {fieldErrors.telefone && (
+              <p className="text-error text-sm mt-1">Informe o telefone com DDD (mínimo 10 dígitos).</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-text-muted mb-1">Observação (opcional)</label>
@@ -869,7 +938,7 @@ function ModalNovoAgendamento({ diaInicial, onClose, onSuccess, submitting, setS
             </button>
             <button
               type="submit"
-              disabled={submitting || !hora_inicio || loadingHorarios}
+              disabled={submitting}
               className="px-4 py-2 rounded-lg bg-primary text-text-on-primary font-medium hover:bg-primary-hover disabled:opacity-50"
             >
               {submitting ? 'Salvando...' : 'Criar'}

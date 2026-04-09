@@ -222,7 +222,7 @@ export default function Vendas() {
   const handleEditarVenda = async (venda: VendaDetalhe) => {
     setDetalheVenda(null);
     try {
-      // Buscar detalhes completos (itens/servicos/anexos/etc.) para o modal de edição
+      // Buscar detalhes completos (itens/serviços etc.) para o modal de edição
       const response = await api.get<Venda>(`/vendas/${venda.id}`);
       setVendaEditando(response.data);
       setModalOpen(true);
@@ -340,23 +340,22 @@ export default function Vendas() {
         </button>
       </div>
 
-      <div className="bg-bg-card rounded-xl border border-border shadow-sm p-4 sm:p-5">
-        <div className="flex flex-col lg:flex-row lg:items-end gap-4 flex-wrap">
-          <div className="min-w-0 w-full max-w-md flex-1 lg:min-w-[220px] order-1">
-            <label htmlFor="vendas-pesquisa" className="block text-sm font-medium text-text-main mb-1">
-              Pesquisar
-            </label>
-            <div className="relative">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none text-lg">search</span>
-              <input
-                id="vendas-pesquisa"
-                type="text"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Código, cliente ou telefone..."
-                className="w-full rounded-lg border border-border bg-bg-elevated pl-10 pr-10 py-3 min-h-[48px] text-base sm:text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20"
-                aria-label="Pesquisar vendas"
-              />
+      <div className="bg-bg-card rounded-xl border border-border shadow-sm p-4 sm:p-5 space-y-4">
+        <div className="w-full min-w-0">
+          <label htmlFor="vendas-pesquisa" className="block text-sm font-medium text-text-main mb-1">
+            Pesquisar
+          </label>
+          <div className="relative w-full">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none text-lg">search</span>
+            <input
+              id="vendas-pesquisa"
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Código, cliente ou telefone..."
+              className="w-full rounded-lg border border-border bg-bg-elevated pl-10 pr-10 py-3 min-h-[48px] text-base sm:text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20"
+              aria-label="Pesquisar vendas"
+            />
             {searchInput.length > 0 && (
               <button
                 type="button"
@@ -367,9 +366,11 @@ export default function Vendas() {
                 <span className="material-symbols-outlined text-lg">close</span>
               </button>
             )}
-            </div>
           </div>
-          <div className="order-2 flex flex-col gap-3 min-w-0 w-full lg:w-auto">
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-end gap-4 flex-wrap">
+          <div className="flex flex-col gap-3 min-w-0 w-full lg:w-auto">
             <div>
               <span className="block text-xs font-medium text-text-muted mb-1.5">Tipo</span>
               <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-touch">
@@ -421,7 +422,7 @@ export default function Vendas() {
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 min-w-0 flex-1 order-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 min-w-0 flex-1">
             <div>
               <label className="block text-sm font-medium text-text-main mb-1">Data inicial</label>
               <input

@@ -21,6 +21,7 @@ export interface PersonalizacaoPayload {
       ativar_dados_adicionais: boolean;
       mostrar_dados_adicionais_orcamento: boolean;
       mostrar_dados_adicionais_venda: boolean;
+      ativar_ficha_complementar_cliente: boolean;
     };
     produtos: ModuloBase & { controlar_estoque: boolean };
     vendas: ModuloBase & {
@@ -29,6 +30,9 @@ export interface PersonalizacaoPayload {
       permitir_conversao_orcamento_venda: boolean;
       permitir_ordem_servico: boolean;
       mostrar_dados_adicionais_pdf_os: boolean;
+      /** Pré-preenchimento ao criar nova OS */
+      os_texto_garantia_padrao?: string | null;
+      os_mensagem_agradecimento_padrao?: string | null;
     };
     agendamentos: ModuloBase & {
       ativar_link_publico: boolean;
@@ -119,9 +123,19 @@ export function PersonalizacaoProvider({ children }: { children: ReactNode }) {
     <K extends ModuleKey>(key: K): PersonalizacaoPayload['modulos'][K] => {
       const mod = config?.modulos?.[key];
       const defaults = {
-        clientes: { active: true, name: DEFAULT_LABELS.clientes, ativar_dados_adicionais: false, mostrar_dados_adicionais_orcamento: false, mostrar_dados_adicionais_venda: false },
+        clientes: { active: true, name: DEFAULT_LABELS.clientes, ativar_dados_adicionais: false, mostrar_dados_adicionais_orcamento: false, mostrar_dados_adicionais_venda: false, ativar_ficha_complementar_cliente: false },
         produtos: { active: true, name: DEFAULT_LABELS.produtos, controlar_estoque: true },
-        vendas: { active: true, name: DEFAULT_LABELS.vendas, permitir_orcamentos: false, mostrar_botao_orcamento: false, permitir_conversao_orcamento_venda: false, permitir_ordem_servico: false, mostrar_dados_adicionais_pdf_os: true },
+        vendas: {
+          active: true,
+          name: DEFAULT_LABELS.vendas,
+          permitir_orcamentos: false,
+          mostrar_botao_orcamento: false,
+          permitir_conversao_orcamento_venda: false,
+          permitir_ordem_servico: false,
+          mostrar_dados_adicionais_pdf_os: true,
+          os_texto_garantia_padrao: null,
+          os_mensagem_agradecimento_padrao: null
+        },
         agendamentos: { active: true, name: DEFAULT_LABELS.agendamentos, ativar_link_publico: true, permitir_confirmacao_automatica: false, enviar_lembrete_agendamento: true },
         relatorios: { active: true, name: DEFAULT_LABELS.relatorios, permitir_exportacao_csv: true, mostrar_comparacao_periodos: true },
         marketing: { active: true, name: DEFAULT_LABELS.marketing, mostrar_clientes_inativos: true, mostrar_receita_em_risco: true, mostrar_recuperacao_clientes: true },

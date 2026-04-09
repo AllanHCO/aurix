@@ -17,4 +17,7 @@ git commit -m ""
 git push origin main
 
 Write-Host ""
-Write-Host "Pronto. Se o remote estiver certo, o Fly.io (backend) e a Vercel (frontend) vao fazer o deploy automatico." -ForegroundColor Green
+Write-Host "Push concluido. O Fly.io NAO faz deploy sozinho ao dar push (a menos que voce tenha GitHub Actions)." -ForegroundColor Yellow
+Write-Host "Para publicar backend + frontend (SPA embutido na imagem), na RAIZ do repo rode:" -ForegroundColor Green
+Write-Host "  fly deploy" -ForegroundColor Cyan
+Write-Host "Nao use 'fly deploy' dentro de backend/ — essa imagem e so API e fica sem o React atualizado." -ForegroundColor Yellow

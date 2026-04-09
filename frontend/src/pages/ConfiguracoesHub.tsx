@@ -31,7 +31,7 @@ const MODULOS: Array<{
   },
   { id: 'areas-negocio', path: '/configuracoes/areas-negocio', icon: 'account_tree', titulo: 'Áreas de negócio', descricao: 'Mecânica, Funilaria, etc. Veja resultado por área ou consolidado.', status: 'ativo', keywords: ['área', 'mecânica', 'funilaria', 'consolidado', 'frente', 'negócio'] },
   { id: 'clientes', path: '/configuracoes/clientes', icon: 'group', titulo: 'Clientes', descricao: 'Configura regras de retenção, dias para atenção e inativo.', status: 'ativo', keywords: ['retenção', 'atenção', 'inativo', 'dados adicionais', 'orçamento', 'venda'] },
-  { id: 'vendas', path: '/configuracoes/vendas', icon: 'payments', titulo: 'Vendas', descricao: 'Orçamentos, nome do módulo e regras do fluxo comercial.', status: 'ativo', keywords: ['orçamento', 'atendimentos', 'ordens de serviço', 'fluxo comercial'] },
+  { id: 'vendas', path: '/configuracoes/vendas', icon: 'payments', titulo: 'Vendas', descricao: 'Orçamentos, nome do módulo, OS e textos padrão (garantia/agradecimento no PDF).', status: 'ativo', keywords: ['orçamento', 'atendimentos', 'ordens de serviço', 'fluxo comercial', 'garantia', 'agradecimento', 'pdf', 'os'] },
   { id: 'agendamentos', path: '/configuracoes/agendamento', icon: 'calendar_month', titulo: 'Agendamentos', descricao: 'Agenda pública, horários, bloqueios e confirmação.', status: 'ativo', keywords: ['agendamento', 'agenda', 'link público', 'horário', 'slot', 'buffer', 'bloqueio', 'lembrete', 'confirmação', 'template confirmação', 'lembrete de agendamento'] },
   { id: 'marketing', path: '/configuracoes/marketing', icon: 'campaign', titulo: 'Marketing', descricao: 'Templates WhatsApp e regras de reativação.', status: 'ativo', keywords: ['whatsapp', 'template', 'atenção', 'inativo', 'pós-venda', 'confirmação agendamento', 'lembrete agendamento'] },
   { id: 'relatorios', path: '/configuracoes/relatorios', icon: 'bar_chart', titulo: 'Relatórios', descricao: 'Exportação CSV e comparação entre períodos.', status: 'ativo', keywords: ['csv', 'exportação', 'comparação', 'períodos', 'análises', 'estatísticas'] },
@@ -40,7 +40,15 @@ const MODULOS: Array<{
   { id: 'plano', path: '/configuracoes/plano', icon: 'payments', titulo: 'Plano / Cobrança', descricao: 'Plano atual, trial e status da assinatura.', status: 'ativo', keywords: ['plano', 'cobrança', 'trial', 'assinatura', 'bloqueio'] },
   { id: 'personalizacao', path: '/configuracoes/personalizacao', icon: 'tune', titulo: 'Personalização', descricao: 'Presets por nicho e nomes dos módulos.', status: 'ativo', keywords: ['preset', 'nicho', 'barbearia', 'mecânica', 'estética', 'renomear', 'ativar', 'desativar'] },
   { id: 'sistema', path: '/configuracoes/sistema', icon: 'settings', titulo: 'Sistema', descricao: 'Modo demo e utilidades gerais.', status: 'ativo', keywords: ['demo', 'resetar', 'regenerar'] },
-  { id: 'integracoes', path: '#', icon: 'link', titulo: 'Integrações', descricao: 'Em breve.', status: 'futuro', keywords: [] },
+  {
+    id: 'integracoes',
+    path: '/configuracoes/integracoes/google-calendar',
+    icon: 'link',
+    titulo: 'Integrações',
+    descricao: 'Conexões externas: Google Calendar e sincronização de agendamentos.',
+    status: 'ativo',
+    keywords: ['google', 'agenda', 'calendar', 'integração', 'integrações', 'sincronizar', 'ical', 'oauth']
+  },
 ];
 
 export default function ConfiguracoesHub() {

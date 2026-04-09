@@ -37,9 +37,20 @@ export default function ConfiguracaoRelatorios() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      const res = await api.get<{ modulos: PersonalizacaoModulos }>('/configuracoes/personalizacao');
-      const next = { ...res.data, modulos: { ...res.data.modulos, relatorios: { ...res.data.modulos.relatorios, name, permitir_exportacao_csv: permitirExportacaoCsv, mostrar_comparacao_periodos: mostrarComparacaoPeriodos } } };
-      await api.put('/configuracoes/personalizacao', next);
+      const res = await api.get<{ modo: string; modulos: PersonalizacaoModulos }>('/configuracoes/personalizacao');
+      const { modo, modulos } = res.data;
+      await api.put('/configuracoes/personalizacao', {
+        modo,
+        modulos: {
+          ...modulos,
+          relatorios: {
+            ...modulos.relatorios,
+            name,
+            permitir_exportacao_csv: permitirExportacaoCsv,
+            mostrar_comparacao_periodos: mostrarComparacaoPeriodos
+          }
+        }
+      });
       toast.success('Configurações salvas.');
       load();
     } catch (e: any) {

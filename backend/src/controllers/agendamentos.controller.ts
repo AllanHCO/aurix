@@ -5,7 +5,8 @@ import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getTotalSlotsNoDia, getHorariosDisponiveis } from '../services/availability.service';
-import { createAgendamentoManual } from '../services/booking.service';
+import { createAgendamentoManual, updateAgendamentoForUsuario } from '../services/booking.service';
+import { syncAgendamentoToGoogle } from '../services/googleCalendar/agendamentoGoogleSync.service';
 import { invalidatePrefix } from '../services/cache.service';
 
 function toDateString(d: Date): string {
@@ -163,6 +164,32 @@ export const createManual = async (req: AuthRequest, res: Response) => {
   invalidatePrefix(`dashboard:summary:${userId}:`);
 };
 
+const updateAgendamentoSchema = z
+  .object({
+    nome_cliente: z.string().min(2).max(200).optional(),
+    telefone_cliente: z.string().min(10).optional(),
+    observacao: z.string().max(500).optional().nullable(),
+    data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    hora_inicio: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional()
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: 'Informe ao menos um campo para atualizar.' });
+
+/** PATCH /agendamentos/:id — edita dados / remarca (sincroniza com Google se conectado) */
+export const updateAgendamento = async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const { id } = req.params;
+  const body = updateAgendamentoSchema.parse(req.body);
+  const ag = await updateAgendamentoForUsuario(userId, id, {
+    nome_cliente: body.nome_cliente?.trim(),
+    telefone_cliente: body.telefone_cliente?.replace(/\D/g, '').trim(),
+    observacao: body.observacao,
+    data: body.data,
+    hora_inicio: body.hora_inicio
+  });
+  invalidatePrefix(`dashboard:summary:${userId}:`);
+  res.json(ag);
+};
+
 const updateStatusSchema = z.object({
   status: z.enum(['PENDENTE', 'CONFIRMADO', 'CANCELADO'])
 });
@@ -184,6 +211,9 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
   const { invalidateAgendaMesCache } = await import('../services/availability.service');
   invalidateAgendaMesCache(a.usuario_id);
   invalidatePrefix(`dashboard:summary:${userId}:`);
+  void syncAgendamentoToGoogle(userId, id).catch((err) =>
+    console.error('[GoogleCalendar] sync após status:', err)
+  );
   res.json(updated);
 };
 

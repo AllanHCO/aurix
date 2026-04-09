@@ -1,5 +1,6 @@
 # Fly.io - Aurix (backend + frontend) em São Paulo
-# Na raiz do projeto: fly deploy
+# Sempre na RAIZ do repositório: fly deploy
+# (Inclui build do Vite em backend/dist/public; não deployar só de backend/.)
 
 app = "aurix-prod"
 

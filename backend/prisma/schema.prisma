@@ -40,8 +40,30 @@ model Usuario {
   categorias                Categoria[]
   clientes                  Cliente[]
   produtos                  Produto[]
+  google_calendar_integration GoogleCalendarIntegration?
+  cliente_ficha_complementar ClienteFichaComplementar[] @relation("FichaComplementarOwner")
+  cliente_ficha_updates      ClienteFichaComplementar[] @relation("FichaAtualizadoPor")
+  cliente_ficha_imagens      ClienteFichaImagem[]
 
   @@map("usuarios")
+}
+
+/// OAuth Google Calendar (Aurix → Google Agenda, um por usuário)
+model GoogleCalendarIntegration {
+  id             String    @id @default(uuid())
+  usuario_id     String    @unique
+  google_email   String?   @db.VarChar(320)
+  calendar_id    String    @default("primary") @db.VarChar(256)
+  access_token   String    @db.Text
+  refresh_token  String?   @db.Text
+  token_expiry   DateTime?
+  sync_enabled   Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@map("google_calendar_integrations")
 }
 
 // Áreas de negócio (ex.: Mecânica, Funilaria) — mesma empresa, visão separada e consolidada
@@ -207,10 +229,47 @@ model Cliente {
   business_area BusinessArea? @relation(fields: [business_area_id], references: [id], onDelete: SetNull)
   vendas        Venda[]
   extraItems    ClientExtraItem[]
+  ficha_complementar ClienteFichaComplementar?
+  ficha_imagens      ClienteFichaImagem[]
 
   @@index([usuario_id])
   @@index([business_area_id])
   @@map("clientes")
+}
+
+/// Ficha complementar / anamnese (opcional por personalização), separada do cadastro base do cliente
+model ClienteFichaComplementar {
+  cliente_id                String   @id
+  usuario_id                String
+  observacoes_gerais        String?  @db.Text
+  preferencias              String?  @db.Text
+  informacoes_adicionais    Json?
+  atualizado_por_usuario_id String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  cliente           Cliente @relation(fields: [cliente_id], references: [id], onDelete: Cascade)
+  usuario           Usuario @relation("FichaComplementarOwner", fields: [usuario_id], references: [id], onDelete: Cascade)
+  atualizado_por    Usuario? @relation("FichaAtualizadoPor", fields: [atualizado_por_usuario_id], references: [id], onDelete: SetNull)
+
+  @@index([usuario_id])
+  @@map("cliente_ficha_complementar")
+}
+
+model ClienteFichaImagem {
+  id           String   @id @default(uuid())
+  cliente_id   String
+  usuario_id   String
+  arquivo_path String   @db.VarChar(512)
+  ordem        Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  cliente Cliente  @relation(fields: [cliente_id], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@index([cliente_id])
+  @@index([usuario_id])
+  @@map("cliente_ficha_imagens")
 }
 
 enum ClientExtraItemType {
@@ -426,6 +485,13 @@ model Agendamento {
   checkin_at       DateTime?        // quando fez check-in (compareceu)
   no_show          Boolean          @default(false) // não compareceu
   createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  /// ID do evento no Google Calendar (Calendar API)
+  google_event_id     String?   @db.VarChar(256)
+  google_calendar_id  String?   @db.VarChar(256)
+  google_sync_status  String?   @db.VarChar(24) // synced | error | pending | skipped
+  google_last_sync_at DateTime?
+  google_sync_error   String?   @db.VarChar(500)
 
   usuario      Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
   business_area BusinessArea? @relation(fields: [business_area_id], references: [id], onDelete: SetNull)

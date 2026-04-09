@@ -18,6 +18,14 @@ import {
   atualizarExtraItem,
   excluirExtraItem
 } from '../controllers/clientesExtraItems.controller';
+import {
+  getClienteFicha,
+  putClienteFicha,
+  postClienteFichaImagem,
+  deleteClienteFichaImagem,
+  getClienteFichaImagemFile
+} from '../controllers/clientesFicha.controller';
+import { multerClienteFichaImagem } from '../middleware/uploadClienteFichaImagem';
 
 const router = Router();
 router.use(authenticate);
@@ -30,6 +38,11 @@ router.get('/:id/extra-items', listarExtraItems);
 router.post('/:id/extra-items', criarExtraItem);
 router.put('/:id/extra-items/:itemId', atualizarExtraItem);
 router.delete('/:id/extra-items/:itemId', excluirExtraItem);
+router.get('/:id/ficha/imagens/:imageId/file', getClienteFichaImagemFile);
+router.post('/:id/ficha/imagens', multerClienteFichaImagem, postClienteFichaImagem);
+router.delete('/:id/ficha/imagens/:imageId', deleteClienteFichaImagem);
+router.get('/:id/ficha', getClienteFicha);
+router.put('/:id/ficha', putClienteFicha);
 router.get('/:id/historico', obterHistoricoCompras);
 router.get('/:id', obterCliente);
 router.post('/', criarCliente);

@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { getHorariosDisponiveis, getMinMaxDataStr, invalidateAgendaMesCache } from './availability.service';
+import { syncAgendamentoToGoogle } from './googleCalendar/agendamentoGoogleSync.service';
 
 const TIME_REGEX = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
 
@@ -17,7 +18,10 @@ function formatTime(minutes: number): string {
 }
 
 function toDateString(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function addDays(date: Date, days: number): Date {
@@ -111,6 +115,9 @@ export async function createAgendamentoPublic(
     return agendamento;
   });
   invalidateAgendaMesCache(usuarioId);
+  void syncAgendamentoToGoogle(usuarioId, result.id).catch((err) =>
+    console.error('[GoogleCalendar] sync após criar agendamento:', err)
+  );
   return result;
 }
 
@@ -126,4 +133,85 @@ export async function createAgendamentoManual(
   }
 ) {
   return createAgendamentoPublic(usuarioId, body, null);
+}
+
+/** Atualiza agendamento (edição no painel). Valida horário disponível se data/hora mudarem. */
+export async function updateAgendamentoForUsuario(
+  usuarioId: string,
+  agendamentoId: string,
+  body: {
+    nome_cliente?: string;
+    telefone_cliente?: string;
+    observacao?: string | null;
+    data?: string;
+    hora_inicio?: string;
+  }
+) {
+  const existing = await prisma.agendamento.findFirst({
+    where: { id: agendamentoId, usuario_id: usuarioId }
+  });
+  if (!existing) throw new AppError('Agendamento não encontrado', 404);
+  if (existing.status === 'CANCELADO') throw new AppError('Agendamento cancelado não pode ser editado.', 400);
+
+  const dataStr: string = body.data ?? toDateString(existing.data);
+  const horaInicio = body.hora_inicio ?? existing.hora_inicio;
+
+  if (body.data || body.hora_inicio) {
+    const slots = await getHorariosDisponiveis(usuarioId, dataStr);
+    const slotValido = slots.find((s) => s.hora_inicio === horaInicio);
+    if (!slotValido) throw new AppError('Horário não disponível.', 400);
+
+    const dataD = new Date(dataStr + 'T12:00:00');
+    const conflict = await prisma.agendamento.findFirst({
+      where: {
+        usuario_id: usuarioId,
+        data: dataD,
+        hora_inicio: horaInicio,
+        status: { in: ['PENDENTE', 'CONFIRMADO'] },
+        id: { not: agendamentoId }
+      }
+    });
+    if (conflict) throw new AppError('Este horário já está ocupado.', 409);
+  }
+
+  const config = await prisma.configuracaoAgenda.findUnique({
+    where: { usuario_id: usuarioId }
+  });
+  if (!config) throw new AppError('Agenda não configurada.', 400);
+
+  const slotInicioMin = parseTime(horaInicio);
+  const horaFim = formatTime(slotInicioMin + config.duracao_padrao_minutos);
+
+  const nome =
+    body.nome_cliente !== undefined ? String(body.nome_cliente).trim().slice(0, 200) : existing.nome_cliente;
+  const tel =
+    body.telefone_cliente !== undefined
+      ? normalizePhone(String(body.telefone_cliente))
+      : existing.telefone_cliente;
+  if (!nome || nome.length < 2) throw new AppError('Nome é obrigatório (mín. 2 caracteres).', 400);
+  if (!tel || tel.length < 10) throw new AppError('Telefone é obrigatório (mín. 10 dígitos).', 400);
+
+  let observacao: string | null | undefined = undefined;
+  if (body.observacao !== undefined) {
+    const o = body.observacao != null ? String(body.observacao).trim() : '';
+    observacao = o ? o.replace(/<[^>]*>/g, '').slice(0, 500).trim() || null : null;
+    if (String(body.observacao ?? '').length > 500) throw new AppError('Observação deve ter no máximo 500 caracteres.', 400);
+  }
+
+  const updated = await prisma.agendamento.update({
+    where: { id: agendamentoId },
+    data: {
+      nome_cliente: nome,
+      telefone_cliente: tel,
+      observacao: observacao !== undefined ? observacao : existing.observacao,
+      data: body.data ? new Date(dataStr + 'T12:00:00') : existing.data,
+      hora_inicio: horaInicio,
+      hora_fim: horaFim
+    }
+  });
+  invalidateAgendaMesCache(usuarioId);
+  void syncAgendamentoToGoogle(usuarioId, updated.id).catch((err) =>
+    console.error('[GoogleCalendar] sync após editar agendamento:', err)
+  );
+  return updated;
 }

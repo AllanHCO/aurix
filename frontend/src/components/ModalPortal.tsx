@@ -4,8 +4,9 @@ import { createPortal } from 'react-dom';
 /**
  * z-index máximo para garantir que modais/drawers fiquem sempre por cima
  * de sidebar (z-50), headers, tabelas com coluna fixa, etc.
+ * Reutilizado por dropdowns portaled (ex.: SearchableSelect) para ficarem no mesmo plano.
  */
-const MODAL_PORTAL_Z = 2147483647;
+export const MODAL_PORTAL_Z = 2147483647;
 
 /**
  * Renderiza o conteúdo (modal/drawer) diretamente em document.body,

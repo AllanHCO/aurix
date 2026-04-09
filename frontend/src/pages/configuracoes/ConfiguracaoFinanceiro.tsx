@@ -39,9 +39,21 @@ export default function ConfiguracaoFinanceiro() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      const res = await api.get<{ modulos: PersonalizacaoModulos }>('/configuracoes/personalizacao');
-      const next = { ...res.data, modulos: { ...res.data.modulos, financeiro: { ...res.data.modulos.financeiro, name, ativar_controle_despesas: ativarControleDespesas, mostrar_lucro_dashboard: mostrarLucroDashboard, mostrar_grafico_financeiro: mostrarGraficoFinanceiro } } };
-      await api.put('/configuracoes/personalizacao', next);
+      const res = await api.get<{ modo: string; modulos: PersonalizacaoModulos }>('/configuracoes/personalizacao');
+      const { modo, modulos } = res.data;
+      await api.put('/configuracoes/personalizacao', {
+        modo,
+        modulos: {
+          ...modulos,
+          financeiro: {
+            ...modulos.financeiro,
+            name,
+            ativar_controle_despesas: ativarControleDespesas,
+            mostrar_lucro_dashboard: mostrarLucroDashboard,
+            mostrar_grafico_financeiro: mostrarGraficoFinanceiro
+          }
+        }
+      });
       toast.success('Configurações salvas.');
       load();
     } catch (e: any) {

@@ -19,5 +19,6 @@ router.post('/', ctrl.createManual);
 router.patch('/:id/status', ctrl.updateStatus);
 router.patch('/:id/checkin', ctrl.checkin);
 router.patch('/:id/no-show', ctrl.noShow);
+router.patch('/:id', ctrl.updateAgendamento);
 
 export default router;

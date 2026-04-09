@@ -34,7 +34,8 @@ const moduloClientesSchema = z.object({
   name: z.string().min(1).max(80),
   ativar_dados_adicionais: z.boolean(),
   mostrar_dados_adicionais_orcamento: z.boolean(),
-  mostrar_dados_adicionais_venda: z.boolean()
+  mostrar_dados_adicionais_venda: z.boolean(),
+  ativar_ficha_complementar_cliente: z.boolean()
 });
 
 const moduloProdutosSchema = z.object({
@@ -50,7 +51,9 @@ const moduloVendasSchema = z.object({
   mostrar_botao_orcamento: z.boolean(),
   permitir_conversao_orcamento_venda: z.boolean(),
   permitir_ordem_servico: z.boolean().optional(),
-  mostrar_dados_adicionais_pdf_os: z.boolean().optional()
+  mostrar_dados_adicionais_pdf_os: z.boolean().optional(),
+  os_texto_garantia_padrao: z.union([z.string().max(2000), z.null()]).optional(),
+  os_mensagem_agradecimento_padrao: z.union([z.string().max(2000), z.null()]).optional()
 });
 
 const moduloAgendamentosSchema = z.object({
@@ -90,6 +93,7 @@ const moduloSistemaSchema = z.object({
   usar_areas_negocio: z.boolean().optional()
 });
 
+/** Sem .strict(): o GET devolve também meta (onboarding_nicho_concluido, nicho_negocio_*, etc.) e o front reenvia o JSON inteiro no PUT — chaves desconhecidas são ignoradas (strip) e o meta continua vindo do banco em preservedMeta. */
 const putSchema = z.object({
   modo: z.enum(modos as [string, ...string[]]),
   modulos: z.object({
@@ -102,7 +106,7 @@ const putSchema = z.object({
     financeiro: moduloFinanceiroSchema,
     sistema: moduloSistemaSchema
   })
-}).strict();
+});
 
 async function getOrCreateSettings(userId: string) {
   let s = await prisma.companySettings.findUnique({ where: { usuario_id: userId } });
@@ -112,6 +116,37 @@ async function getOrCreateSettings(userId: string) {
     });
   }
   return s;
+}
+
+const MODULO_KEYS = [
+  'clientes',
+  'produtos',
+  'vendas',
+  'agendamentos',
+  'relatorios',
+  'marketing',
+  'financeiro',
+  'sistema'
+] as const;
+
+/**
+ * Cada tela de configuração envia só o que edita; sem merge, um PUT sem os novos campos
+ * (ex.: textos padrão OS em vendas) apagava o que já estava salvo no JSON.
+ */
+function mergeModulosParaPersistir(
+  existingMods: unknown,
+  bodyMods: z.infer<typeof putSchema>['modulos']
+): z.infer<typeof putSchema>['modulos'] {
+  const defaults = getDefaultPersonalizacao().modulos;
+  const ex = existingMods && typeof existingMods === 'object' && existingMods !== null ? (existingMods as Record<string, object>) : {};
+  const out = {} as z.infer<typeof putSchema>['modulos'];
+  for (const key of MODULO_KEYS) {
+    const d = defaults[key];
+    const prev = ex[key] && typeof ex[key] === 'object' ? ex[key] : {};
+    const incoming = bodyMods[key];
+    (out as Record<string, object>)[key] = { ...d, ...prev, ...incoming };
+  }
+  return out;
 }
 
 /** GET /configuracoes/personalizacao */
@@ -125,11 +160,24 @@ export const getPersonalizacao = async (req: AuthRequest, res: Response) => {
   if (!raw || typeof raw !== 'object' || !raw.modulos) {
     return res.json({ ...defaultConfig, ...meta });
   }
+  const rawMods = raw.modulos && typeof raw.modulos === 'object' ? raw.modulos : {};
+  const rv = rawMods && typeof rawMods === 'object' && rawMods !== null && 'vendas' in rawMods && rawMods.vendas && typeof rawMods.vendas === 'object' ? rawMods.vendas : {};
   const merged: PersonalizacaoPayload = {
     modo: modos.includes((raw.modo as ModoPreset)) ? (raw.modo as ModoPreset) : 'padrao',
     modulos: {
       ...defaultConfig.modulos,
-      ...(raw.modulos && typeof raw.modulos === 'object' ? raw.modulos : {})
+      ...rawMods,
+      clientes: {
+        ...defaultConfig.modulos.clientes,
+        ...(typeof rawMods === 'object' && rawMods !== null && 'clientes' in rawMods && rawMods.clientes && typeof rawMods.clientes === 'object'
+          ? rawMods.clientes
+          : {})
+      },
+      /** Merge profundo: JSON antigo sem chaves novas (ex.: textos padrão OS) não sobrescreve o default */
+      vendas: {
+        ...defaultConfig.modulos.vendas,
+        ...rv
+      }
     }
   };
   return res.json({ ...merged, ...meta });
@@ -143,11 +191,13 @@ export const putPersonalizacao = async (req: AuthRequest, res: Response) => {
   const existingJson = (settings.personalizacao_json as Record<string, unknown> | null) || {};
   const preservedBranding = mergeDocumentBranding(existingJson.document_branding);
   const preservedMeta = preservedPersonalizacaoMeta(existingJson);
+  const modulosMerged = mergeModulosParaPersistir(existingJson.modulos, body.modulos);
   await prisma.companySettings.update({
     where: { usuario_id: userId },
     data: {
       personalizacao_json: {
         ...body,
+        modulos: modulosMerged,
         ...preservedMeta,
         document_branding: preservedBranding
       } as object

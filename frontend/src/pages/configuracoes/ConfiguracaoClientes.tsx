@@ -15,6 +15,7 @@ interface ModuloClientes {
   ativar_dados_adicionais?: boolean;
   mostrar_dados_adicionais_orcamento?: boolean;
   mostrar_dados_adicionais_venda?: boolean;
+  ativar_ficha_complementar_cliente?: boolean;
 }
 
 interface PersonalizacaoPayload {
@@ -31,6 +32,7 @@ export default function ConfiguracaoClientes() {
   const [ativarDadosAdicionais, setAtivarDadosAdicionais] = useState(false);
   const [mostrarDadosAdicionaisOrcamento, setMostrarDadosAdicionaisOrcamento] = useState(false);
   const [mostrarDadosAdicionaisVenda, setMostrarDadosAdicionaisVenda] = useState(false);
+  const [ativarFichaComplementar, setAtivarFichaComplementar] = useState(false);
   const [personalizacaoFull, setPersonalizacaoFull] = useState<PersonalizacaoPayload | null>(null);
 
   const load = useCallback(async () => {
@@ -46,6 +48,7 @@ export default function ConfiguracaoClientes() {
       setAtivarDadosAdicionais(c.ativar_dados_adicionais ?? false);
       setMostrarDadosAdicionaisOrcamento(c.mostrar_dados_adicionais_orcamento ?? false);
       setMostrarDadosAdicionaisVenda(c.mostrar_dados_adicionais_venda ?? false);
+      setAtivarFichaComplementar(c.ativar_ficha_complementar_cliente ?? false);
     } catch {
       toast.error('Erro ao carregar configurações');
     } finally {
@@ -72,19 +75,21 @@ export default function ConfiguracaoClientes() {
         retencao: { dias_atencao: diasAtencao, dias_inativo: diasInativo }
       });
       if (personalizacaoFull) {
-        const updated = {
-          ...personalizacaoFull,
+        /** Só modo + modulos: o GET inclui meta (onboarding, nicho) que não deve ir no corpo do PUT. */
+        const { modo, modulos } = personalizacaoFull;
+        await api.put('/configuracoes/personalizacao', {
+          modo,
           modulos: {
-            ...personalizacaoFull.modulos,
+            ...modulos,
             clientes: {
-              ...personalizacaoFull.modulos.clientes,
+              ...modulos.clientes,
               ativar_dados_adicionais: ativarDadosAdicionais,
               mostrar_dados_adicionais_orcamento: mostrarDadosAdicionaisOrcamento,
-              mostrar_dados_adicionais_venda: mostrarDadosAdicionaisVenda
+              mostrar_dados_adicionais_venda: mostrarDadosAdicionaisVenda,
+              ativar_ficha_complementar_cliente: ativarFichaComplementar
             }
           }
-        };
-        await api.put('/configuracoes/personalizacao', updated);
+        });
       }
       toast.success('Configurações salvas.');
       load();
@@ -141,6 +146,18 @@ export default function ConfiguracaoClientes() {
           </div>
         </div>
         <p className="text-xs text-text-muted">Atenção deve ser menor que Inativo.</p>
+      </section>
+
+      <section className="rounded-xl border border-border bg-bg-card shadow-sm p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-text-main">Ficha complementar / anamnese</h2>
+        <p className="text-sm text-text-muted">
+          Observações, preferências e imagens de referência separadas do cadastro básico. Útil para barbearia, estética, salão etc.
+        </p>
+        <ToggleSwitch
+          checked={ativarFichaComplementar}
+          onChange={setAtivarFichaComplementar}
+          label="Ativar ficha complementar do cliente"
+        />
       </section>
 
       <section className="rounded-xl border border-border bg-bg-card shadow-sm p-6 space-y-4">

@@ -11,6 +11,8 @@ export interface ModuloClientes {
   ativar_dados_adicionais: boolean;
   mostrar_dados_adicionais_orcamento: boolean;
   mostrar_dados_adicionais_venda: boolean;
+  /** Ficha complementar / anamnese (observações, preferências, imagens) separada do cadastro base */
+  ativar_ficha_complementar_cliente: boolean;
 }
 
 export interface ModuloProdutos {
@@ -27,6 +29,9 @@ export interface ModuloVendas {
   permitir_conversao_orcamento_venda: boolean;
   permitir_ordem_servico: boolean;
   mostrar_dados_adicionais_pdf_os: boolean;
+  /** Pré-preenchimento ao criar nova ordem de serviço (PDF). Vazio = só no pedido. */
+  os_texto_garantia_padrao?: string | null;
+  os_mensagem_agradecimento_padrao?: string | null;
 }
 
 export interface ModuloAgendamentos {
@@ -87,7 +92,8 @@ const DEFAULT_MODULOS: PersonalizacaoPayload['modulos'] = {
     name: 'Clientes',
     ativar_dados_adicionais: false,
     mostrar_dados_adicionais_orcamento: false,
-    mostrar_dados_adicionais_venda: false
+    mostrar_dados_adicionais_venda: false,
+    ativar_ficha_complementar_cliente: false
   },
   produtos: {
     active: true,
@@ -101,7 +107,9 @@ const DEFAULT_MODULOS: PersonalizacaoPayload['modulos'] = {
     mostrar_botao_orcamento: false,
     permitir_conversao_orcamento_venda: false,
     permitir_ordem_servico: false,
-    mostrar_dados_adicionais_pdf_os: true
+    mostrar_dados_adicionais_pdf_os: true,
+    os_texto_garantia_padrao: null,
+    os_mensagem_agradecimento_padrao: null
   },
   agendamentos: {
     active: true,
@@ -150,7 +158,8 @@ const PRESET_BARBEARIA: Partial<PersonalizacaoPayload> = {
     ...getDefaultPersonalizacao().modulos,
     produtos: { ...DEFAULT_MODULOS.produtos, name: 'Serviços' },
     vendas: { ...DEFAULT_MODULOS.vendas, name: 'Atendimentos' },
-    agendamentos: { ...DEFAULT_MODULOS.agendamentos, name: 'Agenda' }
+    agendamentos: { ...DEFAULT_MODULOS.agendamentos, name: 'Agenda' },
+    clientes: { ...DEFAULT_MODULOS.clientes, ativar_ficha_complementar_cliente: true }
   }
 };
 
@@ -180,7 +189,8 @@ const PRESET_ESTETICA: Partial<PersonalizacaoPayload> = {
     ...getDefaultPersonalizacao().modulos,
     produtos: { ...DEFAULT_MODULOS.produtos, name: 'Serviços e produtos' },
     vendas: { ...DEFAULT_MODULOS.vendas, name: 'Atendimentos' },
-    agendamentos: { ...DEFAULT_MODULOS.agendamentos, name: 'Agenda de serviços' }
+    agendamentos: { ...DEFAULT_MODULOS.agendamentos, name: 'Agenda de serviços' },
+    clientes: { ...DEFAULT_MODULOS.clientes, ativar_ficha_complementar_cliente: true }
   }
 };
 

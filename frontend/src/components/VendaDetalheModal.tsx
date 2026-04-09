@@ -101,7 +101,8 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [anexos, setAnexos] = useState<Array<{ id: string; nome_original: string; mime_type?: string | null }>>([]);
   const [loadingAnexos, setLoadingAnexos] = useState(false);
-  const anexosRef = useRef<HTMLDivElement | null>(null);
+  const [uploadingAnexo, setUploadingAnexo] = useState(false);
+  const inputAnexoRef = useRef<HTMLInputElement>(null);
   const [pagamentos, setPagamentos] = useState<SalePayment[]>([]);
   const [loadingPagamentos, setLoadingPagamentos] = useState(false);
 
@@ -521,56 +522,115 @@ export default function VendaDetalheModal({ venda, onClose, onEdit, onFechada }:
             </div>
           </div>
 
-          <div ref={anexosRef} />
-          {(loadingAnexos || anexos.length > 0) && (
-            <div>
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <h3 className="text-sm font-medium text-text-muted">Anexos do pedido</h3>
-                {anexos.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium text-text-muted mb-2">Anexos do pedido</h3>
+            {loadingAnexos ? (
+              <div className="text-sm text-text-muted px-3 py-3 border border-border rounded-lg bg-bg-elevated">Carregando anexos…</div>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <input
+                    ref={inputAnexoRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingAnexo(true);
+                      try {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        await api.post(`/vendas/${venda.id}/anexos`, formData, {
+                          headers: { 'Content-Type': 'multipart/form-data' }
+                        });
+                        const res = await api.get<Array<{ id: string; nome_original: string; mime_type?: string | null }>>(
+                          `/vendas/${venda.id}/anexos`
+                        );
+                        setAnexos(Array.isArray(res.data) ? res.data : []);
+                        toast.success('Anexo adicionado');
+                      } catch (err: unknown) {
+                        const msg =
+                          err && typeof err === 'object' && 'response' in err
+                            ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
+                            : undefined;
+                        toast.error(msg || 'Erro ao enviar anexo');
+                      } finally {
+                        setUploadingAnexo(false);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
                   <button
                     type="button"
-                    onClick={() => anexosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                    className="px-3 py-1.5 border border-border rounded-lg text-text-main hover:bg-bg-elevated text-sm flex items-center gap-1.5"
+                    disabled={uploadingAnexo}
+                    onClick={() => inputAnexoRef.current?.click()}
+                    className="px-3 py-2 rounded-lg border border-border bg-bg-main text-text-main text-sm font-medium flex items-center gap-1 hover:bg-bg-elevated transition-colors disabled:opacity-50"
                   >
-                    <span className="material-symbols-outlined text-base">attach_file</span>
-                    Ver anexos
+                    <span className="material-symbols-outlined text-lg">attach_file</span>
+                    Adicionar anexo
                   </button>
+                  <span className="text-xs text-text-muted">PDF, JPG, PNG ou WEBP. Máx. 10 MB.</span>
+                </div>
+                {anexos.length > 0 && (
+                  <ul className="border border-border rounded-lg divide-y divide-border">
+                    {anexos.map((a) => (
+                      <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <span className="text-sm text-text-main truncate" title={a.nome_original}>
+                          {a.nome_original}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const res = await api.get(`/vendas/${venda.id}/anexos/${a.id}/download`, {
+                                  responseType: 'blob'
+                                });
+                                const url = URL.createObjectURL(res.data as Blob);
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.download = a.nome_original;
+                                link.click();
+                                URL.revokeObjectURL(url);
+                              } catch {
+                                toast.error('Erro ao baixar anexo');
+                              }
+                            }}
+                            className="p-1.5 rounded text-text-muted hover:bg-bg-elevated"
+                            title="Baixar anexo"
+                          >
+                            <span className="material-symbols-outlined text-lg">download</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!window.confirm('Remover este anexo?')) return;
+                              try {
+                                await api.delete(`/vendas/${venda.id}/anexos/${a.id}`);
+                                setAnexos((prev) => prev.filter((x) => x.id !== a.id));
+                                toast.success('Anexo removido');
+                              } catch (err: unknown) {
+                                const msg =
+                                  err && typeof err === 'object' && 'response' in err
+                                    ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
+                                    : undefined;
+                                toast.error(msg || 'Erro ao remover');
+                              }
+                            }}
+                            className="p-1.5 rounded text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                            title="Remover"
+                          >
+                            <span className="material-symbols-outlined text-lg">delete</span>
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </div>
-              {loadingAnexos ? (
-                <div className="text-sm text-text-muted px-3 py-3 border border-border rounded-lg bg-bg-elevated">Carregando anexos…</div>
-              ) : anexos.length === 0 ? null : (
-                <ul className="border border-border rounded-lg divide-y divide-border">
-                  {anexos.map((a) => (
-                    <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                      <span className="text-sm text-text-main truncate" title={a.nome_original}>{a.nome_original}</span>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const res = await api.get(`/vendas/${venda.id}/anexos/${a.id}/download`, { responseType: 'blob' });
-                            const url = URL.createObjectURL(res.data as Blob);
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.download = a.nome_original;
-                            link.click();
-                            URL.revokeObjectURL(url);
-                          } catch {
-                            toast.error('Erro ao baixar anexo');
-                          }
-                        }}
-                        className="p-1.5 rounded text-text-muted hover:bg-bg-elevated flex items-center gap-1 text-sm"
-                        title="Baixar anexo"
-                      >
-                        <span className="material-symbols-outlined text-lg">download</span>
-                        Baixar
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
+              </>
+            )}
+          </div>
 
           {!confirmFechar ? (
             <div className="flex flex-wrap gap-3 pt-2">

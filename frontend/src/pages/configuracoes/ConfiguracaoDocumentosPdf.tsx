@@ -1,9 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
+import OsBannerCropModal, { type OsBannerCropModalSource } from '../../components/OsBannerCropModal';
+import {
+  clampPan,
+  clampZoom,
+  computeOsBannerLayout,
+  getOsBannerHeightPt,
+  OS_BANNER_HEIGHT_PT,
+  type LogoBandStyle
+} from '../../lib/osBannerLayout';
 
-export type LogoBandStyle = 'highlight' | 'compact';
+export type { LogoBandStyle };
 
 export interface DocumentBrandingState {
   logo_path: string | null;
@@ -13,63 +22,21 @@ export interface DocumentBrandingState {
   logo_zoom: number;
 }
 
-/** Alturas do preview (px) — mesma proporção do PDF (108pt / 80pt banner) */
-const BANNER_PREVIEW_H: Record<LogoBandStyle, number> = {
-  highlight: 108,
-  compact: 80
-};
-
-function clampPan(n: number): number {
-  return Math.max(-1, Math.min(1, n));
-}
-
-function clampZoom(n: number): number {
-  return Math.max(1, Math.min(3, Math.round(n * 100) / 100));
-}
-
-/** Idêntico ao backend/PDF: cover × zoom + pan em [-1,1] */
-function computeOsBannerLayout(
-  bandW: number,
-  bandH: number,
-  iw: number,
-  ih: number,
-  panX: number,
-  panY: number,
-  zoom: number
-): { dw: number; dh: number; left: number; top: number } {
-  const z = clampZoom(zoom);
-  const scale = Math.max(bandW / iw, bandH / ih) * z;
-  const dw = iw * scale;
-  const dh = ih * scale;
-  const left = (bandW - dw) / 2 + panX * ((dw - bandW) / 2);
-  const top = (bandH - dh) / 2 + panY * ((dh - bandH) / 2);
-  return { dw, dh, left, top };
-}
-
 export default function ConfiguracaoDocumentosPdf() {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [branding, setBranding] = useState<DocumentBrandingState | null>(null);
   const [draft, setDraft] = useState<DocumentBrandingState | null>(null);
   const [logoBlobUrl, setLogoBlobUrl] = useState<string | null>(null);
+  const [imgLoadError, setImgLoadError] = useState(false);
+
+  const [cropSource, setCropSource] = useState<OsBannerCropModalSource | null>(null);
+  const [cropApplying, setCropApplying] = useState(false);
 
   const bannerRef = useRef<HTMLDivElement>(null);
-  const draftRef = useRef<DocumentBrandingState | null>(null);
-  const naturalRef = useRef<{ w: number; h: number } | null>(null);
-  const dragActiveRef = useRef(false);
-  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
-
   const [boxSize, setBoxSize] = useState({ w: 0, h: 0 });
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
 
-  useEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
-
-  useEffect(() => {
-    naturalRef.current = naturalSize;
-  }, [naturalSize]);
+  const pendingObjectUrlRef = useRef<string | null>(null);
 
   const normalize = useCallback((raw: Record<string, unknown>): DocumentBrandingState => {
     const band = raw.logo_band_style;
@@ -103,11 +70,13 @@ export default function ConfiguracaoDocumentosPdf() {
         if (prev) URL.revokeObjectURL(prev);
         return url;
       });
+      setImgLoadError(false);
     } catch {
       setLogoBlobUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
       });
+      setImgLoadError(true);
     }
   }, []);
 
@@ -116,7 +85,6 @@ export default function ConfiguracaoDocumentosPdf() {
       setLoading(true);
       const res = await api.get<Record<string, unknown>>('/configuracoes/documentos/pdf-branding');
       const n = normalize(res.data);
-      setBranding(n);
       setDraft(n);
       if (n.logo_path) await loadLogoPreview();
       else {
@@ -139,11 +107,13 @@ export default function ConfiguracaoDocumentosPdf() {
   useEffect(() => {
     return () => {
       if (logoBlobUrl) URL.revokeObjectURL(logoBlobUrl);
+      if (pendingObjectUrlRef.current) URL.revokeObjectURL(pendingObjectUrlRef.current);
     };
   }, [logoBlobUrl]);
 
   useEffect(() => {
     setNaturalSize(null);
+    setImgLoadError(false);
   }, [logoBlobUrl]);
 
   useEffect(() => {
@@ -159,40 +129,23 @@ export default function ConfiguracaoDocumentosPdf() {
     return () => ro.disconnect();
   }, [draft?.logo_path, draft?.logo_band_style]);
 
-  const dirty = useMemo(() => {
-    if (!branding || !draft) return false;
-    return (
-      branding.logo_band_style !== draft.logo_band_style ||
-      branding.logo_offset_x !== draft.logo_offset_x ||
-      branding.logo_offset_y !== draft.logo_offset_y ||
-      branding.logo_zoom !== draft.logo_zoom
-    );
-  }, [branding, draft]);
-
-  const saveLayout = async () => {
-    if (!draft) return;
-    try {
-      setSaving(true);
-      await api.put('/configuracoes/documentos/pdf-branding', {
-        logo_band_style: draft.logo_band_style,
-        logo_offset_x: draft.logo_offset_x,
-        logo_offset_y: draft.logo_offset_y,
-        logo_zoom: draft.logo_zoom
-      });
-      const res = await api.get<Record<string, unknown>>('/configuracoes/documentos/pdf-branding');
-      const n = normalize(res.data);
-      setBranding(n);
-      setDraft(n);
-      toast.success('Configuração salva.');
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || 'Erro ao salvar');
-    } finally {
-      setSaving(false);
+  const closeCropModal = () => {
+    if (cropSource?.kind === 'file') {
+      URL.revokeObjectURL(cropSource.objectUrl);
+      pendingObjectUrlRef.current = null;
     }
+    setCropSource(null);
   };
 
-  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const openEditModal = () => {
+    if (!draft?.logo_path || !logoBlobUrl) {
+      toast.error('Carregue uma imagem primeiro.');
+      return;
+    }
+    setCropSource({ kind: 'remote', url: logoBlobUrl });
+  };
+
+  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -205,20 +158,44 @@ export default function ConfiguracaoDocumentosPdf() {
       toast.error('Arquivo muito grande. Máximo 2 MB.');
       return;
     }
+    if (pendingObjectUrlRef.current) {
+      URL.revokeObjectURL(pendingObjectUrlRef.current);
+    }
+    const url = URL.createObjectURL(file);
+    pendingObjectUrlRef.current = url;
+    setCropSource({ kind: 'file', file, objectUrl: url });
+  };
+
+  const handleCropApply = async (payload: {
+    logo_band_style: LogoBandStyle;
+    logo_offset_x: number;
+    logo_offset_y: number;
+    logo_zoom: number;
+    file?: File;
+  }) => {
     try {
-      setUploading(true);
-      const fd = new FormData();
-      fd.append('file', file);
-      await api.post('/configuracoes/documentos/pdf-branding/logo', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      setCropApplying(true);
+      if (payload.file) {
+        const fd = new FormData();
+        fd.append('file', payload.file);
+        await api.post('/configuracoes/documentos/pdf-branding/logo', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+      await api.put('/configuracoes/documentos/pdf-branding', {
+        logo_band_style: payload.logo_band_style,
+        logo_offset_x: payload.logo_offset_x,
+        logo_offset_y: payload.logo_offset_y,
+        logo_zoom: payload.logo_zoom
       });
-      toast.success('Imagem enviada.');
       await load();
+      toast.success(payload.file ? 'Imagem e enquadramento salvos.' : 'Enquadramento salvo.');
+      closeCropModal();
     } catch (err: unknown) {
       const e2 = err as { response?: { data?: { error?: string } } };
-      toast.error(e2.response?.data?.error || 'Erro no upload');
+      toast.error(e2.response?.data?.error || 'Erro ao salvar');
     } finally {
-      setUploading(false);
+      setCropApplying(false);
     }
   };
 
@@ -236,77 +213,15 @@ export default function ConfiguracaoDocumentosPdf() {
     }
   };
 
-  /** Arraste: px → Δpan com a mesma derivada do layout (imagem acompanha o dedo/mouse). */
-  const applyDragDelta = useCallback((dx: number, dy: number) => {
-    const el = bannerRef.current;
-    const d = draftRef.current;
-    const nat = naturalRef.current;
-    if (!el || !d || !nat) return;
-    const { width: bw, height: bh } = el.getBoundingClientRect();
-    if (bw <= 0 || bh <= 0) return;
-    const { dw, dh } = computeOsBannerLayout(bw, bh, nat.w, nat.h, d.logo_offset_x, d.logo_offset_y, d.logo_zoom);
-    const denomX = dw - bw;
-    const denomY = dh - bh;
-    let dPanX = 0;
-    let dPanY = 0;
-    if (Math.abs(denomX) > 0.5) dPanX = (dx * 2) / denomX;
-    if (Math.abs(denomY) > 0.5) dPanY = (dy * 2) / denomY;
-    setDraft((prev) =>
-      prev
-        ? {
-            ...prev,
-            logo_offset_x: clampPan(prev.logo_offset_x + dPanX),
-            logo_offset_y: clampPan(prev.logo_offset_y + dPanY)
-          }
-        : prev
-    );
-  }, []);
-
-  const onBannerPointerDown = (e: React.PointerEvent) => {
-    if (!draftRef.current?.logo_path) return;
-    e.preventDefault();
-    e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    dragActiveRef.current = true;
-    lastPointerRef.current = { x: e.clientX, y: e.clientY };
-  };
-
-  const onBannerPointerMove = (e: React.PointerEvent) => {
-    if (!dragActiveRef.current || !lastPointerRef.current) return;
-    const last = lastPointerRef.current;
-    const dx = e.clientX - last.x;
-    const dy = e.clientY - last.y;
-    lastPointerRef.current = { x: e.clientX, y: e.clientY };
-    applyDragDelta(dx, dy);
-  };
-
-  const endDrag = (e: React.PointerEvent) => {
-    if (dragActiveRef.current) {
-      try {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
-    }
-    dragActiveRef.current = false;
-    lastPointerRef.current = null;
-  };
-
-  const centerPan = () => {
-    setDraft((d) => (d ? { ...d, logo_offset_x: 0, logo_offset_y: 0 } : d));
-  };
-
   if (loading || !draft) {
-    return (
-      <div className="max-w-3xl mx-auto py-12 text-text-muted">Carregando...</div>
-    );
+    return <div className="max-w-3xl mx-auto py-12 text-text-muted">Carregando...</div>;
   }
 
   const hasLogo = !!draft.logo_path;
-  const bannerH = BANNER_PREVIEW_H[draft.logo_band_style];
+  const bannerH = OS_BANNER_HEIGHT_PT[draft.logo_band_style];
 
   const layout =
-    hasLogo && naturalSize && boxSize.w > 0 && boxSize.h > 0
+    hasLogo && naturalSize && boxSize.w > 0 && boxSize.h > 0 && !imgLoadError
       ? computeOsBannerLayout(
           boxSize.w,
           boxSize.h,
@@ -320,6 +235,18 @@ export default function ConfiguracaoDocumentosPdf() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-12 px-1">
+      <OsBannerCropModal
+        open={!!cropSource}
+        source={cropSource}
+        initialBandStyle={draft.logo_band_style}
+        initialPanX={cropSource?.kind === 'file' ? 0 : draft.logo_offset_x}
+        initialPanY={cropSource?.kind === 'file' ? 0 : draft.logo_offset_y}
+        initialZoom={cropSource?.kind === 'file' ? 1 : draft.logo_zoom}
+        onClose={closeCropModal}
+        onApply={handleCropApply}
+        applying={cropApplying}
+      />
+
       <div className="flex items-center gap-2 text-sm text-text-muted">
         <Link to="/configuracoes" className="hover:text-text-main">
           Configurações
@@ -331,189 +258,115 @@ export default function ConfiguracaoDocumentosPdf() {
         <span className="material-symbols-outlined text-primary">description</span>
         Documentos — PDF
       </h1>
-      <p className="text-xs text-text-muted mb-2 flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center rounded-full bg-primary/15 text-primary px-2.5 py-0.5 font-medium">
-          Editor de banner v2.1
-        </span>
-        <span>
-          Se esta etiqueta não aparecer, o site ainda está em cache — use Ctrl+Shift+R ou abra em aba anônima.
-        </span>
-      </p>
       <p className="text-text-muted text-sm leading-relaxed">
-        A imagem será usada como um <strong className="text-text-main">banner no topo do PDF</strong>. Ela será
-        ajustada para <strong className="text-text-main">preencher toda a largura</strong> (modo capa: pode cortar
-        bordas, sem distorcer). Use o <strong className="text-text-main">arraste</strong> e o{' '}
-        <strong className="text-text-main">zoom</strong> para posicionar corretamente. O preview abaixo usa a mesma
-        matemática do PDF.
+        A imagem vira um <strong className="text-text-main">banner no topo</strong> da Ordem de Serviço (mesma
+        largura do PDF, altura conforme o modo). Ao enviar, abrimos um editor para você posicionar o recorte; o
+        preview abaixo repete a mesma lógica do PDF.
       </p>
 
       <section className="rounded-xl border border-border bg-bg-card shadow-sm p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-text-main">Editor de banner — Ordem de Serviço</h2>
+        <h2 className="text-lg font-semibold text-text-main">Banner — Ordem de Serviço</h2>
         <p className="text-sm text-text-muted">
-          PNG, JPG ou WEBP até 2 MB. Modo da faixa (altura), zoom e posição são salvos no servidor com a imagem (
-          <code className="text-xs bg-bg-main px-1 rounded">logo_path</code>).
+          PNG, JPG ou WEBP até 2 MB. O ajuste fino (faixa, zoom, posição) é feito no editor em tela cheia após
+          escolher a imagem.
         </p>
 
         <div className="flex flex-wrap gap-3 items-center">
           <label className="inline-flex items-center gap-2 rounded-lg bg-primary text-[var(--color-text-on-primary)] px-4 py-2 text-sm font-medium cursor-pointer hover:bg-primary/90 disabled:opacity-50">
             <span className="material-symbols-outlined text-lg">upload</span>
-            {uploading ? 'Enviando...' : 'Enviar imagem'}
-            <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={onFile} disabled={uploading} />
+            {uploading ? 'Aguarde…' : 'Enviar imagem'}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp"
+              className="hidden"
+              onChange={onPickFile}
+              disabled={uploading || cropApplying}
+            />
           </label>
-          {draft.logo_path && (
-            <button
-              type="button"
-              onClick={removeLogo}
-              disabled={uploading}
-              className="rounded-lg border border-border px-4 py-2 text-sm text-text-main hover:bg-bg-main disabled:opacity-50"
-            >
-              Remover imagem
-            </button>
+          {hasLogo && (
+            <>
+              <button
+                type="button"
+                onClick={openEditModal}
+                disabled={uploading || cropApplying || !logoBlobUrl}
+                className="rounded-lg border border-border px-4 py-2 text-sm text-text-main hover:bg-bg-main disabled:opacity-50"
+              >
+                Editar enquadramento
+              </button>
+              <button
+                type="button"
+                onClick={removeLogo}
+                disabled={uploading || cropApplying}
+                className="rounded-lg border border-border px-4 py-2 text-sm text-text-main hover:bg-bg-main disabled:opacity-50"
+              >
+                Remover imagem
+              </button>
+            </>
           )}
-        </div>
-
-        <div className="space-y-3">
-          <p className="text-sm font-medium text-text-main">Altura da faixa (modo)</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setDraft((d) => (d ? { ...d, logo_band_style: 'highlight' } : d))}
-              className={`rounded-lg px-3 py-1.5 text-sm border ${
-                draft.logo_band_style === 'highlight'
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border text-text-muted hover:border-primary/40'
-              }`}
-            >
-              Destacada
-            </button>
-            <button
-              type="button"
-              onClick={() => setDraft((d) => (d ? { ...d, logo_band_style: 'compact' } : d))}
-              className={`rounded-lg px-3 py-1.5 text-sm border ${
-                draft.logo_band_style === 'compact'
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border text-text-muted hover:border-primary/40'
-              }`}
-            >
-              Compacta
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm text-text-muted mb-1">Zoom (1× a 3×)</label>
-          <input
-            type="range"
-            min={1}
-            max={3}
-            step={0.05}
-            value={draft.logo_zoom}
-            onChange={(e) => setDraft((d) => (d ? { ...d, logo_zoom: clampZoom(Number(e.target.value)) } : d))}
-            className="w-full max-w-md"
-          />
-          <p className="text-xs text-text-muted mt-1">
-            {draft.logo_zoom.toFixed(2)}× — aumente o zoom se o pan ficar pouco sensível.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-text-muted mb-1">Posição horizontal</label>
-            <input
-              type="range"
-              min={-1}
-              max={1}
-              step={0.005}
-              value={draft.logo_offset_x}
-              onChange={(e) =>
-                setDraft((d) => (d ? { ...d, logo_offset_x: clampPan(Number(e.target.value)) } : d))
-              }
-              className="w-full"
-            />
-            <p className="text-xs text-text-muted mt-1 font-mono">{draft.logo_offset_x.toFixed(3)}</p>
-          </div>
-          <div>
-            <label className="block text-sm text-text-muted mb-1">Posição vertical</label>
-            <input
-              type="range"
-              min={-1}
-              max={1}
-              step={0.005}
-              value={draft.logo_offset_y}
-              onChange={(e) =>
-                setDraft((d) => (d ? { ...d, logo_offset_y: clampPan(Number(e.target.value)) } : d))
-              }
-              className="w-full"
-            />
-            <p className="text-xs text-text-muted mt-1 font-mono">{draft.logo_offset_y.toFixed(3)}</p>
-          </div>
         </div>
 
         <div>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <p className="text-sm font-medium text-text-main">Preview (mesma lógica do PDF)</p>
+            <p className="text-sm font-medium text-text-main">Preview (igual ao PDF)</p>
             {hasLogo && (
-              <button
-                type="button"
-                onClick={centerPan}
-                className="text-sm rounded-lg border border-border px-3 py-1.5 text-text-main hover:bg-bg-main"
-              >
-                Centralizar imagem
-              </button>
+              <span className="text-xs text-text-muted">
+                Faixa: {draft.logo_band_style === 'highlight' ? 'destacada' : 'compacta'} ·{' '}
+                {getOsBannerHeightPt(draft.logo_band_style)} pt
+              </span>
             )}
           </div>
           <div className="rounded-lg border-2 border-border bg-white overflow-hidden shadow-inner w-full min-w-0">
             {hasLogo && (
               <div
                 ref={bannerRef}
-                role="region"
-                aria-label="Preview do banner: arraste para posicionar"
-                className="relative w-full min-w-0 overflow-hidden bg-[#e8e8e8] touch-none select-none cursor-grab active:cursor-grabbing"
+                role="img"
+                aria-label="Preview do banner da Ordem de Serviço"
+                className="relative w-full min-w-0 overflow-hidden bg-[#e8e8e8]"
                 style={{ height: bannerH }}
-                onPointerDown={onBannerPointerDown}
-                onPointerMove={onBannerPointerMove}
-                onPointerUp={endDrag}
-                onPointerCancel={endDrag}
               >
                 {logoBlobUrl && (
-                  <>
-                    <img
-                      src={logoBlobUrl}
-                      alt=""
-                      draggable={false}
-                      decoding="async"
-                      className="absolute pointer-events-none select-none max-w-none block"
-                      onLoad={(e) => {
-                        const im = e.currentTarget;
-                        setNaturalSize({ w: im.naturalWidth, h: im.naturalHeight });
-                      }}
-                      style={
-                        layout
-                          ? {
-                              width: layout.dw,
-                              height: layout.dh,
-                              left: layout.left,
-                              top: layout.top
-                            }
-                          : {
-                              opacity: 0,
-                              width: 1,
-                              height: 1,
-                              left: 0,
-                              top: 0
-                            }
-                      }
-                    />
-                    {!layout && (
-                      <span className="absolute inset-0 flex items-center justify-center text-xs text-text-muted pointer-events-none">
-                        {!naturalSize ? 'Carregando…' : 'Preparando preview…'}
-                      </span>
-                    )}
-                  </>
+                  <img
+                    src={logoBlobUrl}
+                    alt=""
+                    draggable={false}
+                    decoding="async"
+                    className="absolute pointer-events-none select-none max-w-none block"
+                    onLoad={(e) => {
+                      setNaturalSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight });
+                      setImgLoadError(false);
+                    }}
+                    onError={() => {
+                      setNaturalSize(null);
+                      setImgLoadError(true);
+                    }}
+                    style={
+                      layout
+                        ? {
+                            width: layout.dw,
+                            height: layout.dh,
+                            left: layout.left,
+                            top: layout.top
+                          }
+                        : {
+                            opacity: 0,
+                            width: 1,
+                            height: 1,
+                            left: 0,
+                            top: 0
+                          }
+                    }
+                  />
                 )}
-                <span className="absolute bottom-1 right-1 rounded bg-black/55 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">
-                  Arraste · capa + corte
-                </span>
+                {!layout && !imgLoadError && (
+                  <div className="absolute inset-0 flex items-center justify-center text-sm text-text-muted">
+                    Carregando imagem…
+                  </div>
+                )}
+                {imgLoadError && (
+                  <div className="absolute inset-0 flex items-center justify-center text-xs text-red-600 px-2 text-center">
+                    Não foi possível carregar o preview. Tente salvar de novo ou enviar a imagem outra vez.
+                  </div>
+                )}
               </div>
             )}
             <div
@@ -531,17 +384,6 @@ export default function ConfiguracaoDocumentosPdf() {
           </div>
         </div>
 
-        <div className="flex justify-end pt-2">
-          <button
-            type="button"
-            onClick={saveLayout}
-            disabled={saving || !dirty}
-            className="rounded-lg bg-primary text-[var(--color-text-on-primary)] px-6 py-2.5 font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
-          >
-            {saving ? 'Salvando...' : 'Salvar configuração'}
-            <span className="material-symbols-outlined text-lg">save</span>
-          </button>
-        </div>
       </section>
     </div>
   );

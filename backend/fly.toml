@@ -1,4 +1,8 @@
 # Fly.io - Backend Aurix em São Paulo (gru)
+# ATENÇÃO: este Dockerfile NÃO inclui o build do React. Para o site (SPA) atualizado,
+# faça deploy na RAIZ do repositório: `fly deploy` (app aurix-prod, Dockerfile na raiz).
+# Só use este app/folder se quiser API-only de propósito.
+#
 # Use: fly launch (já com este arquivo) ou fly deploy
 # Região: gru = São Paulo, Brasil
 #

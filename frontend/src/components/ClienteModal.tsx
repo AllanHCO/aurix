@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { usePersonalizacao } from '../contexts/PersonalizacaoContext';
 import { useBusinessAreas } from '../contexts/BusinessAreaContext';
 import ClienteExtraItemModal, { type ClientExtraItem, type PendingExtraItemPayload } from './ClienteExtraItemModal';
+import ClienteFichaModal from './ClienteFichaModal';
 import ModalPortal from './ModalPortal';
 import SearchableSelect from './SearchableSelect';
 
@@ -47,12 +48,14 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
   const { areas: businessAreas, enabled: businessAreasEnabled, selectedAreaId } = useBusinessAreas();
   const clientesConfig = getModuleConfig('clientes');
   const extraDataEnabled = clientesConfig.ativar_dados_adicionais ?? false;
+  const fichaComplementarEnabled = clientesConfig.ativar_ficha_complementar_cliente ?? false;
 
   const [extraItems, setExtraItems] = useState<ClientExtraItem[]>([]);
   const [extraItemsLoading, setExtraItemsLoading] = useState(false);
   const [pendingExtraItems, setPendingExtraItems] = useState<(PendingExtraItemPayload & { tempId: string })[]>([]);
   const [extraItemModalOpen, setExtraItemModalOpen] = useState(false);
   const [extraItemEditing, setExtraItemEditing] = useState<ClientExtraItem | (PendingExtraItemPayload & { tempId: string }) | null>(null);
+  const [fichaModalOpen, setFichaModalOpen] = useState(false);
 
   const {
     register,
@@ -176,18 +179,30 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
     <ModalPortal>
       <div className="aurix-modal-overlay fixed inset-0 flex items-center justify-center p-4 overflow-y-auto" style={{ backgroundColor: 'var(--color-overlay)' }}>
         <div className="bg-bg-elevated border border-border-soft rounded-2xl shadow-xl max-w-2xl w-full my-auto max-h-[90vh] overflow-y-auto">
-        <div className="p-4 sm:p-6 border-b border-border flex items-center justify-between shrink-0">
-          <h2 className="text-lg sm:text-xl font-bold text-text-main">
+        <div className="p-4 sm:p-6 border-b border-border flex items-center justify-between gap-2 shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold text-text-main min-w-0">
             {cliente ? 'Editar Cliente' : 'Novo Cliente'}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 -m-2 rounded-lg text-text-muted hover:text-text-main hover:bg-bg-elevated min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
-            aria-label="Fechar"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {fichaComplementarEnabled && cliente?.id && (
+              <button
+                type="button"
+                onClick={() => setFichaModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-bg-main px-3 py-2 text-sm font-medium text-text-main hover:bg-bg-card min-h-[44px] touch-manipulation"
+              >
+                <span className="material-symbols-outlined text-lg text-primary">assignment_ind</span>
+                <span className="hidden sm:inline">Ficha do cliente</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 -m-2 rounded-lg text-text-muted hover:text-text-main hover:bg-bg-elevated min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+              aria-label="Fechar"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="p-4 sm:p-6 space-y-4">
@@ -403,6 +418,15 @@ export default function ClienteModal({ cliente, onClose }: ClienteModalProps) {
             </button>
           </div>
         </form>
+
+        {fichaModalOpen && cliente?.id && (
+          <ClienteFichaModal
+            open={fichaModalOpen}
+            onClose={() => setFichaModalOpen(false)}
+            clienteId={cliente.id}
+            clienteNome={cliente.nome}
+          />
+        )}
 
         {extraItemModalOpen && (
           <ClienteExtraItemModal

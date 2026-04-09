@@ -32,6 +32,7 @@ import ConfiguracaoSeguranca from './pages/configuracoes/ConfiguracaoSeguranca';
 import ConfiguracaoPlano from './pages/configuracoes/ConfiguracaoPlano';
 import ConfiguracaoSistema from './pages/configuracoes/ConfiguracaoSistema';
 import ConfiguracaoDocumentosPdf from './pages/configuracoes/ConfiguracaoDocumentosPdf';
+import IntegracaoGoogleCalendar from './pages/configuracoes/IntegracaoGoogleCalendar';
 import AssinaturaBloqueio from './pages/AssinaturaBloqueio';
 import AgendaPublica from './pages/AgendaPublica';
 import Layout from './components/Layout';
@@ -102,6 +103,7 @@ function AppRoutes() {
         <Route path="configuracoes/plano" element={<ConfiguracaoPlano />} />
         <Route path="configuracoes/personalizacao" element={<PersonalizacaoSistema />} />
         <Route path="configuracoes/sistema" element={<ConfiguracaoSistema />} />
+        <Route path="configuracoes/integracoes/google-calendar" element={<IntegracaoGoogleCalendar />} />
         <Route path="assinatura-bloqueio" element={<AssinaturaBloqueio />} />
         <Route path="financeiro" element={<ModuleGuard moduleKey="financeiro"><Financeiro /></ModuleGuard>} />
         <Route path="fornecedores" element={<ModuleGuard moduleKey="fornecedores"><Fornecedores /></ModuleGuard>} />
