@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
 import { invalidatePrefix } from '../services/cache.service';
-import { getUploadsBaseDir } from '../config/env';
+import { getUploadsRootDir } from '../config/env';
 
 import { prisma } from '../lib/prisma';
 
@@ -1149,7 +1149,7 @@ export const deletarAnexoVenda = async (req: AuthRequest, res: Response) => {
   if (!anexo) throw new AppError('Anexo não encontrado', 404);
   const fs = await import('fs');
   const path = await import('path');
-  const fullPath = path.join(process.cwd(), getUploadsBaseDir(), anexo.path);
+  const fullPath = path.join(getUploadsRootDir(), anexo.path);
   if (fs.existsSync(fullPath)) {
     try { fs.unlinkSync(fullPath); } catch {}
   }
@@ -1171,7 +1171,7 @@ export const downloadAnexoVenda = async (req: AuthRequest, res: Response) => {
   if (!anexo) throw new AppError('Anexo não encontrado', 404);
   const path = await import('path');
   const fs = await import('fs');
-  const fullPath = path.join(process.cwd(), getUploadsBaseDir(), anexo.path);
+  const fullPath = path.join(getUploadsRootDir(), anexo.path);
   if (!fs.existsSync(fullPath)) throw new AppError('Arquivo não encontrado no servidor', 404);
   res.download(fullPath, anexo.nome_original, (err) => {
     if (err && !res.headersSent) res.status(500).json({ error: 'Erro ao enviar arquivo' });

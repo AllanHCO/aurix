@@ -5,7 +5,7 @@
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { getUploadsBaseDir } from '../config/env';
+import { getUploadsRootDir } from '../config/env';
 
 export type LogoAlignment = 'left' | 'center' | 'right';
 export type LogoSizePreset = 'small' | 'medium' | 'large';
@@ -91,11 +91,11 @@ export function normalizePan(raw: unknown, fallback: number): number {
 }
 
 export function absolutePathFromRelative(relativePath: string): string {
-  return path.join(process.cwd(), getUploadsBaseDir(), relativePath);
+  return path.join(getUploadsRootDir(), relativePath);
 }
 
 export function buildBrandingLogoPath(userId: string, ext: string): { dir: string; filename: string; relative: string } {
-  const base = path.join(process.cwd(), getUploadsBaseDir(), 'branding', 'logos');
+  const base = path.join(getUploadsRootDir(), 'branding', 'logos');
   const dir = path.join(base, userId);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const filename = `${crypto.randomUUID()}${ext}`;

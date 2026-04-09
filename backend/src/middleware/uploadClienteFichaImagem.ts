@@ -2,9 +2,9 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { getUploadsBaseDir } from '../config/env';
+import { getUploadsRootDir } from '../config/env';
 
-const BASE = path.join(process.cwd(), getUploadsBaseDir(), 'cliente-ficha');
+const BASE = path.join(getUploadsRootDir(), 'cliente-ficha');
 const ALLOWED_MIMES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_SIZE = 8 * 1024 * 1024;
 

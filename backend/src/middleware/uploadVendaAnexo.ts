@@ -2,9 +2,9 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { getUploadsBaseDir } from '../config/env';
+import { getUploadsRootDir } from '../config/env';
 
-const UPLOAD_DIR = path.join(process.cwd(), getUploadsBaseDir(), 'vendas');
+const UPLOAD_DIR = path.join(getUploadsRootDir(), 'vendas');
 const ALLOWED_MIMES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 

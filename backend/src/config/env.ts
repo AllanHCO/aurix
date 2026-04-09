@@ -1,3 +1,5 @@
+import path from 'path';
+
 /**
  * Configuração e validação de ambiente.
  * REGRA: localhost e staging NUNCA podem usar banco, auth ou storage de produção.
@@ -124,6 +126,19 @@ export function getUploadsBaseDir(): string {
   return APP_ENV === 'production' ? 'uploads' : `uploads_${APP_ENV}`;
 }
 
+/**
+ * Caminho raiz de uploads no disco.
+ * - Se UPLOADS_DIR estiver definido, usa esse caminho (ideal para volume persistente em produção).
+ * - Sem variável, mantém comportamento legado em process.cwd().
+ */
+export function getUploadsRootDir(): string {
+  const custom = process.env.UPLOADS_DIR?.trim();
+  if (custom) {
+    return path.isAbsolute(custom) ? custom : path.join(process.cwd(), custom);
+  }
+  return path.join(process.cwd(), getUploadsBaseDir());
+}
+
 /** Retorna descrição segura do ambiente para logs (sem expor URLs completas). */
 export function getEnvSummary(): { APP_ENV: AppEnv; DATABASE: string; STORAGE: string; PORT: string } {
   const dbUrl = process.env.DATABASE_URL?.trim() || '';
@@ -133,7 +148,7 @@ export function getEnvSummary(): { APP_ENV: AppEnv; DATABASE: string; STORAGE: s
     else if (dbUrl.includes('staging') || dbUrl.includes('_dev')) dbHint = 'staging/dev';
     else dbHint = 'remoto (produção?)';
   }
-  const storageDir = getUploadsBaseDir();
+  const storageDir = getUploadsRootDir();
   return {
     APP_ENV,
     DATABASE: dbHint,

@@ -8,7 +8,7 @@ import { AuthRequest } from '../middleware/auth';
 import { getCurrentOrganizationId, organizationFilter, assertRecordOwnership } from '../lib/tenant';
 import { prisma } from '../lib/prisma';
 import { getDefaultPersonalizacao } from '../services/personalizacao.service';
-import { getUploadsBaseDir } from '../config/env';
+import { getUploadsRootDir } from '../config/env';
 
 function isFichaComplementarAtivaParaUsuario(usuarioId: string): Promise<boolean> {
   return prisma.companySettings.findUnique({ where: { usuario_id: usuarioId } }).then((s) => {
@@ -185,7 +185,7 @@ export const deleteClienteFichaImagem = async (req: AuthRequest, res: Response) 
   });
   if (!img) throw new AppError('Imagem não encontrada', 404);
 
-  const fullPath = path.join(process.cwd(), getUploadsBaseDir(), img.arquivo_path);
+  const fullPath = path.join(getUploadsRootDir(), img.arquivo_path);
   await prisma.clienteFichaImagem.delete({ where: { id: imageId } });
   fs.unlink(fullPath, () => {});
 
@@ -205,7 +205,7 @@ export const getClienteFichaImagemFile = async (req: AuthRequest, res: Response)
   });
   if (!img) throw new AppError('Imagem não encontrada', 404);
 
-  const fullPath = path.join(process.cwd(), getUploadsBaseDir(), img.arquivo_path);
+  const fullPath = path.join(getUploadsRootDir(), img.arquivo_path);
   if (!fs.existsSync(fullPath)) throw new AppError('Arquivo não encontrado', 404);
 
   res.setHeader('Content-Type', contentTypeForPath(img.arquivo_path));

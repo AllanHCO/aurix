@@ -10,6 +10,7 @@ app = "aurix-prod"
 [env]
   NODE_ENV = "production"
   PORT = "3001"
+  UPLOADS_DIR = "/data/uploads"
 
 [http_service]
   internal_port = 3001
@@ -30,3 +31,7 @@ app = "aurix-prod"
   memory = "512mb"
   cpu_kind = "shared"
   cpus = 1
+
+[[mounts]]
+  source = "aurix_data"
+  destination = "/data"
